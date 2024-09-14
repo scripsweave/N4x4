@@ -3,6 +3,7 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import UserNotifications
 
 class TimerViewModel: ObservableObject {
     // User settings stored in UserDefaults
@@ -25,7 +26,18 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
     @AppStorage("preventSleep") var preventSleep: Bool = true
-    @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false
+    
+    //Notifications
+    @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false {
+            didSet {
+                if notificationsEnabled && !notificationPermissionRequested {
+                    requestNotificationPermission()
+                }
+            }
+        }
+        
+    @AppStorage("notificationPermissionRequested") var notificationPermissionRequested: Bool = false
+
 
     // Timer properties
     @Published var currentIntervalIndex: Int = 0
@@ -117,19 +129,36 @@ class TimerViewModel: ObservableObject {
         }
     }
 
+//    func moveToNextInterval() {
+//        if currentIntervalIndex + 1 < intervals.count {
+//            currentIntervalIndex += 1
+//            timeRemaining = intervals[currentIntervalIndex].duration
+//
+//            // Update counts
+//            updateCounts()
+//        } else {
+//            // Workout complete after the last interval
+//            stopTimer()
+//            showCompletionMessage = true
+//        }
+//    }
+    
     func moveToNextInterval() {
-        if currentIntervalIndex + 1 < intervals.count {
-            currentIntervalIndex += 1
-            timeRemaining = intervals[currentIntervalIndex].duration
+            if currentIntervalIndex + 1 < intervals.count {
+                currentIntervalIndex += 1
+                timeRemaining = intervals[currentIntervalIndex].duration
 
-            // Update counts
-            updateCounts()
-        } else {
-            // Workout complete after the last interval
-            stopTimer()
-            showCompletionMessage = true
+                // Schedule notification for the next interval
+                scheduleNotification(for: intervals[currentIntervalIndex])
+
+                // Update counts
+                updateCounts()
+            } else {
+                // Workout complete after the last interval
+                stopTimer()
+                showCompletionMessage = true
+            }
         }
-    }
 
     func pause() {
         if isRunning {
@@ -174,6 +203,44 @@ class TimerViewModel: ObservableObject {
             player?.play()
         } catch {
             print("Error playing alarm sound: \(error.localizedDescription)")
+        }
+    }
+    
+    // Request notification permission
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            if let error = error {
+                print("Error requesting notification permission: \(error.localizedDescription)")
+            } else {
+                DispatchQueue.main.async {
+                    self.notificationPermissionRequested = true
+                    if !granted {
+                        self.notificationsEnabled = false
+                    }
+                }
+                print("Notification permission granted: \(granted)")
+            }
+        }
+    }
+
+        // Schedule a notification
+    func scheduleNotification(for interval: Interval) {
+        guard notificationsEnabled else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "N4x4 Interval"
+        content.body = "\(interval.name) interval is starting."
+        content.sound = .default
+
+        // Schedule notification to trigger when the interval starts
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling notification: \(error.localizedDescription)")
+            }
         }
     }
 }

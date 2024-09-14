@@ -42,7 +42,12 @@ struct SettingsView: View {
                 Section(header: Text("Display").font(.headline)) {
                                   Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
                                         .font(.body)
-                                }
+                }
+                
+                Section(header: Text("Notifications").font(.headline)) {
+                                    Toggle("Notification at Start of Interval", isOn: $viewModel.notificationsEnabled)
+                                        .font(.body)
+                }
 
                 // Reset to Defaults Button
                 Section {
