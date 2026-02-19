@@ -1,6 +1,9 @@
 // TimerView.swift
 
 import SwiftUI
+#if canImport(Charts)
+import Charts
+#endif
 
 struct TimerView: View {
     @ObservedObject var viewModel: TimerViewModel
@@ -8,7 +11,6 @@ struct TimerView: View {
     @State private var showResetAlert = false
     @Environment(\.scenePhase) private var scenePhase
 
-    // Computed property for ring color
     var ringColor: Color {
         switch viewModel.intervals[viewModel.currentIntervalIndex].type {
         case .warmup:
@@ -20,7 +22,6 @@ struct TimerView: View {
         }
     }
 
-    // Computed property for interval name with count
     var currentIntervalName: String {
         let interval = viewModel.intervals[viewModel.currentIntervalIndex]
         let totalIntervals = viewModel.numberOfIntervals
@@ -41,20 +42,16 @@ struct TimerView: View {
                 Color(UIColor.systemBackground)
                     .edgesIgnoringSafeArea(.all)
 
-                VStack(spacing: 40) {
-                    // Interval Name
+                VStack(spacing: 24) {
                     Text(currentIntervalName)
                         .font(.system(size: 34, weight: .semibold, design: .default))
                         .foregroundColor(.primary)
 
-                    // Timer Circle and Text
                     ZStack {
-                        // Background Circle
                         Circle()
                             .stroke(lineWidth: 15)
                             .foregroundColor(Color(UIColor.systemGray5))
 
-                        // Animated Ring
                         Circle()
                             .trim(from: 0, to: CGFloat(viewModel.timeRemaining) / CGFloat(viewModel.intervals[viewModel.currentIntervalIndex].duration))
                             .stroke(style: StrokeStyle(lineWidth: 15, lineCap: .round))
@@ -62,14 +59,12 @@ struct TimerView: View {
                             .rotationEffect(Angle(degrees: -90))
                             .animation(.linear(duration: 1), value: viewModel.timeRemaining)
 
-                        // Timer Text
                         Text(timeString(time: viewModel.timeRemaining))
                             .font(.system(size: 50, weight: .bold, design: .default))
                             .foregroundColor(.primary)
                     }
                     .frame(width: 250, height: 250)
 
-                    // Control Buttons
                     HStack(spacing: 50) {
                         Button(action: {
                             viewModel.pause()
@@ -87,10 +82,13 @@ struct TimerView: View {
                                 .foregroundColor(.primary)
                         }
                     }
+
+                    HeartRateGuidanceCard(viewModel: viewModel, showInstructions: false)
+
+                    vo2Section
                 }
                 .padding()
 
-                // Display "Workout Complete!" when the workout is finished
                 if viewModel.showCompletionMessage {
                     ZStack {
                         Color.black.opacity(0.8)
@@ -104,7 +102,6 @@ struct TimerView: View {
                     }
                     .transition(.opacity)
                     .onAppear {
-                        // Hide the message after 5 seconds and reset the app
                         DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                             withAnimation {
                                 viewModel.showCompletionMessage = false
@@ -150,9 +147,11 @@ struct TimerView: View {
             }
             .onChange(of: scenePhase) { newPhase in
                 if newPhase == .active {
-                    // Update timeRemaining when app becomes active
                     if viewModel.isRunning {
                         viewModel.timeRemaining = viewModel.intervalEndTime?.timeIntervalSinceNow ?? viewModel.timeRemaining
+                    }
+                    if viewModel.healthKitEnabled {
+                        viewModel.fetchVO2MaxSamples()
                     }
                 }
             }
@@ -162,7 +161,40 @@ struct TimerView: View {
         }
     }
 
-    // Helper function
+    @ViewBuilder
+    var vo2Section: some View {
+        if viewModel.healthKitEnabled {
+            if viewModel.vo2DataPoints.count >= 2 {
+#if canImport(Charts)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("VO₂ Max Trend")
+                        .font(.headline)
+                    Chart(viewModel.vo2DataPoints) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("VO₂", point.value)
+                        )
+                        PointMark(
+                            x: .value("Date", point.date),
+                            y: .value("VO₂", point.value)
+                        )
+                    }
+                    .frame(height: 160)
+                }
+#else
+                Text("VO₂ max data available. Trend chart requires iOS Charts support.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+#endif
+            } else {
+                Text("No VO₂ max trend yet. Apple Health data will appear here when available.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
     func timeString(time: TimeInterval) -> String {
         let minutes = Int(time) / 60 % 60
         let seconds = Int(time) % 60

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>N4x4 reads your VO₂ max data to show your fitness trend over time.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>N4x4 writes completed interval workouts to Apple Health.</string>
 	<key>UIBackgroundModes</key>
 	<array/>
 </dict>

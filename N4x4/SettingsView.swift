@@ -34,6 +34,11 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Text("Heart Rate Guide").font(.headline)) {
+                    HeartRateGuidanceCard(viewModel: viewModel)
+                        .listRowInsets(EdgeInsets())
+                }
+
                 Section(header: Text("Alarm").font(.headline)) {
                     VStack(alignment: .leading) {
                         Toggle("Alarm at End of Interval", isOn: $viewModel.alarmEnabled)
@@ -41,21 +46,48 @@ struct SettingsView: View {
                         Text("(only works when N4x4 is in the foreground)")
                             .font(.footnote)
                             .foregroundColor(.gray)
-                            .padding(.leading, 4) // Optional: add some padding if needed
+                            .padding(.leading, 4)
                     }
                 }
-                
+
                 Section(header: Text("Display").font(.headline)) {
-                                  Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
-                                        .font(.body)
-                }
-                
-                Section(header: Text("Notifications").font(.headline)) {
-                                    Toggle("Notification at Start of Interval", isOn: $viewModel.notificationsEnabled)
-                                        .font(.body)
+                    Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
+                        .font(.body)
                 }
 
-                // Reset to Defaults Button
+                Section(header: Text("Interval Notifications").font(.headline)) {
+                    Toggle("Notification at Start of Interval", isOn: $viewModel.notificationsEnabled)
+                        .font(.body)
+                }
+
+                Section(header: Text("Workout Reminders").font(.headline)) {
+                    Toggle("Reminder Notifications", isOn: $viewModel.workoutRemindersEnabled)
+                    Stepper(value: $viewModel.workoutReminderDays, in: 1...30) {
+                        Text("Every \(viewModel.workoutReminderDays) day(s)")
+                    }
+                    Text("Default is weekly (7 days).")
+                        .font(.footnote)
+                        .foregroundColor(.gray)
+                }
+
+                Section(header: Text("Apple Health").font(.headline)) {
+                    Toggle("Enable Apple Health", isOn: $viewModel.healthKitEnabled)
+                        .onChange(of: viewModel.healthKitEnabled) { enabled in
+                            if enabled {
+                                viewModel.requestHealthKitAuthorizationIfNeeded()
+                            }
+                        }
+
+                    Button("Refresh VO₂ max Data") {
+                        viewModel.fetchVO2MaxSamples()
+                    }
+                    .disabled(!viewModel.healthKitEnabled)
+
+                    Text(viewModel.healthAuthorizationGranted ? "Connected" : "Not connected")
+                        .font(.footnote)
+                        .foregroundColor(viewModel.healthAuthorizationGranted ? .green : .secondary)
+                }
+
                 Section {
                     Button(action: {
                         showResetAlert = true
@@ -82,4 +114,3 @@ struct SettingsView: View {
         }
     }
 }
-
