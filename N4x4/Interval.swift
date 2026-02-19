@@ -13,3 +13,4 @@ struct Interval {
     let duration: TimeInterval
     let type: IntervalType
 }
+

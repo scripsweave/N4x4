@@ -1,5 +1,4 @@
-
-//TimerView
+// TimerView.swift
 
 import SwiftUI
 
@@ -7,6 +6,7 @@ struct TimerView: View {
     @ObservedObject var viewModel: TimerViewModel
     @State private var showSettings = false
     @State private var showResetAlert = false
+    @Environment(\.scenePhase) private var scenePhase
 
     // Computed property for ring color
     var ringColor: Color {
@@ -147,6 +147,14 @@ struct TimerView: View {
             }
             .onChange(of: viewModel.preventSleep) { _ in
                 updateIdleTimer()
+            }
+            .onChange(of: scenePhase) { newPhase in
+                if newPhase == .active {
+                    // Update timeRemaining when app becomes active
+                    if viewModel.isRunning {
+                        viewModel.timeRemaining = viewModel.intervalEndTime?.timeIntervalSinceNow ?? viewModel.timeRemaining
+                    }
+                }
             }
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = false

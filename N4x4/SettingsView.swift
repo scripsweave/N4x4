@@ -35,8 +35,14 @@ struct SettingsView: View {
                 }
 
                 Section(header: Text("Alarm").font(.headline)) {
-                    Toggle("Alarm at End of Interval", isOn: $viewModel.alarmEnabled)
-                        .font(.body)
+                    VStack(alignment: .leading) {
+                        Toggle("Alarm at End of Interval", isOn: $viewModel.alarmEnabled)
+                            .font(.body)
+                        Text("(only works when N4x4 is in the foreground)")
+                            .font(.footnote)
+                            .foregroundColor(.gray)
+                            .padding(.leading, 4) // Optional: add some padding if needed
+                    }
                 }
                 
                 Section(header: Text("Display").font(.headline)) {
