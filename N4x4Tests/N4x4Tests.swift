@@ -131,6 +131,23 @@ final class N4x4Tests: XCTestCase {
         XCTAssertFalse(vm.isRunning)
     }
 
+    func testSkippingFinalIntervalWhileRunningEndsWorkoutWithoutRestartingTimer() {
+        let vm = TimerViewModel()
+        vm.numberOfIntervals = 1
+        vm.warmupDuration = 0
+        vm.highIntensityDuration = 10
+        vm.setupIntervals()
+        vm.currentIntervalIndex = 0
+        vm.timeRemaining = 2
+        vm.isRunning = true
+
+        vm.skip()
+
+        XCTAssertTrue(vm.showPostWorkoutSummary)
+        XCTAssertFalse(vm.isRunning)
+        XCTAssertNil(vm.intervalEndTime)
+    }
+
     func testScheduleWorkoutReminderDisabledWithoutNotificationPermission() {
         let vm = TimerViewModel()
         vm.notificationPermissionState = .denied

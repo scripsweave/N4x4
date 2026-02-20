@@ -438,7 +438,7 @@ class TimerViewModel: ObservableObject {
         let wasRunning = isRunning
         moveToNextInterval()
 
-        if wasRunning, !showCompletionMessage {
+        if wasRunning, !showPostWorkoutSummary {
             startTimer()
         }
     }
