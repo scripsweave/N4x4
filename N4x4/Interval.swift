@@ -2,7 +2,7 @@
 
 import Foundation
 
-enum IntervalType {
+enum IntervalType: Equatable {
     case warmup
     case highIntensity
     case rest

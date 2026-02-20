@@ -12,6 +12,10 @@ struct TimerView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var ringColor: Color {
+        guard viewModel.intervals.indices.contains(viewModel.currentIntervalIndex) else {
+            return .gray
+        }
+
         switch viewModel.intervals[viewModel.currentIntervalIndex].type {
         case .warmup:
             return .blue
@@ -23,6 +27,10 @@ struct TimerView: View {
     }
 
     var currentIntervalName: String {
+        guard viewModel.intervals.indices.contains(viewModel.currentIntervalIndex) else {
+            return "Ready"
+        }
+
         let interval = viewModel.intervals[viewModel.currentIntervalIndex]
         let totalIntervals = viewModel.numberOfIntervals
 
@@ -34,6 +42,13 @@ struct TimerView: View {
         case .rest:
             return "\(interval.name) (\(viewModel.restCount)/\(totalIntervals))"
         }
+    }
+
+    var progressValue: CGFloat {
+        guard viewModel.intervals.indices.contains(viewModel.currentIntervalIndex) else { return 0 }
+        let duration = max(1, viewModel.intervals[viewModel.currentIntervalIndex].duration)
+        let raw = viewModel.timeRemaining / duration
+        return CGFloat(min(1, max(0, raw)))
     }
 
     var body: some View {
@@ -53,7 +68,7 @@ struct TimerView: View {
                             .foregroundColor(Color(UIColor.systemGray5))
 
                         Circle()
-                            .trim(from: 0, to: CGFloat(viewModel.timeRemaining) / CGFloat(viewModel.intervals[viewModel.currentIntervalIndex].duration))
+                            .trim(from: 0, to: progressValue)
                             .stroke(style: StrokeStyle(lineWidth: 15, lineCap: .round))
                             .foregroundColor(ringColor)
                             .rotationEffect(Angle(degrees: -90))
@@ -147,8 +162,10 @@ struct TimerView: View {
             }
             .onChange(of: scenePhase) { newPhase in
                 if newPhase == .active {
+                    viewModel.refreshNotificationPermissionState()
+                    viewModel.refreshHealthKitAuthorizationState()
                     if viewModel.isRunning {
-                        viewModel.timeRemaining = viewModel.intervalEndTime?.timeIntervalSinceNow ?? viewModel.timeRemaining
+                        viewModel.reconcileTimerState(now: Date(), playAlarm: false)
                     }
                     if viewModel.healthKitEnabled {
                         viewModel.fetchVO2MaxSamples()

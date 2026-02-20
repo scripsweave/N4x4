@@ -6,6 +6,14 @@ import AVFoundation
 import UserNotifications
 import HealthKit
 
+enum PermissionState: Equatable {
+    case unknown
+    case notDetermined
+    case granted
+    case denied
+    case unavailable
+}
+
 struct VO2DataPoint: Identifiable {
     let id = UUID()
     let date: Date
@@ -45,8 +53,8 @@ class TimerViewModel: ObservableObject {
     // Interval notifications
     @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false {
         didSet {
-            if notificationsEnabled && !notificationPermissionRequested {
-                requestNotificationPermission()
+            if notificationsEnabled {
+                ensureNotificationPermissionForToggles()
             }
         }
     }
@@ -56,9 +64,7 @@ class TimerViewModel: ObservableObject {
     @AppStorage("workoutRemindersEnabled") var workoutRemindersEnabled: Bool = false {
         didSet {
             if workoutRemindersEnabled {
-                if !notificationPermissionRequested {
-                    requestNotificationPermission()
-                }
+                ensureNotificationPermissionForToggles()
                 scheduleWorkoutReminder()
             } else {
                 cancelWorkoutReminder()
@@ -80,6 +86,9 @@ class TimerViewModel: ObservableObject {
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
     @Published var healthAuthorizationGranted: Bool = false
     @Published var vo2DataPoints: [VO2DataPoint] = []
+
+    @Published var notificationPermissionState: PermissionState = .unknown
+    @Published var healthKitPermissionState: PermissionState = .unknown
 
     private let healthStore = HKHealthStore()
 
@@ -128,6 +137,9 @@ class TimerViewModel: ObservableObject {
 
         setupIntervals()
 
+        refreshNotificationPermissionState()
+        refreshHealthKitAuthorizationState()
+
         if workoutRemindersEnabled {
             scheduleWorkoutReminder()
         }
@@ -142,13 +154,11 @@ class TimerViewModel: ObservableObject {
         highIntensityCount = 0
         restCount = 0
 
-        // Conditionally add warm-up interval
         if warmupDuration > 0 {
             let warmup = Interval(name: "Warm Up", duration: warmupDuration, type: .warmup)
             intervals.append(warmup)
         }
 
-        // High-intensity and rest intervals
         for i in 1...numberOfIntervals {
             let highIntensity = Interval(name: "High Intensity", duration: highIntensityDuration, type: .highIntensity)
             intervals.append(highIntensity)
@@ -166,19 +176,23 @@ class TimerViewModel: ObservableObject {
     }
 
     func updateCounts() {
-        guard !intervals.isEmpty else { return }
-        let currentType = intervals[currentIntervalIndex].type
-        switch currentType {
-        case .highIntensity:
-            highIntensityCount += 1
-        case .rest:
-            restCount += 1
-        default:
-            break
+        guard !intervals.isEmpty, intervals.indices.contains(currentIntervalIndex) else {
+            highIntensityCount = 0
+            restCount = 0
+            return
         }
+
+        let traversed = intervals.prefix(currentIntervalIndex + 1)
+        highIntensityCount = traversed.filter { $0.type == .highIntensity }.count
+        restCount = traversed.filter { $0.type == .rest }.count
     }
 
     func startTimer() {
+        guard !intervals.isEmpty, intervals.indices.contains(currentIntervalIndex) else { return }
+
+        timer?.cancel()
+        timer = nil
+
         isRunning = true
         if workoutStartDate == nil {
             workoutStartDate = Date()
@@ -186,13 +200,17 @@ class TimerViewModel: ObservableObject {
         if intervalEndTime == nil {
             intervalEndTime = Date().addingTimeInterval(timeRemaining)
         }
+
+        reconcileTimerState(now: Date(), playAlarm: false)
+        guard isRunning else { return }
+
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         scheduleNextIntervalNotification()
 
         timer = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
-            .sink { _ in
-                self.tick()
+            .sink { [weak self] _ in
+                self?.tick()
             }
     }
 
@@ -204,10 +222,69 @@ class TimerViewModel: ObservableObject {
 
     func tick() {
         guard isRunning else { return }
-        timeRemaining = intervalEndTime?.timeIntervalSinceNow ?? timeRemaining
-        if timeRemaining <= 0 {
-            playAlarmIfNeeded()
-            moveToNextInterval()
+        reconcileTimerState(now: Date(), playAlarm: true)
+    }
+
+    func reconcileTimerState(now: Date = Date(), playAlarm: Bool) {
+        guard isRunning else { return }
+        guard !intervals.isEmpty, intervals.indices.contains(currentIntervalIndex) else {
+            stopTimer()
+            return
+        }
+
+        if intervalEndTime == nil {
+            intervalEndTime = now.addingTimeInterval(timeRemaining)
+        }
+
+        guard let endTime = intervalEndTime else { return }
+
+        if now < endTime {
+            timeRemaining = max(0, endTime.timeIntervalSince(now))
+            return
+        }
+
+        var cursor = currentIntervalIndex
+        var intervalEndCursor = endTime
+        var advanced = false
+
+        while now >= intervalEndCursor {
+            advanced = true
+            if cursor + 1 >= intervals.count {
+                finishWorkout()
+                return
+            }
+
+            cursor += 1
+            intervalEndCursor = intervalEndCursor.addingTimeInterval(intervals[cursor].duration)
+        }
+
+        currentIntervalIndex = cursor
+        updateCounts()
+        intervalEndTime = intervalEndCursor
+        timeRemaining = max(0, intervalEndCursor.timeIntervalSince(now))
+
+        if advanced {
+            if playAlarm {
+                playAlarmIfNeeded()
+            }
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+            scheduleNextIntervalNotification()
+        }
+    }
+
+    func finishWorkout() {
+        stopTimer()
+        intervalEndTime = nil
+        timeRemaining = 0
+        showCompletionMessage = true
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+
+        if workoutRemindersEnabled {
+            scheduleWorkoutReminder()
+        }
+        if healthKitEnabled {
+            saveCompletedWorkoutToHealthKit()
+            fetchVO2MaxSamples()
         }
     }
 
@@ -221,24 +298,13 @@ class TimerViewModel: ObservableObject {
             updateCounts()
             scheduleNextIntervalNotification()
         } else {
-            stopTimer()
-            intervalEndTime = nil
-            showCompletionMessage = true
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
-
-            if workoutRemindersEnabled {
-                scheduleWorkoutReminder()
-            }
-            if healthKitEnabled {
-                saveCompletedWorkoutToHealthKit()
-                fetchVO2MaxSamples()
-            }
+            finishWorkout()
         }
     }
 
     func pause() {
         if isRunning {
-            timeRemaining = intervalEndTime?.timeIntervalSinceNow ?? timeRemaining
+            timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
             stopTimer()
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         } else {
@@ -249,10 +315,14 @@ class TimerViewModel: ObservableObject {
     }
 
     func skip() {
+        guard intervals.indices.contains(currentIntervalIndex) else { return }
+
         playAlarmIfNeeded()
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+        let wasRunning = isRunning
         moveToNextInterval()
-        if !isRunning {
+
+        if wasRunning, !showCompletionMessage {
             startTimer()
         }
     }
@@ -278,6 +348,11 @@ class TimerViewModel: ObservableObject {
 
     func scheduleWorkoutReminder() {
         guard workoutRemindersEnabled else { return }
+        guard notificationPermissionState == .granted else {
+            workoutRemindersEnabled = false
+            return
+        }
+
         let seconds = max(1, workoutReminderDays) * 24 * 60 * 60
 
         scheduleNotification(
@@ -328,18 +403,59 @@ class TimerViewModel: ObservableObject {
         }
     }
 
+    func ensureNotificationPermissionForToggles() {
+        refreshNotificationPermissionState { [weak self] in
+            guard let self else { return }
+            switch self.notificationPermissionState {
+            case .notDetermined, .unknown:
+                self.requestNotificationPermission()
+            case .denied:
+                self.notificationsEnabled = false
+                self.workoutRemindersEnabled = false
+            case .granted:
+                if self.workoutRemindersEnabled {
+                    self.scheduleWorkoutReminder()
+                }
+            case .unavailable:
+                self.notificationsEnabled = false
+                self.workoutRemindersEnabled = false
+            }
+        }
+    }
+
+    func refreshNotificationPermissionState(completion: (() -> Void)? = nil) {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .authorized, .provisional:
+                    self.notificationPermissionState = .granted
+                case .denied:
+                    self.notificationPermissionState = .denied
+                case .notDetermined:
+                    self.notificationPermissionState = .notDetermined
+                @unknown default:
+                    self.notificationPermissionState = .unknown
+                }
+                completion?()
+            }
+        }
+    }
+
     // Request notification permission
     func requestNotificationPermission() {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Error requesting notification permission: \(error.localizedDescription)")
-            } else {
-                DispatchQueue.main.async {
-                    self.notificationPermissionRequested = true
-                    if !granted {
-                        self.notificationsEnabled = false
-                        self.workoutRemindersEnabled = false
-                    }
+            }
+
+            DispatchQueue.main.async {
+                self.notificationPermissionRequested = true
+                self.notificationPermissionState = granted ? .granted : .denied
+                if !granted {
+                    self.notificationsEnabled = false
+                    self.workoutRemindersEnabled = false
+                } else if self.workoutRemindersEnabled {
+                    self.scheduleWorkoutReminder()
                 }
             }
         }
@@ -348,6 +464,7 @@ class TimerViewModel: ObservableObject {
     // Shared notification helper
     func scheduleNotification(identifier: String, title: String, body: String, in timeInterval: TimeInterval, repeats: Bool) {
         guard notificationsEnabled || workoutRemindersEnabled else { return }
+        guard notificationPermissionState == .granted else { return }
 
         let content = UNMutableNotificationContent()
         content.title = title
@@ -367,9 +484,17 @@ class TimerViewModel: ObservableObject {
     // MARK: - HealthKit
 
     func requestHealthKitAuthorizationIfNeeded() {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard HKHealthStore.isHealthDataAvailable() else {
+            healthKitEnabled = false
+            healthAuthorizationGranted = false
+            healthKitPermissionState = .unavailable
+            return
+        }
 
-        guard let vo2Type = HKObjectType.quantityType(forIdentifier: .vo2Max) else { return }
+        guard let vo2Type = HKObjectType.quantityType(forIdentifier: .vo2Max) else {
+            healthKitPermissionState = .unavailable
+            return
+        }
 
         let readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType()]
         let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
@@ -377,6 +502,7 @@ class TimerViewModel: ObservableObject {
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
             DispatchQueue.main.async {
                 self.healthAuthorizationGranted = success
+                self.refreshHealthKitAuthorizationState()
                 self.healthKitEnabled = success
             }
 
@@ -387,6 +513,31 @@ class TimerViewModel: ObservableObject {
             if success {
                 self.fetchVO2MaxSamples()
             }
+        }
+    }
+
+    func refreshHealthKitAuthorizationState() {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            healthKitPermissionState = .unavailable
+            healthAuthorizationGranted = false
+            return
+        }
+
+        let workoutStatus = healthStore.authorizationStatus(for: HKObjectType.workoutType())
+        switch workoutStatus {
+        case .sharingAuthorized:
+            healthKitPermissionState = .granted
+            healthAuthorizationGranted = true
+        case .sharingDenied:
+            healthKitPermissionState = .denied
+            healthAuthorizationGranted = false
+            healthKitEnabled = false
+        case .notDetermined:
+            healthKitPermissionState = .notDetermined
+            healthAuthorizationGranted = false
+        @unknown default:
+            healthKitPermissionState = .unknown
+            healthAuthorizationGranted = false
         }
     }
 
@@ -438,6 +589,13 @@ class TimerViewModel: ObservableObject {
             if !success {
                 print("Workout save failed")
             }
+        }
+    }
+
+    func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        if UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
         }
     }
 

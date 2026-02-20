@@ -58,6 +58,12 @@ struct SettingsView: View {
                 Section(header: Text("Interval Notifications").font(.headline)) {
                     Toggle("Notification at Start of Interval", isOn: $viewModel.notificationsEnabled)
                         .font(.body)
+
+                    if viewModel.notificationPermissionState == .denied {
+                        permissionDeniedView(
+                            "Notifications are denied for N4x4. Enable them in Settings to receive interval and reminder alerts."
+                        )
+                    }
                 }
 
                 Section(header: Text("Workout Reminders").font(.headline)) {
@@ -77,6 +83,12 @@ struct SettingsView: View {
                                 viewModel.requestHealthKitAuthorizationIfNeeded()
                             }
                         }
+
+                    if viewModel.healthKitPermissionState == .denied {
+                        permissionDeniedView(
+                            "Apple Health access is denied. Enable workout and VO₂ permissions in Settings to sync completed sessions."
+                        )
+                    }
 
                     Button("Refresh VO₂ max Data") {
                         viewModel.fetchVO2MaxSamples()
@@ -111,6 +123,25 @@ struct SettingsView: View {
                     secondaryButton: .cancel()
                 )
             }
+            .onAppear {
+                viewModel.refreshNotificationPermissionState()
+                viewModel.refreshHealthKitAuthorizationState()
+            }
         }
+    }
+
+    @ViewBuilder
+    private func permissionDeniedView(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(message)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+
+            Button("Open Settings") {
+                viewModel.openAppSettings()
+            }
+            .font(.footnote)
+        }
+        .padding(.vertical, 4)
     }
 }

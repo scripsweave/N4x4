@@ -14,7 +14,7 @@ struct N4x4App: App {
 
     var body: some Scene {
         WindowGroup {
-            TimerView(viewModel: TimerViewModel())
+            ContentView()
         }
     }
 }
