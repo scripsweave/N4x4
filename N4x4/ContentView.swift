@@ -307,7 +307,24 @@ private struct OnboardingView: View {
     private func saveReminderWeekdayAndContinue() {
         timerViewModel.workoutReminderMode = .weeklyWeekday
         timerViewModel.workoutReminderWeekday = selectedReminderWeekday
-        flow.next()
+
+        timerViewModel.refreshNotificationPermissionState {
+            switch timerViewModel.notificationPermissionState {
+            case .granted:
+                timerViewModel.notificationsEnabled = true
+                timerViewModel.workoutRemindersEnabled = true
+                flow.next()
+            case .notDetermined, .unknown:
+                timerViewModel.notificationsEnabled = true
+                timerViewModel.workoutRemindersEnabled = true
+                timerViewModel.requestNotificationPermission()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    flow.next()
+                }
+            case .denied, .unavailable:
+                flow.next()
+            }
+        }
     }
 
     private func skipReminderWeekdayAndContinue() {
