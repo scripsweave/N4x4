@@ -152,10 +152,12 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
         didSet {
-            if workoutReminderWeekday < 0 || workoutReminderWeekday > 7 {
-                workoutReminderWeekday = 0
+            let bounded = (1...7).contains(workoutReminderWeekday) ? workoutReminderWeekday : 0
+            if bounded != workoutReminderWeekday {
+                workoutReminderWeekday = bounded
+                return
             }
-            if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday {
+            if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday, oldValue != workoutReminderWeekday {
                 scheduleWorkoutReminder()
             }
         }
@@ -489,7 +491,10 @@ class TimerViewModel: ObservableObject {
             )
         case .weeklyWeekday:
             let weekday = workoutReminderWeekday == 0 ? Self.defaultWorkoutReminderWeekday() : workoutReminderWeekday
-            workoutReminderWeekday = weekday
+            if workoutReminderWeekday == 0 {
+                workoutReminderWeekday = weekday
+                return
+            }
             scheduleWeeklyWorkoutReminder(weekday: weekday)
             scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
         }
