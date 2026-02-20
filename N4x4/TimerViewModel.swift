@@ -406,11 +406,13 @@ class TimerViewModel: ObservableObject {
         if currentIntervalIndex + 1 < intervals.count {
             currentIntervalIndex += 1
             timeRemaining = intervals[currentIntervalIndex].duration
-            intervalEndTime = Date().addingTimeInterval(timeRemaining)
+            intervalEndTime = isRunning ? Date().addingTimeInterval(timeRemaining) : nil
 
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             updateCounts()
-            scheduleNextIntervalNotification()
+            if isRunning {
+                scheduleNextIntervalNotification()
+            }
         } else {
             finishWorkout()
         }
@@ -529,6 +531,7 @@ class TimerViewModel: ObservableObject {
         )
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
+        cancelMissedWorkoutFollowUpIfCompletedToday()
         showPostWorkoutSummary = false
         reset()
     }
