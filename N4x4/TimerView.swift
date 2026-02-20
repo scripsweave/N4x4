@@ -99,8 +99,6 @@ struct TimerView: View {
                         }
                     }
 
-                    HeartRateGuidanceCard(viewModel: viewModel, showInstructions: false)
-
                     vo2Section
                 }
                 .padding()
