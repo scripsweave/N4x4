@@ -8,6 +8,7 @@ import Charts
 struct TimerView: View {
     @ObservedObject var viewModel: TimerViewModel
     @State private var showSettings = false
+    @State private var showHistory = false
     @State private var showResetAlert = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -103,28 +104,6 @@ struct TimerView: View {
                     vo2Section
                 }
                 .padding()
-
-                if viewModel.showCompletionMessage {
-                    ZStack {
-                        Color.black.opacity(0.8)
-                            .edgesIgnoringSafeArea(.all)
-                        Text("Workout Complete!")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .multilineTextAlignment(.center)
-                            .padding()
-                    }
-                    .transition(.opacity)
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                            withAnimation {
-                                viewModel.showCompletionMessage = false
-                                viewModel.reset()
-                            }
-                        }
-                    }
-                }
             }
             .navigationBarTitle("", displayMode: .inline)
             .navigationBarItems(
@@ -134,15 +113,30 @@ struct TimerView: View {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.title2)
                 },
-                trailing: Button(action: {
-                    showSettings = true
-                }) {
-                    Image(systemName: "gear")
-                        .font(.title2)
+                trailing: HStack(spacing: 16) {
+                    Button(action: {
+                        showHistory = true
+                    }) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.title3)
+                    }
+
+                    Button(action: {
+                        showSettings = true
+                    }) {
+                        Image(systemName: "gear")
+                            .font(.title2)
+                    }
                 }
             )
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showHistory) {
+                WorkoutHistoryView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
+                PostWorkoutSummaryView(viewModel: viewModel)
             }
             .alert(isPresented: $showResetAlert) {
                 Alert(
@@ -211,6 +205,85 @@ struct TimerView: View {
             }
         }
     }
+
+
+
+private struct PostWorkoutSummaryView: View {
+    @ObservedObject var viewModel: TimerViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Workout complete")) {
+                    Picker("Type", selection: $viewModel.selectedWorkoutType) {
+                        ForEach(WorkoutType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+
+                    TextField("Notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+
+                Section {
+                    Button("Save to Log") {
+                        viewModel.saveWorkoutLogEntryAndResetSession()
+                        dismiss()
+                    }
+                    .font(.headline)
+                }
+            }
+            .navigationTitle("Session Saved?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Skip") {
+                        viewModel.closePostWorkoutSummaryWithoutSaving()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct WorkoutHistoryView: View {
+    @ObservedObject var viewModel: TimerViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            List {
+                if viewModel.workoutLogEntries.isEmpty {
+                    Text("No workouts logged yet.")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(viewModel.workoutLogEntries) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(entry.workoutType.rawValue)
+                                .font(.headline)
+                            Text(entry.completedAt, style: .date)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            if !entry.notes.isEmpty {
+                                Text(entry.notes)
+                                    .font(.subheadline)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .navigationTitle("Workout Log")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
 
     func timeString(time: TimeInterval) -> String {
         let minutes = Int(time) / 60 % 60

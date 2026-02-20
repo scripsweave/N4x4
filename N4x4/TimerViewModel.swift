@@ -28,6 +28,38 @@ enum WorkoutReminderMode: String, CaseIterable, Identifiable {
     }
 }
 
+
+
+enum WorkoutType: String, CaseIterable, Identifiable, Codable {
+    case norwegian4x4 = "Norwegian 4x4"
+    case run = "Run"
+    case cycle = "Cycle"
+    case rowing = "Rowing"
+    case treadmill = "Treadmill"
+    case hillSprints = "Hill sprints"
+    case stairs = "Stairs"
+    case jumpRope = "Jump rope"
+    case circuit = "Circuit"
+    case sports = "Sports"
+    case other = "Other"
+
+    var id: String { rawValue }
+}
+
+struct WorkoutLogEntry: Identifiable, Codable, Equatable {
+    let id: UUID
+    let completedAt: Date
+    let workoutType: WorkoutType
+    let notes: String
+
+    init(id: UUID = UUID(), completedAt: Date = Date(), workoutType: WorkoutType, notes: String) {
+        self.id = id
+        self.completedAt = completedAt
+        self.workoutType = workoutType
+        self.notes = notes
+    }
+}
+
 struct VO2DataPoint: Identifiable {
     let id = UUID()
     let date: Date
@@ -113,6 +145,13 @@ class TimerViewModel: ObservableObject {
         }
     }
 
+
+    @AppStorage("workoutLogEntriesData") private var workoutLogEntriesData: String = "[]"
+    @Published var workoutLogEntries: [WorkoutLogEntry] = []
+    @Published var selectedWorkoutType: WorkoutType = .norwegian4x4
+    @Published var workoutNotesDraft: String = ""
+    @Published var showPostWorkoutSummary: Bool = false
+
     // HealthKit
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
     @Published var healthAuthorizationGranted: Bool = false
@@ -193,6 +232,7 @@ class TimerViewModel: ObservableObject {
         userAge = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
 
         setupIntervals()
+        loadWorkoutLogEntries()
 
         refreshNotificationPermissionState()
         refreshHealthKitAuthorizationState()
@@ -333,11 +373,16 @@ class TimerViewModel: ObservableObject {
         stopTimer()
         intervalEndTime = nil
         timeRemaining = 0
-        showCompletionMessage = true
+        showCompletionMessage = false
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+
+        selectedWorkoutType = .norwegian4x4
+        workoutNotesDraft = ""
+        showPostWorkoutSummary = true
 
         if workoutRemindersEnabled {
             scheduleWorkoutReminder()
+            cancelMissedWorkoutFollowUpIfCompletedToday()
         }
         if healthKitEnabled {
             saveCompletedWorkoutToHealthKit()
@@ -387,8 +432,10 @@ class TimerViewModel: ObservableObject {
     func reset() {
         stopTimer()
         setupIntervals()
+        loadWorkoutLogEntries()
         isRunning = false
         showCompletionMessage = false
+        showPostWorkoutSummary = false
         intervalEndTime = nil
         workoutStartDate = nil
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
@@ -411,6 +458,7 @@ class TimerViewModel: ObservableObject {
         }
 
         cancelWorkoutReminder()
+        cancelMissedWorkoutFollowUpReminder()
 
         switch workoutReminderMode {
         case .everyXDays:
@@ -426,11 +474,13 @@ class TimerViewModel: ObservableObject {
             let weekday = workoutReminderWeekday == 0 ? Self.defaultWorkoutReminderWeekday() : workoutReminderWeekday
             workoutReminderWeekday = weekday
             scheduleWeeklyWorkoutReminder(weekday: weekday)
+            scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
         }
     }
 
     func cancelWorkoutReminder() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder"])
+        cancelMissedWorkoutFollowUpReminder()
     }
 
     private func scheduleWeeklyWorkoutReminder(weekday: Int) {
@@ -456,6 +506,126 @@ class TimerViewModel: ObservableObject {
         }
     }
 
+
+
+    func saveWorkoutLogEntryAndResetSession() {
+        let trimmedNotes = workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let entry = WorkoutLogEntry(
+            completedAt: Date(),
+            workoutType: selectedWorkoutType,
+            notes: trimmedNotes
+        )
+        workoutLogEntries.insert(entry, at: 0)
+        persistWorkoutLogEntries()
+        showPostWorkoutSummary = false
+        reset()
+    }
+
+    func closePostWorkoutSummaryWithoutSaving() {
+        showPostWorkoutSummary = false
+        reset()
+    }
+
+    private func loadWorkoutLogEntries() {
+        guard let data = workoutLogEntriesData.data(using: .utf8) else {
+            workoutLogEntries = []
+            return
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        guard let decoded = try? decoder.decode([WorkoutLogEntry].self, from: data) else {
+            workoutLogEntries = []
+            return
+        }
+        workoutLogEntries = decoded.sorted { $0.completedAt > $1.completedAt }
+    }
+
+    private func persistWorkoutLogEntries() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(workoutLogEntries), let json = String(data: data, encoding: .utf8) {
+            workoutLogEntriesData = json
+        }
+    }
+
+    private func followUpIdentifier(for date: Date) -> String {
+        "workoutReminderFollowup-\(Int(date.timeIntervalSince1970))"
+    }
+
+    private func cancelMissedWorkoutFollowUpReminder() {
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let ids = requests
+                .map(\.identifier)
+                .filter { $0.hasPrefix("workoutReminderFollowup-") }
+            if !ids.isEmpty {
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+            }
+        }
+    }
+
+    private func scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday weekday: Int) {
+        guard notificationPermissionState == .granted else { return }
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: now),
+              let followUpDate = calendar.date(byAdding: .day, value: 1, to: scheduledDate),
+              !hasLoggedWorkout(on: scheduledDate) else {
+            return
+        }
+
+        var components = calendar.dateComponents([.year, .month, .day], from: followUpDate)
+        components.hour = 9
+
+        let content = UNMutableNotificationContent()
+        content.title = "Missed yesterday? You can still do it today"
+        content.body = "It’s not too late—fit in your N4x4 session today and keep the streak alive."
+        content.sound = .default
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+        let request = UNNotificationRequest(identifier: followUpIdentifier(for: followUpDate), content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling follow-up reminder: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func nextOccurrence(ofWeekday weekday: Int, from date: Date) -> Date? {
+        var comps = DateComponents()
+        comps.weekday = weekday
+        comps.hour = 9
+        comps.minute = 0
+
+        return Calendar.current.nextDate(
+            after: date,
+            matching: comps,
+            matchingPolicy: .nextTime,
+            direction: .forward
+        )
+    }
+
+    private func hasLoggedWorkout(on date: Date) -> Bool {
+        workoutLogEntries.contains { Calendar.current.isDate($0.completedAt, inSameDayAs: date) }
+    }
+
+    private func cancelMissedWorkoutFollowUpIfCompletedToday() {
+        let today = Date()
+        guard workoutReminderMode == .weeklyWeekday,
+              workoutReminderWeekday != 0,
+              Calendar.current.component(.weekday, from: today) == workoutReminderWeekday else {
+            return
+        }
+
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else { return }
+        let identifier = followUpIdentifier(for: tomorrow)
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+    }
+
     func resetSettingsToDefaults() {
         numberOfIntervals = 4
         warmupDuration = 5 * 60
@@ -475,6 +645,7 @@ class TimerViewModel: ObservableObject {
         healthAuthorizationGranted = false
         vo2DataPoints = []
         cancelWorkoutReminder()
+        cancelMissedWorkoutFollowUpReminder()
     }
 
     func playAlarmIfNeeded() {

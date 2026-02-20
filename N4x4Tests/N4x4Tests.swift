@@ -21,7 +21,8 @@ final class N4x4Tests: XCTestCase {
             "workoutReminderMode",
             "workoutReminderWeekday",
             "healthKitEnabled",
-            "hasCompletedOnboarding"
+            "hasCompletedOnboarding",
+            "workoutLogEntriesData"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -81,7 +82,7 @@ final class N4x4Tests: XCTestCase {
 
         vm.reconcileTimerState(now: start.addingTimeInterval(20), playAlarm: false)
 
-        XCTAssertTrue(vm.showCompletionMessage)
+        XCTAssertTrue(vm.showPostWorkoutSummary)
         XCTAssertFalse(vm.isRunning)
         XCTAssertEqual(vm.timeRemaining, 0)
     }
@@ -189,4 +190,24 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.reminderWeekdayTitle(2), "Monday")
         XCTAssertEqual(vm.reminderWeekdayTitle(1), "Sunday")
     }
+
+    func testSavingWorkoutLogEntryPersistsAndResets() {
+        let vm = TimerViewModel()
+        vm.selectedWorkoutType = .cycle
+        vm.workoutNotesDraft = "Felt strong"
+        vm.showPostWorkoutSummary = true
+
+        vm.saveWorkoutLogEntryAndResetSession()
+
+        XCTAssertEqual(vm.workoutLogEntries.count, 1)
+        XCTAssertEqual(vm.workoutLogEntries.first?.workoutType, .cycle)
+        XCTAssertEqual(vm.workoutLogEntries.first?.notes, "Felt strong")
+        XCTAssertFalse(vm.showPostWorkoutSummary)
+    }
+
+    func testWorkoutTypeIncludesOtherOption() {
+        XCTAssertTrue(WorkoutType.allCases.contains(.other))
+        XCTAssertEqual(WorkoutType.allCases.count, 11)
+    }
+
 }
