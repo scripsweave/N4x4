@@ -24,7 +24,6 @@ enum WorkoutReminderMode: String, CaseIterable, Identifiable {
         switch self {
         case .everyXDays: return "Every X days"
         case .weeklyWeekday: return "Weekly on weekday"
-        default: return "Every X days"
         }
     }
 }
@@ -493,8 +492,6 @@ class TimerViewModel: ObservableObject {
             workoutReminderWeekday = weekday
             scheduleWeeklyWorkoutReminder(weekday: weekday)
             scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
-        default:
-            break
         }
     }
 
@@ -733,7 +730,7 @@ class TimerViewModel: ObservableObject {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
                 switch settings.authorizationStatus {
-                case .authorized, .provisional:
+                case .authorized, .provisional, .ephemeral:
                     self.notificationPermissionState = .granted
                 case .denied:
                     self.notificationPermissionState = .denied
@@ -877,22 +874,29 @@ class TimerViewModel: ObservableObject {
         let endDate = Date()
         let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())
 
-        let workout = HKWorkout(
-            activityType: .highIntensityIntervalTraining,
-            start: startDate,
-            end: endDate,
-            workoutEvents: nil,
-            totalEnergyBurned: nil,
-            totalDistance: nil,
-            metadata: [HKMetadataKeyIndoorWorkout: true]
-        )
+        let config = HKWorkoutConfiguration()
+        config.activityType = .highIntensityIntervalTraining
+        config.locationType = .indoor
 
-        healthStore.save(workout) { success, error in
-            if let error = error {
-                print("Workout save error: \(error.localizedDescription)")
+        let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: config, device: .local())
+
+        builder.beginCollection(withStart: startDate) { _, beginError in
+            if let beginError = beginError {
+                print("Workout beginCollection error: \(beginError.localizedDescription)")
+                return
             }
-            if !success {
-                print("Workout save failed")
+
+            builder.endCollection(withEnd: endDate) { _, endError in
+                if let endError = endError {
+                    print("Workout endCollection error: \(endError.localizedDescription)")
+                    return
+                }
+
+                builder.finishWorkout { _, finishError in
+                    if let finishError = finishError {
+                        print("Workout finish error: \(finishError.localizedDescription)")
+                    }
+                }
             }
         }
     }
