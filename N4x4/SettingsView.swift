@@ -30,7 +30,7 @@ struct SettingsView: View {
                     }
 
                     Stepper(value: $viewModel.restDuration, in: 60...600, step: 60) {
-                        Text("Rest Duration: \(Int(viewModel.restDuration / 60)) min")
+                        Text("Recovery Duration: \(Int(viewModel.restDuration / 60)) min")
                             .font(.body)
                     }
                 }

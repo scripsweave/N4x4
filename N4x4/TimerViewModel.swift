@@ -86,35 +86,50 @@ class TimerViewModel: ObservableObject {
     // User settings stored in UserDefaults
     @AppStorage("numberOfIntervals") var numberOfIntervals: Int = 4 {
         didSet {
-            if numberOfIntervals < 1 {
-                numberOfIntervals = 1
+            let sanitized = max(1, numberOfIntervals)
+            if sanitized != numberOfIntervals {
+                numberOfIntervals = sanitized
+                return
             }
+            guard oldValue != numberOfIntervals else { return }
             reset()
         }
     }
     @AppStorage("warmupDuration") var warmupDuration: TimeInterval = 5 * 60 {
-        didSet { reset() }
+        didSet {
+            guard oldValue != warmupDuration else { return }
+            reset()
+        }
     }
     @AppStorage("highIntensityDuration") var highIntensityDuration: TimeInterval = 4 * 60 {
-        didSet { reset() }
+        didSet {
+            guard oldValue != highIntensityDuration else { return }
+            reset()
+        }
     }
     @AppStorage("restDuration") var restDuration: TimeInterval = 3 * 60 {
-        didSet { reset() }
+        didSet {
+            guard oldValue != restDuration else { return }
+            reset()
+        }
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
     @AppStorage("preventSleep") var preventSleep: Bool = true
     @AppStorage("userAge") var userAge: Int = 40 {
         didSet {
-            let bounded = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
-            if bounded != userAge {
-                userAge = bounded
+            let sanitized = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
+            if sanitized != userAge {
+                userAge = sanitized
+                return
             }
+            guard oldValue != userAge else { return }
         }
     }
 
     // Interval notifications
     @AppStorage("notificationsEnabled") var notificationsEnabled: Bool = false {
         didSet {
+            guard oldValue != notificationsEnabled else { return }
             if notificationsEnabled {
                 ensureNotificationPermissionForToggles()
             }
@@ -125,6 +140,7 @@ class TimerViewModel: ObservableObject {
     // Reminder notifications
     @AppStorage("workoutRemindersEnabled") var workoutRemindersEnabled: Bool = false {
         didSet {
+            guard oldValue != workoutRemindersEnabled else { return }
             if workoutRemindersEnabled {
                 ensureNotificationPermissionForToggles()
                 scheduleWorkoutReminder()
@@ -135,16 +151,31 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("workoutReminderDays") var workoutReminderDays: Int = 7 {
         didSet {
-            if workoutReminderDays < 1 {
-                workoutReminderDays = 1
+            let sanitized = max(1, workoutReminderDays)
+            if sanitized != workoutReminderDays {
+                workoutReminderDays = sanitized
+                return
             }
-            if workoutRemindersEnabled {
+            guard oldValue != workoutReminderDays else { return }
+            if workoutRemindersEnabled, workoutReminderMode == .everyXDays {
                 scheduleWorkoutReminder()
             }
         }
     }
     @AppStorage("workoutReminderMode") private var workoutReminderModeRaw: String = WorkoutReminderMode.everyXDays.rawValue {
         didSet {
+            let sanitized = WorkoutReminderMode(rawValue: workoutReminderModeRaw)?.rawValue ?? WorkoutReminderMode.everyXDays.rawValue
+            if sanitized != workoutReminderModeRaw {
+                workoutReminderModeRaw = sanitized
+                return
+            }
+            guard oldValue != workoutReminderModeRaw else { return }
+
+            if workoutReminderMode == .weeklyWeekday, workoutReminderWeekday == 0 {
+                workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
+                return
+            }
+
             if workoutRemindersEnabled {
                 scheduleWorkoutReminder()
             }
@@ -152,12 +183,13 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
         didSet {
-            let bounded = (1...7).contains(workoutReminderWeekday) ? workoutReminderWeekday : 0
-            if bounded != workoutReminderWeekday {
-                workoutReminderWeekday = bounded
+            let sanitized = (1...7).contains(workoutReminderWeekday) ? workoutReminderWeekday : 0
+            if sanitized != workoutReminderWeekday {
+                workoutReminderWeekday = sanitized
                 return
             }
-            if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday, oldValue != workoutReminderWeekday {
+            guard oldValue != workoutReminderWeekday else { return }
+            if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday {
                 scheduleWorkoutReminder()
             }
         }
@@ -181,10 +213,9 @@ class TimerViewModel: ObservableObject {
     var workoutReminderMode: WorkoutReminderMode {
         get { WorkoutReminderMode(rawValue: workoutReminderModeRaw) ?? .everyXDays }
         set {
-            workoutReminderModeRaw = newValue.rawValue
-            if newValue == .weeklyWeekday, workoutReminderWeekday == 0 {
-                workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
-            }
+            let sanitized = newValue
+            guard workoutReminderModeRaw != sanitized.rawValue else { return }
+            workoutReminderModeRaw = sanitized.rawValue
         }
     }
 
@@ -199,6 +230,9 @@ class TimerViewModel: ObservableObject {
     ]
 
     private let healthStore = HKHealthStore()
+    private var isSchedulingWorkoutReminder = false
+    private var isResolvingNotificationPermission = false
+    private var isRequestingNotificationAuthorization = false
 
     // Timer properties
     @Published var currentIntervalIndex: Int = 0
@@ -279,7 +313,7 @@ class TimerViewModel: ObservableObject {
             intervals.append(highIntensity)
 
             if i < numberOfIntervals {
-                let rest = Interval(name: "Rest", duration: restDuration, type: .rest)
+                let rest = Interval(name: "Recovery", duration: restDuration, type: .rest)
                 intervals.append(rest)
             }
         }
@@ -470,9 +504,15 @@ class TimerViewModel: ObservableObject {
     }
 
     func scheduleWorkoutReminder() {
+        guard !isSchedulingWorkoutReminder else { return }
+        isSchedulingWorkoutReminder = true
+        defer { isSchedulingWorkoutReminder = false }
+
         guard workoutRemindersEnabled else { return }
         guard notificationPermissionState == .granted else {
-            workoutRemindersEnabled = false
+            if workoutRemindersEnabled {
+                workoutRemindersEnabled = false
+            }
             return
         }
 
@@ -481,22 +521,23 @@ class TimerViewModel: ObservableObject {
 
         switch workoutReminderMode {
         case .everyXDays:
-            let seconds = max(1, workoutReminderDays) * 24 * 60 * 60
+            let days = max(1, workoutReminderDays)
+            let seconds = days * 24 * 60 * 60
             scheduleNotification(
                 identifier: "workoutReminder",
                 title: "Time for your N4x4 session",
-                body: "It’s been \(workoutReminderDays) day(s). Ready for your next workout?",
+                body: "It’s been \(days) day(s). Ready for your next workout?",
                 in: TimeInterval(seconds),
                 repeats: true
             )
         case .weeklyWeekday:
-            let weekday = workoutReminderWeekday == 0 ? Self.defaultWorkoutReminderWeekday() : workoutReminderWeekday
-            if workoutReminderWeekday == 0 {
-                workoutReminderWeekday = weekday
+            let sanitizedWeekday = (1...7).contains(workoutReminderWeekday) ? workoutReminderWeekday : Self.defaultWorkoutReminderWeekday()
+            if workoutReminderWeekday != sanitizedWeekday {
+                workoutReminderWeekday = sanitizedWeekday
                 return
             }
-            scheduleWeeklyWorkoutReminder(weekday: weekday)
-            scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
+            scheduleWeeklyWorkoutReminder(weekday: sanitizedWeekday)
+            scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: sanitizedWeekday)
         }
     }
 
@@ -712,21 +753,27 @@ class TimerViewModel: ObservableObject {
     }
 
     func ensureNotificationPermissionForToggles() {
+        guard !isResolvingNotificationPermission else { return }
+        isResolvingNotificationPermission = true
+
         refreshNotificationPermissionState { [weak self] in
             guard let self else { return }
+            defer { self.isResolvingNotificationPermission = false }
+
             switch self.notificationPermissionState {
             case .notDetermined, .unknown:
                 self.requestNotificationPermission()
-            case .denied:
-                self.notificationsEnabled = false
-                self.workoutRemindersEnabled = false
+            case .denied, .unavailable:
+                if self.notificationsEnabled {
+                    self.notificationsEnabled = false
+                }
+                if self.workoutRemindersEnabled {
+                    self.workoutRemindersEnabled = false
+                }
             case .granted:
                 if self.workoutRemindersEnabled {
                     self.scheduleWorkoutReminder()
                 }
-            case .unavailable:
-                self.notificationsEnabled = false
-                self.workoutRemindersEnabled = false
             }
         }
     }
@@ -751,17 +798,25 @@ class TimerViewModel: ObservableObject {
 
     // Request notification permission
     func requestNotificationPermission() {
+        guard !isRequestingNotificationAuthorization else { return }
+        isRequestingNotificationAuthorization = true
+
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Error requesting notification permission: \(error.localizedDescription)")
             }
 
             DispatchQueue.main.async {
+                self.isRequestingNotificationAuthorization = false
                 self.notificationPermissionRequested = true
                 self.notificationPermissionState = granted ? .granted : .denied
                 if !granted {
-                    self.notificationsEnabled = false
-                    self.workoutRemindersEnabled = false
+                    if self.notificationsEnabled {
+                        self.notificationsEnabled = false
+                    }
+                    if self.workoutRemindersEnabled {
+                        self.workoutRemindersEnabled = false
+                    }
                 } else if self.workoutRemindersEnabled {
                     self.scheduleWorkoutReminder()
                 }

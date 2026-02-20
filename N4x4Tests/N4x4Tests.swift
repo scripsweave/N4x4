@@ -38,8 +38,10 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.intervals[0].type, .warmup)
         XCTAssertEqual(vm.intervals[1].type, .highIntensity)
         XCTAssertEqual(vm.intervals[2].type, .rest)
+        XCTAssertEqual(vm.intervals[2].name, "Recovery")
         XCTAssertEqual(vm.intervals[3].type, .highIntensity)
         XCTAssertEqual(vm.intervals[4].type, .rest)
+        XCTAssertEqual(vm.intervals[4].name, "Recovery")
         XCTAssertEqual(vm.intervals[5].type, .highIntensity)
     }
 
@@ -264,6 +266,45 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.workoutLogEntries.count, 1)
         XCTAssertEqual(vm.workoutLogEntries.first?.workoutType, .norwegian4x4)
         XCTAssertEqual(vm.workoutLogEntries.first?.notes, "hard effort")
+    }
+
+    func testUserAgeSanitizationDoesNotLoopAndStaysBounded() {
+        let vm = TimerViewModel()
+
+        vm.userAge = 5
+        XCTAssertEqual(vm.userAge, TimerViewModel.minimumSupportedAge)
+
+        vm.userAge = 150
+        XCTAssertEqual(vm.userAge, TimerViewModel.maximumSupportedAge)
+
+        vm.userAge = 40
+        XCTAssertEqual(vm.userAge, 40)
+    }
+
+    func testWorkoutReminderWeekdayInvalidValueSanitizesWithoutChangingMode() {
+        let vm = TimerViewModel()
+        vm.workoutReminderMode = .weeklyWeekday
+        vm.workoutReminderWeekday = 3
+
+        vm.workoutReminderWeekday = 999
+
+        XCTAssertEqual(vm.workoutReminderWeekday, 0)
+        XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
+    }
+
+    func testReminderModeAndDayTransitionsDoNotOscillate() {
+        let vm = TimerViewModel()
+        vm.workoutRemindersEnabled = false
+
+        vm.workoutReminderMode = .weeklyWeekday
+        let weeklyDay = vm.workoutReminderWeekday
+        XCTAssertTrue((1...7).contains(weeklyDay))
+
+        vm.workoutReminderMode = .everyXDays
+        XCTAssertEqual(vm.workoutReminderMode, .everyXDays)
+
+        vm.workoutReminderMode = .weeklyWeekday
+        XCTAssertTrue((1...7).contains(vm.workoutReminderWeekday))
     }
 
 }
