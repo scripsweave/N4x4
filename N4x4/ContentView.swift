@@ -68,6 +68,7 @@ private struct OnboardingView: View {
     @ObservedObject var timerViewModel: TimerViewModel
     @StateObject private var flow = OnboardingFlowViewModel()
     @State private var selectedReminderWeekday: Int = TimerViewModel.defaultWorkoutReminderWeekday()
+    @State private var isRequestingNotificationPermission = false
     @Environment(\.dismiss) private var dismiss
 
     let onComplete: () -> Void
@@ -285,7 +286,12 @@ private struct OnboardingView: View {
     }
 
     private func requestNotifications() {
+        guard !isRequestingNotificationPermission else { return }
+        isRequestingNotificationPermission = true
+
         timerViewModel.refreshNotificationPermissionState {
+            defer { isRequestingNotificationPermission = false }
+
             switch timerViewModel.notificationPermissionState {
             case .granted:
                 timerViewModel.notificationsEnabled = true
@@ -295,9 +301,7 @@ private struct OnboardingView: View {
                 timerViewModel.notificationsEnabled = true
                 timerViewModel.workoutRemindersEnabled = true
                 timerViewModel.requestNotificationPermission()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    flow.next()
-                }
+                flow.next()
             case .denied, .unavailable:
                 flow.next()
             }
@@ -305,10 +309,14 @@ private struct OnboardingView: View {
     }
 
     private func saveReminderWeekdayAndContinue() {
+        guard !isRequestingNotificationPermission else { return }
         timerViewModel.workoutReminderMode = .weeklyWeekday
         timerViewModel.workoutReminderWeekday = selectedReminderWeekday
+        isRequestingNotificationPermission = true
 
         timerViewModel.refreshNotificationPermissionState {
+            defer { isRequestingNotificationPermission = false }
+
             switch timerViewModel.notificationPermissionState {
             case .granted:
                 timerViewModel.notificationsEnabled = true
@@ -318,9 +326,7 @@ private struct OnboardingView: View {
                 timerViewModel.notificationsEnabled = true
                 timerViewModel.workoutRemindersEnabled = true
                 timerViewModel.requestNotificationPermission()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    flow.next()
-                }
+                flow.next()
             case .denied, .unavailable:
                 flow.next()
             }
