@@ -24,6 +24,7 @@ enum WorkoutReminderMode: String, CaseIterable, Identifiable {
         switch self {
         case .everyXDays: return "Every X days"
         case .weeklyWeekday: return "Weekly on weekday"
+        default: return "Every X days"
         }
     }
 }
@@ -489,6 +490,8 @@ class TimerViewModel: ObservableObject {
             workoutReminderWeekday = weekday
             scheduleWeeklyWorkoutReminder(weekday: weekday)
             scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
+        default:
+            break
         }
     }
 
@@ -870,13 +873,12 @@ class TimerViewModel: ObservableObject {
 
         let endDate = Date()
         let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())
-        let duration = max(0, endDate.timeIntervalSince(startDate))
 
         let workout = HKWorkout(
             activityType: .highIntensityIntervalTraining,
             start: startDate,
             end: endDate,
-            duration: duration,
+            workoutEvents: nil,
             totalEnergyBurned: nil,
             totalDistance: nil,
             metadata: [HKMetadataKeyIndoorWorkout: true]

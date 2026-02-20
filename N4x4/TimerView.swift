@@ -148,13 +148,13 @@ struct TimerView: View {
                     secondaryButton: .cancel()
                 )
             }
-            .onChange(of: viewModel.isRunning) { _ in
+            .onChange(of: viewModel.isRunning) { _, _ in
                 updateIdleTimer()
             }
-            .onChange(of: viewModel.preventSleep) { _ in
+            .onChange(of: viewModel.preventSleep) { _, _ in
                 updateIdleTimer()
             }
-            .onChange(of: scenePhase) { newPhase in
+            .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     viewModel.refreshNotificationPermissionState()
                     viewModel.refreshHealthKitAuthorizationState()

@@ -104,7 +104,7 @@ struct SettingsView: View {
 
                 Section(header: Text("Apple Health").font(.headline)) {
                     Toggle("Enable Apple Health", isOn: $viewModel.healthKitEnabled)
-                        .onChange(of: viewModel.healthKitEnabled) { enabled in
+                        .onChange(of: viewModel.healthKitEnabled) { _, enabled in
                             if enabled {
                                 viewModel.requestHealthKitAuthorizationIfNeeded()
                             }
