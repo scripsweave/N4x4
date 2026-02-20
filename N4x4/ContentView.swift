@@ -5,6 +5,7 @@ final class OnboardingFlowViewModel: ObservableObject {
         case welcome
         case structure
         case notifications
+        case reminderDay
         case health
         case launch
 
@@ -13,6 +14,7 @@ final class OnboardingFlowViewModel: ObservableObject {
             case .welcome: return "Welcome to N4x4"
             case .structure: return "Train with purpose"
             case .notifications: return "Stay consistent"
+            case .reminderDay: return "Pick your workout day"
             case .health: return "Track your progress"
             case .launch: return "You’re ready"
             }
@@ -65,6 +67,7 @@ struct ContentView: View {
 private struct OnboardingView: View {
     @ObservedObject var timerViewModel: TimerViewModel
     @StateObject private var flow = OnboardingFlowViewModel()
+    @State private var selectedReminderWeekday: Int = TimerViewModel.defaultWorkoutReminderWeekday()
     @Environment(\.dismiss) private var dismiss
 
     let onComplete: () -> Void
@@ -117,12 +120,14 @@ private struct OnboardingView: View {
                         permissionCard(
                             icon: "bell.badge.fill",
                             title: "Get interval cues + comeback reminders",
-                            body: "We’ll alert you when each interval changes and send a gentle reminder every few days so momentum never fades.",
+                            body: "We’ll alert you when each interval changes and can send gentle reminder nudges so momentum never fades.",
                             primaryTitle: "Enable Notifications",
                             secondaryTitle: "Not now",
                             primaryAction: requestNotifications,
                             secondaryAction: flow.next
                         )
+                    case .reminderDay:
+                        reminderDayCard
                     case .health:
                         permissionCard(
                             icon: "heart.text.square.fill",
@@ -169,6 +174,11 @@ private struct OnboardingView: View {
                 }
             }
             .padding(24)
+            .onAppear {
+                selectedReminderWeekday = timerViewModel.workoutReminderWeekday == 0
+                    ? TimerViewModel.defaultWorkoutReminderWeekday()
+                    : timerViewModel.workoutReminderWeekday
+            }
         }
     }
 
@@ -190,6 +200,45 @@ private struct OnboardingView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.9))
                 .padding(.horizontal, 8)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private var reminderDayCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("Which day works best each week?")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+
+            Text("Pick your preferred workout day to make consistency easier. You can change this any time in Settings.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.9))
+
+            Picker("Preferred workout day", selection: $selectedReminderWeekday) {
+                ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
+                    Text(option.title).tag(option.value)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(maxHeight: 130)
+
+            VStack(spacing: 12) {
+                Button("Save Day") { saveReminderWeekdayAndContinue() }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                Button("Skip for now") { skipReminderWeekdayAndContinue() }
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
+            }
+            .padding(.top, 8)
         }
         .padding(28)
         .frame(maxWidth: .infinity)
@@ -253,6 +302,16 @@ private struct OnboardingView: View {
                 flow.next()
             }
         }
+    }
+
+    private func saveReminderWeekdayAndContinue() {
+        timerViewModel.workoutReminderMode = .weeklyWeekday
+        timerViewModel.workoutReminderWeekday = selectedReminderWeekday
+        flow.next()
+    }
+
+    private func skipReminderWeekdayAndContinue() {
+        flow.next()
     }
 
     private func requestHealth() {

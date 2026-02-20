@@ -69,12 +69,37 @@ struct SettingsView: View {
 
                 Section(header: Text("Workout Reminders").font(.headline)) {
                     Toggle("Reminder Notifications", isOn: $viewModel.workoutRemindersEnabled)
-                    Stepper(value: $viewModel.workoutReminderDays, in: 1...30) {
-                        Text("Every \(viewModel.workoutReminderDays) day(s)")
+
+                    Picker("Reminder Schedule", selection: Binding(
+                        get: { viewModel.workoutReminderMode },
+                        set: { viewModel.workoutReminderMode = $0 }
+                    )) {
+                        ForEach(WorkoutReminderMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
                     }
-                    Text("Default is weekly (7 days).")
+
+                    if viewModel.workoutReminderMode == .everyXDays {
+                        Stepper(value: $viewModel.workoutReminderDays, in: 1...30) {
+                            Text("Every \(viewModel.workoutReminderDays) day(s)")
+                        }
+                    } else {
+                        Picker("Reminder Day", selection: $viewModel.workoutReminderWeekday) {
+                            ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
+                                Text(option.title).tag(option.value)
+                            }
+                        }
+                    }
+
+                    Text("Pick the style that feels easiest to keep.")
                         .font(.footnote)
                         .foregroundColor(.gray)
+
+                    if viewModel.notificationPermissionState == .denied {
+                        permissionDeniedView(
+                            "Reminder notifications are denied for N4x4. You can still choose a schedule and enable alerts later in Settings."
+                        )
+                    }
                 }
 
                 Section(header: Text("Apple Health").font(.headline)) {

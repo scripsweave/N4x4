@@ -14,6 +14,20 @@ enum PermissionState: Equatable {
     case unavailable
 }
 
+enum WorkoutReminderMode: String, CaseIterable, Identifiable {
+    case everyXDays
+    case weeklyWeekday
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .everyXDays: return "Every X days"
+        case .weeklyWeekday: return "Weekly on weekday"
+        }
+    }
+}
+
 struct VO2DataPoint: Identifiable {
     let id = UUID()
     let date: Date
@@ -81,6 +95,23 @@ class TimerViewModel: ObservableObject {
             }
         }
     }
+    @AppStorage("workoutReminderMode") private var workoutReminderModeRaw: String = WorkoutReminderMode.everyXDays.rawValue {
+        didSet {
+            if workoutRemindersEnabled {
+                scheduleWorkoutReminder()
+            }
+        }
+    }
+    @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
+        didSet {
+            if workoutReminderWeekday < 0 || workoutReminderWeekday > 7 {
+                workoutReminderWeekday = 0
+            }
+            if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday {
+                scheduleWorkoutReminder()
+            }
+        }
+    }
 
     // HealthKit
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
@@ -89,6 +120,26 @@ class TimerViewModel: ObservableObject {
 
     @Published var notificationPermissionState: PermissionState = .unknown
     @Published var healthKitPermissionState: PermissionState = .unknown
+
+    var workoutReminderMode: WorkoutReminderMode {
+        get { WorkoutReminderMode(rawValue: workoutReminderModeRaw) ?? .everyXDays }
+        set {
+            workoutReminderModeRaw = newValue.rawValue
+            if newValue == .weeklyWeekday, workoutReminderWeekday == 0 {
+                workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
+            }
+        }
+    }
+
+    static let reminderWeekdayOptions: [(value: Int, title: String)] = [
+        (2, "Monday"),
+        (3, "Tuesday"),
+        (4, "Wednesday"),
+        (5, "Thursday"),
+        (6, "Friday"),
+        (7, "Saturday"),
+        (1, "Sunday")
+    ]
 
     private let healthStore = HKHealthStore()
 
@@ -132,6 +183,12 @@ class TimerViewModel: ObservableObject {
         }
         if workoutReminderDays < 1 {
             workoutReminderDays = 7
+        }
+        if WorkoutReminderMode(rawValue: workoutReminderModeRaw) == nil {
+            workoutReminderModeRaw = WorkoutReminderMode.everyXDays.rawValue
+        }
+        if workoutReminderMode == .weeklyWeekday && workoutReminderWeekday == 0 {
+            workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
         }
         userAge = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
 
@@ -353,19 +410,50 @@ class TimerViewModel: ObservableObject {
             return
         }
 
-        let seconds = max(1, workoutReminderDays) * 24 * 60 * 60
+        cancelWorkoutReminder()
 
-        scheduleNotification(
-            identifier: "workoutReminder",
-            title: "Time for your N4x4 session",
-            body: "It’s been \(workoutReminderDays) day(s). Ready for your next workout?",
-            in: TimeInterval(seconds),
-            repeats: true
-        )
+        switch workoutReminderMode {
+        case .everyXDays:
+            let seconds = max(1, workoutReminderDays) * 24 * 60 * 60
+            scheduleNotification(
+                identifier: "workoutReminder",
+                title: "Time for your N4x4 session",
+                body: "It’s been \(workoutReminderDays) day(s). Ready for your next workout?",
+                in: TimeInterval(seconds),
+                repeats: true
+            )
+        case .weeklyWeekday:
+            let weekday = workoutReminderWeekday == 0 ? Self.defaultWorkoutReminderWeekday() : workoutReminderWeekday
+            workoutReminderWeekday = weekday
+            scheduleWeeklyWorkoutReminder(weekday: weekday)
+        }
     }
 
     func cancelWorkoutReminder() {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder"])
+    }
+
+    private func scheduleWeeklyWorkoutReminder(weekday: Int) {
+        guard (1...7).contains(weekday) else { return }
+        guard notificationPermissionState == .granted else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Time for your N4x4 session"
+        content.body = "It’s your \(reminderWeekdayTitle(weekday)) workout day. Ready to train?"
+        content.sound = .default
+
+        var components = DateComponents()
+        components.weekday = weekday
+        components.hour = 9
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(identifier: "workoutReminder", content: content, trigger: trigger)
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Error scheduling weekly reminder: \(error.localizedDescription)")
+            }
+        }
     }
 
     func resetSettingsToDefaults() {
@@ -380,6 +468,8 @@ class TimerViewModel: ObservableObject {
         notificationsEnabled = false
         workoutRemindersEnabled = false
         workoutReminderDays = 7
+        workoutReminderMode = .everyXDays
+        workoutReminderWeekday = 0
 
         healthKitEnabled = false
         healthAuthorizationGranted = false
@@ -597,6 +687,14 @@ class TimerViewModel: ObservableObject {
         if UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
         }
+    }
+
+    func reminderWeekdayTitle(_ weekday: Int) -> String {
+        Self.reminderWeekdayOptions.first(where: { $0.value == weekday })?.title ?? "Not set"
+    }
+
+    static func defaultWorkoutReminderWeekday() -> Int {
+        Calendar.current.component(.weekday, from: Date())
     }
 
     func totalWorkoutDuration() -> TimeInterval {

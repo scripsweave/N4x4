@@ -18,6 +18,8 @@ final class N4x4Tests: XCTestCase {
             "notificationPermissionRequested",
             "workoutRemindersEnabled",
             "workoutReminderDays",
+            "workoutReminderMode",
+            "workoutReminderWeekday",
             "healthKitEnabled",
             "hasCompletedOnboarding"
         ].forEach { defaults.removeObject(forKey: $0) }
@@ -154,5 +156,37 @@ final class N4x4Tests: XCTestCase {
 
         XCTAssertEqual(flow.currentStep, .launch)
         XCTAssertTrue(flow.isLastStep)
+    }
+
+    func testOnboardingFlowIncludesReminderDayStep() {
+        let flow = OnboardingFlowViewModel()
+
+        flow.next() // structure
+        flow.next() // notifications
+        flow.next() // reminder day
+
+        XCTAssertEqual(flow.currentStep, .reminderDay)
+    }
+
+    func testWorkoutReminderModeDefaultsToEveryXDays() {
+        let vm = TimerViewModel()
+        XCTAssertEqual(vm.workoutReminderMode, .everyXDays)
+    }
+
+    func testSelectingWeeklyModeAutoPopulatesWeekday() {
+        let vm = TimerViewModel()
+        vm.workoutReminderWeekday = 0
+
+        vm.workoutReminderMode = .weeklyWeekday
+
+        XCTAssertTrue((1...7).contains(vm.workoutReminderWeekday))
+        XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
+    }
+
+    func testReminderWeekdayTitlesIncludeMondayAndSunday() {
+        let vm = TimerViewModel()
+
+        XCTAssertEqual(vm.reminderWeekdayTitle(2), "Monday")
+        XCTAssertEqual(vm.reminderWeekdayTitle(1), "Sunday")
     }
 }
