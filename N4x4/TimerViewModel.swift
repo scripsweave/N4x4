@@ -60,6 +60,18 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     }
 }
 
+private struct LegacyWorkoutLogEntryV1: Decodable {
+    let id: UUID?
+    let completedAt: Date
+}
+
+private struct LegacyWorkoutLogEntryV2: Decodable {
+    let id: UUID?
+    let completedAt: Date
+    let workoutType: String?
+    let notes: String?
+}
+
 struct VO2DataPoint: Identifiable {
     let id = UUID()
     let date: Date
@@ -69,6 +81,7 @@ struct VO2DataPoint: Identifiable {
 class TimerViewModel: ObservableObject {
     static let minimumSupportedAge = 13
     static let maximumSupportedAge = 100
+    private static let missedWorkoutFollowUpIdentifier = "workoutReminderFollowup"
 
     // User settings stored in UserDefaults
     @AppStorage("numberOfIntervals") var numberOfIntervals: Int = 4 {
@@ -382,7 +395,6 @@ class TimerViewModel: ObservableObject {
 
         if workoutRemindersEnabled {
             scheduleWorkoutReminder()
-            cancelMissedWorkoutFollowUpIfCompletedToday()
         }
         if healthKitEnabled {
             saveCompletedWorkoutToHealthKit()
@@ -535,11 +547,42 @@ class TimerViewModel: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
 
-        guard let decoded = try? decoder.decode([WorkoutLogEntry].self, from: data) else {
-            workoutLogEntries = []
+        if let decoded = try? decoder.decode([WorkoutLogEntry].self, from: data) {
+            workoutLogEntries = decoded.sorted { $0.completedAt > $1.completedAt }
             return
         }
-        workoutLogEntries = decoded.sorted { $0.completedAt > $1.completedAt }
+
+        if let legacyV2 = try? decoder.decode([LegacyWorkoutLogEntryV2].self, from: data) {
+            workoutLogEntries = legacyV2
+                .map {
+                    WorkoutLogEntry(
+                        id: $0.id ?? UUID(),
+                        completedAt: $0.completedAt,
+                        workoutType: WorkoutType(rawValue: $0.workoutType ?? "") ?? .norwegian4x4,
+                        notes: ($0.notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
+                .sorted { $0.completedAt > $1.completedAt }
+            persistWorkoutLogEntries()
+            return
+        }
+
+        if let legacyV1 = try? decoder.decode([LegacyWorkoutLogEntryV1].self, from: data) {
+            workoutLogEntries = legacyV1
+                .map {
+                    WorkoutLogEntry(
+                        id: $0.id ?? UUID(),
+                        completedAt: $0.completedAt,
+                        workoutType: .norwegian4x4,
+                        notes: ""
+                    )
+                }
+                .sorted { $0.completedAt > $1.completedAt }
+            persistWorkoutLogEntries()
+            return
+        }
+
+        workoutLogEntries = []
     }
 
     private func persistWorkoutLogEntries() {
@@ -550,19 +593,8 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    private func followUpIdentifier(for date: Date) -> String {
-        "workoutReminderFollowup-\(Int(date.timeIntervalSince1970))"
-    }
-
     private func cancelMissedWorkoutFollowUpReminder() {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            let ids = requests
-                .map(\.identifier)
-                .filter { $0.hasPrefix("workoutReminderFollowup-") }
-            if !ids.isEmpty {
-                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
-            }
-        }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.missedWorkoutFollowUpIdentifier])
     }
 
     private func scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday weekday: Int) {
@@ -572,13 +604,12 @@ class TimerViewModel: ObservableObject {
         let now = Date()
 
         guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: now),
-              let followUpDate = calendar.date(byAdding: .day, value: 1, to: scheduledDate),
+              let followUpDate = followUpDate(from: scheduledDate),
               !hasLoggedWorkout(on: scheduledDate) else {
             return
         }
 
-        var components = calendar.dateComponents([.year, .month, .day], from: followUpDate)
-        components.hour = 9
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: followUpDate)
 
         let content = UNMutableNotificationContent()
         content.title = "Missed yesterday? You can still do it today"
@@ -586,7 +617,7 @@ class TimerViewModel: ObservableObject {
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let request = UNNotificationRequest(identifier: followUpIdentifier(for: followUpDate), content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: Self.missedWorkoutFollowUpIdentifier, content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
@@ -609,6 +640,13 @@ class TimerViewModel: ObservableObject {
         )
     }
 
+    private func followUpDate(from scheduledDate: Date) -> Date? {
+        let calendar = Calendar.current
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: scheduledDate) else { return nil }
+        let dayComponents = calendar.dateComponents([.year, .month, .day], from: nextDay)
+        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: calendar.date(from: dayComponents) ?? nextDay)
+    }
+
     private func hasLoggedWorkout(on date: Date) -> Bool {
         workoutLogEntries.contains { Calendar.current.isDate($0.completedAt, inSameDayAs: date) }
     }
@@ -621,9 +659,7 @@ class TimerViewModel: ObservableObject {
             return
         }
 
-        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today) else { return }
-        let identifier = followUpIdentifier(for: tomorrow)
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+        cancelMissedWorkoutFollowUpReminder()
     }
 
     func resetSettingsToDefaults() {
@@ -831,7 +867,7 @@ class TimerViewModel: ObservableObject {
 
         let endDate = Date()
         let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())
-        let duration = endDate.timeIntervalSince(startDate)
+        let duration = max(0, endDate.timeIntervalSince(startDate))
 
         let workout = HKWorkout(
             activityType: .highIntensityIntervalTraining,

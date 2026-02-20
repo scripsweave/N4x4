@@ -210,4 +210,26 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(WorkoutType.allCases.count, 11)
     }
 
+    func testWorkoutLogMigrationFromLegacySchemaPreservesEntry() {
+        let legacyJson = "[{\"completedAt\":\"2026-02-18T10:00:00Z\"}]"
+        UserDefaults.standard.set(legacyJson, forKey: "workoutLogEntriesData")
+
+        let vm = TimerViewModel()
+
+        XCTAssertEqual(vm.workoutLogEntries.count, 1)
+        XCTAssertEqual(vm.workoutLogEntries.first?.workoutType, .norwegian4x4)
+        XCTAssertEqual(vm.workoutLogEntries.first?.notes, "")
+    }
+
+    func testWorkoutLogMigrationDefaultsUnknownWorkoutTypeToNorwegian4x4() {
+        let legacyJson = "[{\"completedAt\":\"2026-02-18T10:00:00Z\",\"workoutType\":\"SkiErg\",\"notes\":\"  hard effort  \"}]"
+        UserDefaults.standard.set(legacyJson, forKey: "workoutLogEntriesData")
+
+        let vm = TimerViewModel()
+
+        XCTAssertEqual(vm.workoutLogEntries.count, 1)
+        XCTAssertEqual(vm.workoutLogEntries.first?.workoutType, .norwegian4x4)
+        XCTAssertEqual(vm.workoutLogEntries.first?.notes, "hard effort")
+    }
+
 }
