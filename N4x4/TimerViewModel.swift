@@ -106,7 +106,10 @@ class TimerViewModel: ObservableObject {
     @AppStorage("preventSleep") var preventSleep: Bool = true
     @AppStorage("userAge") var userAge: Int = 40 {
         didSet {
-            userAge = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
+            let bounded = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
+            if bounded != userAge {
+                userAge = bounded
+            }
         }
     }
 
