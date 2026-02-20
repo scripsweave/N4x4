@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var viewModel: TimerViewModel
     @Environment(\.presentationMode) var presentationMode
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showResetAlert = false
 
     var body: some View {
@@ -98,6 +99,17 @@ struct SettingsView: View {
                     Text(viewModel.healthAuthorizationGranted ? "Connected" : "Not connected")
                         .font(.footnote)
                         .foregroundColor(viewModel.healthAuthorizationGranted ? .green : .secondary)
+                }
+
+                Section(header: Text("Onboarding").font(.headline)) {
+                    Text("You can replay the first-run guide any time.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+
+                    Button("Replay Onboarding") {
+                        hasCompletedOnboarding = false
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 }
 
                 Section {

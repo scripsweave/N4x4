@@ -18,7 +18,8 @@ final class N4x4Tests: XCTestCase {
             "notificationPermissionRequested",
             "workoutRemindersEnabled",
             "workoutReminderDays",
-            "healthKitEnabled"
+            "healthKitEnabled",
+            "hasCompletedOnboarding"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -127,5 +128,31 @@ final class N4x4Tests: XCTestCase {
         vm.saveCompletedWorkoutToHealthKit()
 
         XCTAssertFalse(vm.healthAuthorizationGranted)
+    }
+
+    func testOnboardingFlowMovesForwardAndBackWithinBounds() {
+        let flow = OnboardingFlowViewModel()
+
+        XCTAssertEqual(flow.currentStep, .welcome)
+
+        flow.next()
+        XCTAssertEqual(flow.currentStep, .structure)
+
+        flow.back()
+        XCTAssertEqual(flow.currentStep, .welcome)
+
+        flow.back()
+        XCTAssertEqual(flow.currentStep, .welcome)
+    }
+
+    func testOnboardingFlowStopsAtLastStep() {
+        let flow = OnboardingFlowViewModel()
+
+        OnboardingFlowViewModel.Step.allCases.forEach { _ in
+            flow.next()
+        }
+
+        XCTAssertEqual(flow.currentStep, .launch)
+        XCTAssertTrue(flow.isLastStep)
     }
 }
