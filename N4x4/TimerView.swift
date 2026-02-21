@@ -172,35 +172,28 @@ struct TimerView: View {
 
     @ViewBuilder
     var vo2Section: some View {
-        if viewModel.healthKitEnabled {
-            if viewModel.vo2DataPoints.count >= 2 {
+        if viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2 {
 #if canImport(Charts)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("VO₂ Max Trend")
-                        .font(.headline)
-                    Chart(viewModel.vo2DataPoints) { point in
-                        LineMark(
-                            x: .value("Date", point.date),
-                            y: .value("VO₂", point.value)
-                        )
-                        PointMark(
-                            x: .value("Date", point.date),
-                            y: .value("VO₂", point.value)
-                        )
-                    }
-                    .frame(height: 160)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("VO₂ Max Trend")
+                    .font(.headline)
+                Chart(viewModel.vo2DataPoints) { point in
+                    LineMark(
+                        x: .value("Date", point.date),
+                        y: .value("VO₂", point.value)
+                    )
+                    PointMark(
+                        x: .value("Date", point.date),
+                        y: .value("VO₂", point.value)
+                    )
                 }
-#else
-                Text("VO₂ max data available. Trend chart requires iOS Charts support.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-#endif
-            } else {
-                Text("No VO₂ max trend yet. Apple Health data will appear here when available.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+                .frame(height: 160)
             }
+#else
+            Text("VO₂ max data available. Trend chart requires iOS Charts support.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+#endif
         }
     }
 
