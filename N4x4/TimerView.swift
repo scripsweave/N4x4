@@ -115,7 +115,7 @@ struct TimerView: View {
                     Button(action: {
                         showHistory = true
                     }) {
-                        Image(systemName: "clock.arrow.circlepath")
+                        Image(systemName: "book")
                             .font(.title3)
                     }
 
