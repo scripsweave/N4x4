@@ -58,6 +58,14 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         self.workoutType = workoutType
         self.notes = notes
     }
+
+    var weekOfYear: Int {
+        Calendar.current.component(.weekOfYear, from: completedAt)
+    }
+
+    var year: Int {
+        Calendar.current.component(.year, from: completedAt)
+    }
 }
 
 private struct LegacyWorkoutLogEntryV1: Decodable {
@@ -137,7 +145,13 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("notificationPermissionRequested") var notificationPermissionRequested: Bool = false
 
-    // Reminder notifications
+    // Streak tracking
+    @AppStorage("currentStreak") var currentStreak: Int = 0
+    @AppStorage("longestStreak") var longestStreak: Int = 0
+    @AppStorage("hasMadeCommitment") var hasMadeCommitment: Bool = false
+    @AppStorage("committedWeeks") var committedWeeks: Int = 5  // Default 5-week commitment
+
+    // Reminder notifications - now supports multiple days per week
     @AppStorage("workoutRemindersEnabled") var workoutRemindersEnabled: Bool = false {
         didSet {
             guard oldValue != workoutRemindersEnabled else { return }
@@ -171,26 +185,27 @@ class TimerViewModel: ObservableObject {
             }
             guard oldValue != workoutReminderModeRaw else { return }
 
-            if workoutReminderMode == .weeklyWeekday, workoutReminderWeekday == 0 {
-                workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
-                return
-            }
-
             if workoutRemindersEnabled {
                 scheduleWorkoutReminder()
             }
         }
     }
-    @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
+    // Store multiple weekdays as comma-separated string (e.g., "1,3,5" for Mon,Wed,Fri)
+    @AppStorage("workoutReminderWeekdays") var workoutReminderWeekdays: String = "" {
         didSet {
-            let sanitized = (1...7).contains(workoutReminderWeekday) ? workoutReminderWeekday : 0
-            if sanitized != workoutReminderWeekday {
-                workoutReminderWeekday = sanitized
-                return
-            }
-            guard oldValue != workoutReminderWeekday else { return }
+            guard oldValue != workoutReminderWeekdays else { return }
             if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday {
                 scheduleWorkoutReminder()
+            }
+        }
+    }
+
+    // Legacy support for single weekday
+    @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
+        didSet {
+            // Migrate legacy single weekday to new format
+            if oldValue > 0 && workoutReminderWeekdays.isEmpty {
+                workoutReminderWeekdays = String(oldValue)
             }
         }
     }
@@ -228,6 +243,109 @@ class TimerViewModel: ObservableObject {
         (7, "Saturday"),
         (1, "Sunday")
     ]
+
+    // MARK: - Multi-day Reminder Helpers
+
+    var selectedWeekdays: [Int] {
+        get {
+            guard !workoutReminderWeekdays.isEmpty else { return [] }
+            return workoutReminderWeekdays
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { (1...7).contains($0) }
+        }
+        set {
+            let sorted = newValue.sorted()
+            workoutReminderWeekdays = sorted.map { String($0) }.joined(separator: ",")
+        }
+    }
+
+    func toggleWeekday(_ weekday: Int) {
+        var days = selectedWeekdays
+        if days.contains(weekday) {
+            days.removeAll { $0 == weekday }
+        } else {
+            days.append(weekday)
+        }
+        selectedWeekdays = days
+    }
+
+    func isWeekdaySelected(_ weekday: Int) -> Bool {
+        selectedWeekdays.contains(weekday)
+    }
+
+    // MARK: - Streak Calculation
+
+    var currentWeekStreak: Int {
+        calculateCurrentStreak()
+    }
+
+    private func calculateCurrentStreak() -> Int {
+        guard !workoutLogEntries.isEmpty else { return 0 }
+
+        let calendar = Calendar.current
+        let now = Date()
+        var streak = 0
+        var currentWeek = calendar.component(.weekOfYear, from: now)
+        var currentYear = calendar.component(.year, from: now)
+
+        // Get unique weeks from workout entries
+        let uniqueWeeks = Set(workoutLogEntries.map { ($0.year, $0.weekOfYear) })
+        let sortedWeeks = uniqueWeeks.sorted { ($0.0, $1) > ($1.0, $0.1) }
+
+        // Check from current week backwards
+        for (year, week) in sortedWeeks {
+            if year == currentYear && week == currentWeek {
+                streak += 1
+                currentWeek -= 1
+                if currentWeek < 1 {
+                    currentYear -= 1
+                    let lastWeek = calendar.component(.weekOfYear, from: calendar.date(from: DateComponents(year: currentYear, month: 12, day: 28))!)
+                    currentWeek = lastWeek
+                }
+            } else if year == currentYear && week == currentWeek - 1 {
+                streak += 1
+                currentWeek = week - 1
+                if currentWeek < 1 {
+                    currentYear -= 1
+                    currentWeek = 52
+                }
+            } else {
+                break
+            }
+        }
+
+        return streak
+    }
+
+    func updateStreakOnWorkoutComplete() {
+        let newStreak = currentWeekStreak
+        if newStreak > currentStreak {
+            currentStreak = newStreak
+        }
+        if currentStreak > longestStreak {
+            longestStreak = currentStreak
+        }
+    }
+
+    // MARK: - Success Messages
+
+    static let successMessages: [String] = [
+        "Crushing it, Viking! 🪓",
+        "Another workout, another victory! ⚔️",
+        "Your VO2 max is thanking you! 💪",
+        "Stronger than yesterday! 🔥",
+        "Viking tradition: never skip training! 🛡️",
+        "Epic workout complete! 🏆",
+        "You're becoming unstoppable! ⭐",
+        "The forge grows stronger! 🔨",
+        "Discipline is your superpower! 🎯",
+        "One workout at a time! 👊"
+    ]
+
+    var randomSuccessMessage: String {
+        Self.successMessages.randomElement() ?? "Great job, Viking!"
+    }
 
     private let healthStore = HKHealthStore()
     private var isSchedulingWorkoutReminder = false
@@ -431,6 +549,9 @@ class TimerViewModel: ObservableObject {
         selectedWorkoutType = .norwegian4x4
         workoutNotesDraft = ""
         showPostWorkoutSummary = true
+        
+        // Update streak
+        updateStreakOnWorkoutComplete()
 
         if workoutRemindersEnabled {
             scheduleWorkoutReminder()
@@ -526,23 +647,30 @@ class TimerViewModel: ObservableObject {
             scheduleNotification(
                 identifier: "workoutReminder",
                 title: "Time for your N4x4 session",
-                body: "It’s been \(days) day(s). Ready for your next workout?",
+                body: "It's been \(days) day(s). Ready for your next workout?",
                 in: TimeInterval(seconds),
                 repeats: true
             )
         case .weeklyWeekday:
-            let sanitizedWeekday = (1...7).contains(workoutReminderWeekday) ? workoutReminderWeekday : Self.defaultWorkoutReminderWeekday()
-            if workoutReminderWeekday != sanitizedWeekday {
-                workoutReminderWeekday = sanitizedWeekday
-                return
+            // Support multiple days per week
+            let weekdays = selectedWeekdays
+            if weekdays.isEmpty {
+                // Default to today if no days selected
+                let today = Calendar.current.component(.weekday, from: Date())
+                scheduleWeeklyWorkoutReminder(weekday: today)
+                scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: today)
+            } else {
+                // Schedule for each selected weekday
+                for weekday in weekdays {
+                    scheduleWeeklyWorkoutReminder(weekday: weekday)
+                    scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
+                }
             }
-            scheduleWeeklyWorkoutReminder(weekday: sanitizedWeekday)
-            scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: sanitizedWeekday)
         }
     }
 
     func cancelWorkoutReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder"])
+        cancelAllWeeklyReminders()
         cancelMissedWorkoutFollowUpReminder()
     }
 
@@ -552,7 +680,7 @@ class TimerViewModel: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "Time for your N4x4 session"
-        content.body = "It’s your \(reminderWeekdayTitle(weekday)) workout day. Ready to train?"
+        content.body = "It's your \(reminderWeekdayTitle(weekday)) workout day. Ready to train, Viking? ⚔️"
         content.sound = .default
 
         var components = DateComponents()
@@ -560,13 +688,22 @@ class TimerViewModel: ObservableObject {
         components.hour = 9
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        let request = UNNotificationRequest(identifier: "workoutReminder", content: content, trigger: trigger)
+        // Use unique identifier per weekday
+        let request = UNNotificationRequest(identifier: "workoutReminder_\(weekday)", content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
                 print("Error scheduling weekly reminder: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func cancelAllWeeklyReminders() {
+        // Cancel all possible weekday reminders
+        for weekday in 1...7 {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder_\(weekday)"])
+        }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder"])
     }
 
 
@@ -665,7 +802,7 @@ class TimerViewModel: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "Missed yesterday? You can still do it today"
-        content.body = "It’s not too late—fit in your N4x4 session today and keep the streak alive."
+        content.body = "It's not too late-fit in your N4x4 session today and keep the streak alive."
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
@@ -727,7 +864,11 @@ class TimerViewModel: ObservableObject {
         workoutRemindersEnabled = false
         workoutReminderDays = 7
         workoutReminderMode = .everyXDays
-        workoutReminderWeekday = 0
+        workoutReminderWeekdays = ""
+        
+        // Reset streaks but keep commitment
+        currentStreak = 0
+        longestStreak = 0
 
         healthKitEnabled = false
         healthAuthorizationGranted = false

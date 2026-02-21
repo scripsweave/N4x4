@@ -67,7 +67,6 @@ struct ContentView: View {
 private struct OnboardingView: View {
     @ObservedObject var timerViewModel: TimerViewModel
     @StateObject private var flow = OnboardingFlowViewModel()
-    @State private var selectedReminderWeekday: Int = TimerViewModel.defaultWorkoutReminderWeekday()
     @State private var isRequestingNotificationPermission = false
     @Environment(\.dismiss) private var dismiss
 
@@ -175,11 +174,6 @@ private struct OnboardingView: View {
                 }
             }
             .padding(24)
-            .onAppear {
-                selectedReminderWeekday = timerViewModel.workoutReminderWeekday == 0
-                    ? TimerViewModel.defaultWorkoutReminderWeekday()
-                    : timerViewModel.workoutReminderWeekday
-            }
         }
     }
 
@@ -217,30 +211,56 @@ private struct OnboardingView: View {
                 .padding(16)
                 .background(Circle().fill(Color.white.opacity(0.16)))
 
-            Text("Which day works best each week?")
+            Text("How often will you train?")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Pick your preferred workout day to make consistency easier. You can change this any time in Settings.")
+            Text("Health experts recommend at least 1 Norwegian 4x4 per week. Choose days that work for you — you can always adjust later.")
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 8)
 
-            Picker("Preferred workout day", selection: $selectedReminderWeekday) {
+            // Multi-day selection with toggle buttons
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
-                    Text(option.title).tag(option.value)
+                    Button(action: {
+                        timerViewModel.toggleWeekday(option.value)
+                    }) {
+                        Text(String(option.title.prefix(3)))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(timerViewModel.isWeekdaySelected(option.value) ? .black : .white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(timerViewModel.isWeekdaySelected(option.value) ? Color.white : Color.white.opacity(0.2))
+                            )
+                    }
                 }
             }
-            .pickerStyle(.wheel)
-            .frame(maxHeight: 130)
+            .padding(.horizontal, 8)
+
+            let selectedCount = timerViewModel.selectedWeekdays.count
+            if selectedCount > 0 {
+                Text("\(selectedCount) day\(selectedCount == 1 ? "" : "s") selected per week")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
 
             VStack(spacing: 12) {
-                Button("Save Day") { saveReminderWeekdayAndContinue() }
+                Button(selectedCount > 0 ? "Save My Training Days" : "Skip for now") { 
+                    if selectedCount > 0 {
+                        timerViewModel.workoutReminderMode = .weeklyWeekday
+                        timerViewModel.workoutRemindersEnabled = true
+                    }
+                    saveReminderWeekdayAndContinue()
+                }
                     .buttonStyle(OnboardingPrimaryButtonStyle())
-                Button("Skip for now") { skipReminderWeekdayAndContinue() }
+                Button("I'll decide later") { skipReminderWeekdayAndContinue() }
                     .buttonStyle(OnboardingSecondaryButtonStyle())
             }
             .padding(.top, 8)
@@ -316,8 +336,6 @@ private struct OnboardingView: View {
 
     private func saveReminderWeekdayAndContinue() {
         guard !isRequestingNotificationPermission else { return }
-        timerViewModel.workoutReminderMode = .weeklyWeekday
-        timerViewModel.workoutReminderWeekday = selectedReminderWeekday
         isRequestingNotificationPermission = true
 
         timerViewModel.refreshNotificationPermissionState {
