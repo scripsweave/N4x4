@@ -192,9 +192,11 @@ private struct OnboardingView: View {
                 .background(Circle().fill(Color.white.opacity(0.16)))
 
             Text(title)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 28, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(subtitle)
                 .font(.title3)
@@ -216,9 +218,11 @@ private struct OnboardingView: View {
                 .background(Circle().fill(Color.white.opacity(0.16)))
 
             Text("Which day works best each week?")
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text("Pick your preferred workout day to make consistency easier. You can change this any time in Settings.")
                 .font(.body)
@@ -263,9 +267,11 @@ private struct OnboardingView: View {
                 .background(Circle().fill(Color.white.opacity(0.16)))
 
             Text(title)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(body)
                 .font(.body)
