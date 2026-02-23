@@ -130,6 +130,10 @@ struct SettingsView: View {
                             }
                         }
 
+                    if viewModel.healthKitEnabled {
+                        Toggle("Log Workouts to Apple Health", isOn: $viewModel.logWorkoutsToHealthKit)
+                    }
+
                     if viewModel.healthKitPermissionState == .denied {
                         permissionDeniedView(
                             "Apple Health access is denied. Enable workout and VO₂ permissions in Settings to sync completed sessions.",

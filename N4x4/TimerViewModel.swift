@@ -236,6 +236,7 @@ class TimerViewModel: ObservableObject {
 
     // HealthKit
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
+    @AppStorage("logWorkoutsToHealthKit") var logWorkoutsToHealthKit: Bool = true
     @Published var healthAuthorizationGranted: Bool = false
     @Published var vo2DataPoints: [VO2DataPoint] = []
 
@@ -1042,6 +1043,7 @@ class TimerViewModel: ObservableObject {
         longestStreak = 0
 
         healthKitEnabled = false
+        logWorkoutsToHealthKit = true
         healthAuthorizationGranted = false
         vo2DataPoints = []
         cancelWorkoutReminder()
@@ -1241,7 +1243,7 @@ class TimerViewModel: ObservableObject {
     }
 
     func saveCompletedWorkoutToHealthKit() {
-        guard healthKitEnabled, healthAuthorizationGranted else { return }
+        guard healthKitEnabled, healthAuthorizationGranted, logWorkoutsToHealthKit else { return }
 
         let endDate = Date()
         let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())

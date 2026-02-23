@@ -135,9 +135,9 @@ private struct OnboardingView: View {
                     case .health:
                         permissionCard(
                             icon: "heart.text.square.fill",
-                            title: "Unlock Apple Health insights",
-                            body: "Log completed workouts and watch your VO₂ max trend improve over time. Great for seeing your cardio fitness gains.",
-                            primaryTitle: "Connect Apple Health",
+                            title: "Connect to Apple Health",
+                            body: "Automatically save your N4x4 workouts to Apple Health and track your VO₂ max over time. Great for seeing your cardio fitness gains.",
+                            primaryTitle: "Connect & Log Workouts",
                             secondaryTitle: "Maybe later",
                             primaryAction: requestHealth,
                             secondaryAction: flow.next
