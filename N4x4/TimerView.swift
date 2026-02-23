@@ -101,7 +101,7 @@ struct TimerView: View {
 
                     if let hrZone = heartRateZoneText {
                         Text(hrZone)
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(size: 18, weight: .medium))
                             .foregroundColor(.secondary)
                             .padding(.top, 8)
                     }
