@@ -125,8 +125,6 @@ struct TimerView: View {
                     }
 
                     vo2Section
-                    
-                    streakSection
                 }
                 .padding()
             }
@@ -158,7 +156,7 @@ struct TimerView: View {
                 SettingsView(viewModel: viewModel)
             }
             .sheet(isPresented: $showHistory) {
-                WorkoutHistoryView(viewModel: viewModel)
+                StreakHistoryView(viewModel: viewModel)
             }
             .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
                 PostWorkoutSummaryView(viewModel: viewModel)
@@ -225,10 +223,6 @@ struct TimerView: View {
     }
 
     @ViewBuilder
-    var streakSection: some View {
-        StreakCard(viewModel: viewModel)
-    }
-    
     // Helper functions inside TimerView
     func timeString(time: TimeInterval) -> String {
         let minutes = Int(time) / 60 % 60
@@ -285,39 +279,158 @@ private struct PostWorkoutSummaryView: View {
     }
 }
 
-private struct WorkoutHistoryView: View {
+private struct StreakHistoryView: View {
     @ObservedObject var viewModel: TimerViewModel
     @Environment(\.dismiss) private var dismiss
-
+    @State private var selectedWorkout: WorkoutLogEntry?
+    
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
+    private let daySymbols = ["S", "M", "T", "W", "T", "F", "S"]
+    
     var body: some View {
         NavigationView {
-            List {
-                if viewModel.workoutLogEntries.isEmpty {
-                    Text("No workouts logged yet.")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(viewModel.workoutLogEntries) { entry in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(entry.workoutType.rawValue)
-                                .font(.headline)
-                            Text(entry.completedAt, style: .date)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            if !entry.notes.isEmpty {
-                                Text(entry.notes)
-                                    .font(.subheadline)
-                            }
-                        }
-                        .padding(.vertical, 4)
+            ScrollView {
+                VStack(spacing: 20) {
+                    streakHeader
+                    calendarSection
+                    if let workout = selectedWorkout {
+                        workoutDetailCard(workout)
                     }
                 }
+                .padding()
             }
-            .navigationTitle("Workout Log")
+            .navigationTitle("Streaks")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
         }
+    }
+    
+    private var streakHeader: some View {
+        HStack(spacing: 20) {
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: viewModel.currentStreak > 0 ? "flame.fill" : "flame")
+                        .font(.title)
+                        .foregroundStyle(viewModel.currentStreak > 0 ? .orange : .gray)
+                    Text("\(viewModel.currentStreak)")
+                        .font(.system(size: 36, weight: .bold))
+                }
+                Text("Current Streak")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Divider().frame(height: 50)
+            
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Image(systemName: "trophy.fill")
+                        .font(.title)
+                        .foregroundStyle(.orange)
+                    Text("\(viewModel.longestStreak)")
+                        .font(.system(size: 36, weight: .bold))
+                }
+                Text("Best Streak")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(16)
+    }
+    
+    private var calendarSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("This Month")
+                .font(.headline)
+            
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(daySymbols, id: \.self) { day in
+                    Text(day).font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity)
+                }
+            }
+            
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(0..<currentMonthDays, id: \.self) { index in
+                    let dayNumber = index + 1
+                    let workout = workoutOnDay(dayNumber)
+                    let isToday = isToday(dayNumber)
+                    
+                    Button(action: {
+                        if let w = workout { selectedWorkout = w }
+                    }) {
+                        ZStack {
+                            Circle().fill(workout != nil ? Color.green : (isToday ? Color.accentColor.opacity(0.2) : Color.clear))
+                            if workout != nil {
+                                Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundColor(.white)
+                            }
+                            Text("\(dayNumber)").font(.caption).foregroundColor(workout != nil ? .white : (isToday ? .accentColor : .primary))
+                        }
+                        .aspectRatio(1, contentMode: .fit)
+                    }
+                    .disabled(workout == nil)
+                }
+            }
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(16)
+    }
+    
+    private func workoutDetailCard(_ workout: WorkoutLogEntry) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "checkmark.circle.fill").foregroundColor(.green)
+                Text("Workout Details").font(.headline)
+                Spacer()
+                Button("Close") { selectedWorkout = nil }.font(.caption)
+            }
+            Divider()
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Type").font(.caption).foregroundColor(.secondary)
+                    Text(workout.workoutType.rawValue).font(.body.weight(.medium))
+                }
+                Spacer()
+                VStack(alignment: .trailing) {
+                    Text("Date").font(.caption).foregroundColor(.secondary)
+                    Text(workout.completedAt, style: .date).font(.body.weight(.medium))
+                }
+            }
+            if !workout.notes.isEmpty {
+                VStack(alignment: .leading) {
+                    Text("Notes").font(.caption).foregroundColor(.secondary)
+                    Text(workout.notes).font(.body)
+                }
+            }
+        }
+        .padding()
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(16)
+    }
+    
+    private var currentMonthDays: Int {
+        Calendar.current.range(of: .day, in: .month, for: Date())?.count ?? 30
+    }
+    
+    private func isToday(_ day: Int) -> Bool {
+        Calendar.current.component(.day, from: Date()) == day
+    }
+    
+    private func workoutOnDay(_ day: Int) -> WorkoutLogEntry? {
+        let calendar = Calendar.current
+        guard let monthInterval = calendar.dateInterval(of: .month, for: Date()) else { return nil }
+        for entry in viewModel.workoutLogEntries {
+            if monthInterval.contains(entry.completedAt) {
+                if calendar.component(.day, from: entry.completedAt) == day {
+                    return entry
+                }
+            }
+        }
+        return nil
     }
 }
