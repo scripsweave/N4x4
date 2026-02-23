@@ -256,26 +256,24 @@ private struct PostWorkoutSummaryView: View {
                     TextField("Notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
                         .lineLimit(2...4)
                 }
-
-                Section {
-                    Button("Save to Log") {
-                        viewModel.saveWorkoutLogEntryAndResetSession()
-                        dismiss()
-                    }
-                    .font(.headline)
-                }
             }
-            .navigationTitle("Session Saved?")
+            .navigationTitle("Session on \(sessionDateText)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Skip") {
-                        viewModel.closePostWorkoutSummaryWithoutSaving()
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        viewModel.saveWorkoutLogEntryAndResetSession()
                         dismiss()
                     }
                 }
             }
         }
+    }
+    
+    private var sessionDateText: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter.string(from: viewModel.workoutStartDate ?? Date())
     }
 }
 
