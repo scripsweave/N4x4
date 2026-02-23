@@ -104,6 +104,7 @@ struct SettingsView: View {
                                                     .fill(viewModel.isWeekdaySelected(option.value) ? Color.accentColor : Color.gray.opacity(0.2))
                                             )
                                     }
+                                    .buttonStyle(.plain)
                                 }
                             }
                             
