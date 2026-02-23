@@ -16,7 +16,7 @@ struct StreakCard: View {
                         Image(systemName: flameIcon)
                             .font(.system(size: 32, weight: .bold))
                             .foregroundStyle(flameGradient)
-                            .symbolEffect(.bounce, value: viewModel.currentStreak)
+                            
                         
                         Text("\(viewModel.currentStreak)")
                             .font(.system(size: 48, weight: .black, design: .rounded))
