@@ -4,6 +4,7 @@ final class OnboardingFlowViewModel: ObservableObject {
     enum Step: Int, CaseIterable {
         case welcome
         case structure
+        case age
         case notifications
         case reminderDay
         case health
@@ -13,10 +14,11 @@ final class OnboardingFlowViewModel: ObservableObject {
             switch self {
             case .welcome: return "Welcome to N4x4"
             case .structure: return "Train with purpose"
+            case .age: return "Set your heart rate zones"
             case .notifications: return "Stay consistent"
             case .reminderDay: return "Pick your workout day"
             case .health: return "Track your progress"
-            case .launch: return "You’re ready"
+            case .launch: return "You're ready"
             }
         }
     }
@@ -116,11 +118,13 @@ private struct OnboardingView: View {
                             title: "Built around proven 4x4 intervals.",
                             subtitle: "Warm up, push hard, recover, repeat. Clean cues keep your workout sharp and simple."
                         )
+                    case .age:
+                        ageCard
                     case .notifications:
                         permissionCard(
                             icon: "bell.badge.fill",
                             title: "Get interval cues + comeback reminders",
-                            body: "We’ll alert you when each interval changes and can send gentle reminder nudges so momentum never fades.",
+                            body: "We'll alert you when each interval changes and can send gentle reminder nudges so momentum never fades.",
                             primaryTitle: "Enable Notifications",
                             secondaryTitle: "Not now",
                             primaryAction: requestNotifications,
@@ -141,8 +145,8 @@ private struct OnboardingView: View {
                     case .launch:
                         permissionCard(
                             icon: "bolt.heart.fill",
-                            title: "Let’s crush workout #1",
-                            body: "Everything’s ready. Start your first guided interval session now.",
+                            title: "Let's crush workout #1",
+                            body: "Everything's ready. Start your first guided interval session now.",
                             primaryTitle: "Start First Workout",
                             secondaryTitle: "Finish",
                             primaryAction: {
@@ -203,6 +207,57 @@ private struct OnboardingView: View {
         .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
+    private var ageCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "heart.text.square.fill")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("Let's personalize your training")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("We use your age to calculate your target heart rate zones. This helps you train at the right intensity for maximum VO₂ max improvement.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 8)
+
+            VStack(spacing: 12) {
+                Stepper(value: $timerViewModel.userAge, in: TimerViewModel.minimumSupportedAge...TimerViewModel.maximumSupportedAge) {
+                    Text("Age: \(timerViewModel.userAge)")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 40)
+                .padding(.vertical, 12)
+                .background(Color.white.opacity(0.15))
+                .cornerRadius(12)
+                
+                Text("Your max heart rate: \(timerViewModel.maximumHeartRate) BPM")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .padding(.top, 8)
+
+            VStack(spacing: 12) {
+                Button("Continue") {
+                    flow.next()
+                }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+            }
+            .padding(.top, 8)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
     private var reminderDayCard: some View {
         VStack(spacing: 18) {
             Image(systemName: "calendar.badge.clock")
@@ -218,7 +273,7 @@ private struct OnboardingView: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Health experts recommend at least 1 Norwegian 4x4 per week. Choose days that work for you — you can always adjust later.")
+            Text("Health experts recommend at least 1 Norwegian 4x4 per week. Choose days that work for you - you can always adjust later.")
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.9))
@@ -252,7 +307,7 @@ private struct OnboardingView: View {
             }
 
             VStack(spacing: 12) {
-                Button(selectedCount > 0 ? "Save My Training Days" : "Skip for now") { 
+                Button(selectedCount > 0 ? "Save My Training Days" : "Skip for now") {
                     if selectedCount > 0 {
                         timerViewModel.enableRemindersWithSelectedDays()
                     }
