@@ -125,6 +125,8 @@ struct TimerView: View {
                     }
 
                     vo2Section
+                    
+                    streakSection
                 }
                 .padding()
             }
@@ -222,7 +224,11 @@ struct TimerView: View {
         }
     }
 
-
+    @ViewBuilder
+    var streakSection: some View {
+        StreakCard(viewModel: viewModel)
+    }
+}
 
 private struct PostWorkoutSummaryView: View {
     @ObservedObject var viewModel: TimerViewModel
