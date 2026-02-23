@@ -194,6 +194,15 @@ class TimerViewModel: ObservableObject {
     @AppStorage("workoutReminderWeekdays") var workoutReminderWeekdays: String = "" {
         didSet {
             guard oldValue != workoutReminderWeekdays else { return }
+            // Sync @Published property when AppStorage changes externally
+            if workoutReminderWeekdays.isEmpty {
+                selectedWeekdaysList = []
+            } else {
+                selectedWeekdaysList = workoutReminderWeekdays
+                    .split(separator: ",")
+                    .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                    .filter { (1...7).contains($0) }
+            }
             if workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday {
                 scheduleWorkoutReminder()
             }
@@ -246,32 +255,32 @@ class TimerViewModel: ObservableObject {
 
     // MARK: - Multi-day Reminder Helpers
 
-    var selectedWeekdays: [Int] {
-        get {
-            guard !workoutReminderWeekdays.isEmpty else { return [] }
-            return workoutReminderWeekdays
-                .split(separator: ",")
-                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-                .filter { (1...7).contains($0) }
-        }
-        set {
-            let sorted = newValue.sorted()
+    // @Published property for stable in-memory state (synced with AppStorage)
+    @Published var selectedWeekdaysList: [Int] = [] {
+        didSet {
+            // Sync to AppStorage when value changes
+            let sorted = selectedWeekdaysList.sorted()
             workoutReminderWeekdays = sorted.map { String($0) }.joined(separator: ",")
         }
     }
 
+    var selectedWeekdays: [Int] {
+        get { selectedWeekdaysList }
+        set { selectedWeekdaysList = newValue }
+    }
+
     func toggleWeekday(_ weekday: Int) {
-        var days = selectedWeekdays
+        var days = selectedWeekdaysList
         if days.contains(weekday) {
             days.removeAll { $0 == weekday }
         } else {
             days.append(weekday)
         }
-        selectedWeekdays = days
+        selectedWeekdaysList = days
     }
 
     func isWeekdaySelected(_ weekday: Int) -> Bool {
-        selectedWeekdays.contains(weekday)
+        selectedWeekdaysList.contains(weekday)
     }
 
     // MARK: - Streak Calculation
@@ -394,6 +403,14 @@ class TimerViewModel: ObservableObject {
     }
 
     init() {
+        // Initialize selectedWeekdaysList from AppStorage
+        if !workoutReminderWeekdays.isEmpty {
+            selectedWeekdaysList = workoutReminderWeekdays
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { (1...7).contains($0) }
+        }
+        
         if numberOfIntervals < 1 {
             numberOfIntervals = 4 // Default value
         }
