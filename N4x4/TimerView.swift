@@ -228,6 +228,21 @@ struct TimerView: View {
     var streakSection: some View {
         StreakCard(viewModel: viewModel)
     }
+    
+    // Helper functions inside TimerView
+    func timeString(time: TimeInterval) -> String {
+        let minutes = Int(time) / 60 % 60
+        let seconds = Int(time) % 60
+        return String(format: "%02i:%02i", minutes, seconds)
+    }
+
+    func updateIdleTimer() {
+        if viewModel.isRunning && viewModel.preventSleep {
+            UIApplication.shared.isIdleTimerDisabled = true
+        } else {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
+    }
 }
 
 private struct PostWorkoutSummaryView: View {
@@ -303,21 +318,6 @@ private struct WorkoutHistoryView: View {
                     Button("Done") { dismiss() }
                 }
             }
-        }
-    }
-    
-    // Helper functions inside TimerView
-    func timeString(time: TimeInterval) -> String {
-        let minutes = Int(time) / 60 % 60
-        let seconds = Int(time) % 60
-        return String(format: "%02i:%02i", minutes, seconds)
-    }
-
-    func updateIdleTimer() {
-        if viewModel.isRunning && viewModel.preventSleep {
-            UIApplication.shared.isIdleTimerDisabled = true
-        } else {
-            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 }
