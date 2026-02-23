@@ -289,12 +289,19 @@ class TimerViewModel: ObservableObject {
         var currentWeek = calendar.component(.weekOfYear, from: now)
         var currentYear = calendar.component(.year, from: now)
 
-        // Get unique weeks from workout entries
-        let uniqueWeeks = Set(workoutLogEntries.map { ($0.year, $0.weekOfYear) })
-        let sortedWeeks = uniqueWeeks.sorted { ($0.0, $1) > ($1.0, $0.1) }
+        // Get unique weeks from workout entries using a Hashable key
+        struct WeekKey: Hashable { let year: Int; let week: Int }
+        let uniqueWeeks: Set<WeekKey> = Set(workoutLogEntries.map { WeekKey(year: $0.year, week: $0.weekOfYear) })
+        let sortedWeeks = uniqueWeeks.sorted { lhs, rhs in
+            if lhs.year != rhs.year { return lhs.year > rhs.year }
+            return lhs.week > rhs.week
+        }
 
         // Check from current week backwards
-        for (year, week) in sortedWeeks {
+        for key in sortedWeeks {
+            let year = key.year
+            let week = key.week
+
             if year == currentYear && week == currentWeek {
                 streak += 1
                 currentWeek -= 1
@@ -1121,3 +1128,4 @@ class TimerViewModel: ObservableObject {
         intervals.reduce(0) { $0 + $1.duration }
     }
 }
+
