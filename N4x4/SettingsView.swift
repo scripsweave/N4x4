@@ -62,7 +62,8 @@ struct SettingsView: View {
 
                     if viewModel.notificationPermissionState == .denied {
                         permissionDeniedView(
-                            "Notifications are denied for N4x4. Enable them in Settings to receive interval and reminder alerts."
+                            "Notifications are denied for N4x4. Enable them in Settings to receive interval and reminder alerts.",
+                            viewModel: viewModel
                         )
                     }
                 }
@@ -108,7 +109,8 @@ struct SettingsView: View {
 
                     if viewModel.notificationPermissionState == .denied {
                         permissionDeniedView(
-                            "Reminder notifications are denied for N4x4. You can still choose a schedule and enable alerts later in Settings."
+                            "Reminder notifications are denied for N4x4. You can still choose a schedule and enable alerts later in Settings.",
+                            viewModel: viewModel
                         )
                     }
                 }
@@ -123,7 +125,8 @@ struct SettingsView: View {
 
                     if viewModel.healthKitPermissionState == .denied {
                         permissionDeniedView(
-                            "Apple Health access is denied. Enable workout and VO₂ permissions in Settings to sync completed sessions."
+                            "Apple Health access is denied. Enable workout and VO₂ permissions in Settings to sync completed sessions.",
+                            viewModel: viewModel
                         )
                     }
 
@@ -179,7 +182,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func permissionDeniedView(_ message: String) -> some View {
+    private func permissionDeniedView(_ message: String, viewModel: TimerViewModel) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(message)
                 .font(.footnote)
