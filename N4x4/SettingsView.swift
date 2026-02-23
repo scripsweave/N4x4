@@ -117,7 +117,7 @@ struct SettingsView: View {
 
                 // Heart Rate Guide
                 Section(header: Text("Heart Rate Guide").font(.headline)) {
-                    HeartRateGuidanceCard(viewModel: viewModel)
+                    HeartRateGuidanceCard(viewModel: viewModel, showInstructions: false)
                         .listRowInsets(EdgeInsets())
                 }
 
