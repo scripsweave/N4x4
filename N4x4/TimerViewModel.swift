@@ -89,7 +89,11 @@ struct VO2DataPoint: Identifiable {
 class TimerViewModel: ObservableObject {
     static let minimumSupportedAge = 13
     static let maximumSupportedAge = 100
-    private static let missedWorkoutFollowUpIdentifier = "workoutReminderFollowup"
+    private static let missedWorkoutFollowUpIdentifierPrefix = "workoutReminderFollowup_"
+    
+    private func missedWorkoutFollowUpIdentifier(for weekday: Int) -> String {
+        return Self.missedWorkoutFollowUpIdentifierPrefix + "\(weekday)"
+    }
 
     // User settings stored in UserDefaults
     @AppStorage("numberOfIntervals") var numberOfIntervals: Int = 4 {
@@ -419,6 +423,9 @@ class TimerViewModel: ObservableObject {
                 .filter { (1...7).contains($0) }
         }
         
+        // Reschedule reminders on app launch to handle missed days
+        rescheduleRemindersOnAppLaunch()
+        
         if numberOfIntervals < 1 {
             numberOfIntervals = 4 // Default value
         }
@@ -656,6 +663,24 @@ class TimerViewModel: ObservableObject {
         scheduleNotification(identifier: "nextInterval", title: "N4x4 Interval", body: "Next interval: \(nextInterval.name) is starting.", in: timeInterval, repeats: false)
     }
 
+    /// Reschedules reminders on app launch to handle missed workout days
+    /// This ensures follow-ups are resent if user didn't open app for a while
+    func rescheduleRemindersOnAppLaunch() {
+        guard workoutRemindersEnabled, workoutReminderMode == .weeklyWeekday else { return }
+        
+        let weekdays = selectedWeekdaysList
+        guard !weekdays.isEmpty else { return }
+        
+        // For each selected weekday, check if we missed the workout window and reschedule follow-ups
+        for weekday in weekdays {
+            // Cancel existing follow-ups for this weekday
+            cancelMissedWorkoutFollowUpReminder(for: weekday)
+            
+            // Reschedule follow-ups (this will check if workout was logged and handle accordingly)
+            scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
+        }
+    }
+
     func scheduleWorkoutReminder() {
         guard !isSchedulingWorkoutReminder else { return }
         isSchedulingWorkoutReminder = true
@@ -715,9 +740,17 @@ class TimerViewModel: ObservableObject {
         content.body = "It's your \(reminderWeekdayTitle(weekday)) workout day. Ready to train, Viking? ⚔️"
         content.sound = .default
 
+        // Schedule for 8pm the day BEFORE the workout day
         var components = DateComponents()
         components.weekday = weekday
-        components.hour = 9
+        components.hour = 20  // 8pm
+        components.minute = 0
+        
+        // For repeats, we need to schedule for day-before so it fires correctly each week
+        // Actually, for repeating weekly, we set the weekday and it repeats - but we want day-before
+        // Let's adjust: schedule for (weekday - 1) at 8pm to be the day before
+        let dayBeforeWeekday = weekday == 1 ? 7 : weekday - 1  // Sunday -> Saturday
+        components.weekday = dayBeforeWeekday
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
         // Use unique identifier per weekday
@@ -814,8 +847,15 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    private func cancelMissedWorkoutFollowUpReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.missedWorkoutFollowUpIdentifier])
+    private func cancelMissedWorkoutFollowUpReminder(for weekday: Int? = nil) {
+        if let weekday = weekday {
+            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [missedWorkoutFollowUpIdentifier(for: weekday)])
+        } else {
+            // Cancel all weekday-specific follow-ups
+            for wd in 1...7 {
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [missedWorkoutFollowUpIdentifier(for: wd)])
+            }
+        }
     }
 
     private func scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday weekday: Int) {
@@ -824,9 +864,27 @@ class TimerViewModel: ObservableObject {
         let calendar = Calendar.current
         let now = Date()
 
-        guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: now),
-              let followUpDate = followUpDate(from: scheduledDate),
-              !hasLoggedWorkout(on: scheduledDate) else {
+        // Find the next scheduled workout day
+        guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: now) else {
+            return
+        }
+        
+        // Check if workout already logged on that day
+        if hasLoggedWorkout(on: scheduledDate) {
+            // Workout was logged, cancel any pending follow-up
+            cancelMissedWorkoutFollowUpReminder(for: weekday)
+            return
+        }
+
+        // Determine when to send follow-up: next day at 8am
+        guard let followUpDate = followUpDate(from: scheduledDate) else {
+            return
+        }
+        
+        // Only schedule if follow-up is in the future
+        guard followUpDate > now else {
+            // Follow-up time has passed, schedule for tomorrow
+            scheduleRecurringFollowUp(from: now, weekday: weekday)
             return
         }
 
@@ -834,16 +892,67 @@ class TimerViewModel: ObservableObject {
 
         let content = UNMutableNotificationContent()
         content.title = "Missed yesterday? You can still do it today"
-        content.body = "It's not too late-fit in your N4x4 session today and keep the streak alive."
+        content.body = "It's not too late - fit in your N4x4 session today and keep the streak alive."
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let request = UNNotificationRequest(identifier: Self.missedWorkoutFollowUpIdentifier, content: content, trigger: trigger)
+        let identifier = missedWorkoutFollowUpIdentifier(for: weekday)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
 
         UNUserNotificationCenter.current().add(request) { error in
             if let error = error {
                 print("Error scheduling follow-up reminder: \(error.localizedDescription)")
             }
+        }
+        
+        // Also schedule a recursive follow-up for every day until workout is logged OR next scheduled reminder
+        scheduleRecurringFollowUp(from: now, weekday: weekday)
+    }
+    
+    private func scheduleRecurringFollowUp(from startDate: Date, weekday: Int) {
+        guard notificationPermissionState == .granted else { return }
+        
+        let calendar = Calendar.current
+        
+        // Find next scheduled workout day
+        guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: startDate) else {
+            return
+        }
+        
+        // If workout already logged, stop
+        if hasLoggedWorkout(on: scheduledDate) {
+            return
+        }
+        
+        // Schedule daily follow-ups starting from tomorrow until the day before next scheduled workout
+        var currentDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
+        
+        // Find when the next scheduled reminder will fire (day before scheduled workout)
+        let dayBeforeScheduled = calendar.date(byAdding: .day, value: -1, to: scheduledDate) ?? scheduledDate
+        
+        // Keep scheduling until we reach the day before the next scheduled workout
+        while currentDate <= dayBeforeScheduled {
+            let components = calendar.dateComponents([.year, .month, .day], from: currentDate)
+            var notificationComponents = components
+            notificationComponents.hour = 10  // 10am follow-up
+            notificationComponents.minute = 0
+            
+            let content = UNMutableNotificationContent()
+            content.title = "Your Viking workout awaits"
+            content.body = "You committed to train today. Don't break the streak - N4x4 is ready when you are."
+            content.sound = .default
+            
+            let trigger = UNCalendarNotificationTrigger(dateMatching: notificationComponents, repeats: false)
+            let identifier = "\(missedWorkoutFollowUpIdentifier(for: weekday))_daily_\(calendar.component(.day, from: currentDate))"
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error = error {
+                    print("Error scheduling daily follow-up: \(error.localizedDescription)")
+                }
+            }
+            
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
         }
     }
 
@@ -862,10 +971,10 @@ class TimerViewModel: ObservableObject {
     }
 
     private func followUpDate(from scheduledDate: Date) -> Date? {
+        // Follow-up fires at 8am on the workout day itself (since reminder fires night before)
         let calendar = Calendar.current
-        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: scheduledDate) else { return nil }
-        let dayComponents = calendar.dateComponents([.year, .month, .day], from: nextDay)
-        return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: calendar.date(from: dayComponents) ?? nextDay)
+        let dayComponents = calendar.dateComponents([.year, .month, .day], from: scheduledDate)
+        return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: calendar.date(from: dayComponents) ?? scheduledDate)
     }
 
     private func hasLoggedWorkout(on date: Date) -> Bool {
@@ -874,13 +983,16 @@ class TimerViewModel: ObservableObject {
 
     private func cancelMissedWorkoutFollowUpIfCompletedToday() {
         let today = Date()
-        guard workoutReminderMode == .weeklyWeekday,
-              workoutReminderWeekday != 0,
-              Calendar.current.component(.weekday, from: today) == workoutReminderWeekday else {
-            return
+        let todayWeekday = Calendar.current.component(.weekday, from: today)
+        
+        guard workoutReminderMode == .weeklyWeekday else { return }
+        
+        // Cancel follow-ups for any weekday matching today
+        for weekday in selectedWeekdaysList {
+            if weekday == todayWeekday {
+                cancelMissedWorkoutFollowUpReminder(for: weekday)
+            }
         }
-
-        cancelMissedWorkoutFollowUpReminder()
     }
 
     func resetSettingsToDefaults() {
