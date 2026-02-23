@@ -93,7 +93,7 @@ struct StreakCard: View {
                             }
                         }
                         .aspectRatio(1, contentMode: .fit)
-                        .foregroundStyle(isFuture ? .tertiary : .primary)
+                        .foregroundStyle(isFuture ? Color.gray.opacity(0.5) : .primary)
                     }
                 }
             }
@@ -305,11 +305,11 @@ struct MilestoneBadge: View {
         VStack(spacing: 4) {
             Image(systemName: isAchieved ? icon : "circle")
                 .font(.title2)
-                .foregroundStyle(isAchieved ? achievedColor : .tertiary)
+                .foregroundStyle(isAchieved ? achievedColor : Color.gray.opacity(0.5))
             
             Text(label)
                 .font(.caption2.weight(.medium))
-                .foregroundStyle(isAchieved ? .primary : .tertiary)
+                .foregroundStyle(isAchieved ? .primary : Color.gray.opacity(0.5))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
