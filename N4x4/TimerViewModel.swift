@@ -26,51 +26,6 @@ enum WorkoutReminderMode: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Fun Viking Reminder Messages
-
-private let reminderNightBeforeMessages: [(title: String, body: String)] = [
-    ("Tomorrow is workout day, Viking! 🪓", "You committed to train tomorrow. Ready to crush it?"),
-    ("Your Viking workout awaits tomorrow", "Don't let your training slip - N4x4 is ready when you are."),
-    ("Heads up, Viking! 📢", "You have a workout scheduled for tomorrow. Let's go!"),
-    ("Training day tomorrow! ⚔️", "Your body is waiting. Tomorrow we ride!"),
-    ("Reminder: Viking duty calls tomorrow", "You've got this. Tomorrow's workout is calling your name."),
-]
-
-private let reminderMorningOfMessages: [(title: String, body: String)] = [
-    ("Rise and grind, Viking! ☀️", "Your workout is waiting. There's no time like the present!"),
-    ("Morning workout energy! ⚡", "The best time to train is now. Let's go!"),
-    ("Your Viking workout awaits", "Today is your training day. Don't break the streak!"),
-    ("Time to conquer, Viking! 🛡️", "Your body is ready. Are you?"),
-    ("No more waiting - it's go time! 🎯", "You've committed to train today. Let's do this!"),
-]
-
-private let missedDayMessages: [(title: String, body: String)] = [
-    ("You missed one day, Viking. No biggie. 🪓", "It's never too late. There's no time like the present."),
-    ("Yesterday slipped by - no worries! ⏳", "Your streak isn't dead. Train today and come back stronger!"),
-    ("Vikings don't quit - they adapt! ⚔️", "One missed day doesn't define you. Let's get back on the horse!"),
-    ("Hey Viking, you okay? 💪", "We miss your energy. Today's a fresh start - let's go!"),
-    ("Don't let one day become two! 🚨", "Your future self will thank you. Time to train!"),
-    ("The storm doesn't stop the Viking! 🌩️", "Life happens. But your training? That's up to you."),
-    ("Vikings rise, even after a fall! 🆙", "One workout is all it takes to get back on track."),
-]
-
-private func randomReminderMessage(for type: ReminderMessageType) -> (title: String, body: String) {
-    let messages: [(title: String, body: String)]
-    switch type {
-    case .nightBefore:
-        messages = reminderNightBeforeMessages
-    case .morningOf:
-        messages = reminderMorningOfMessages
-    case .missedDay:
-        messages = missedDayMessages
-    }
-    return messages.randomElement() ?? messages[0]
-}
-
-private enum ReminderMessageType {
-    case nightBefore, morningOf, missedDay
-}
-
 
 
 enum WorkoutType: String, CaseIterable, Identifiable, Codable {
@@ -778,11 +733,18 @@ class TimerViewModel: ObservableObject {
         guard (1...7).contains(weekday) else { return }
         guard notificationPermissionState == .granted else { return }
 
-        // Use fun random Viking messages for night-before reminder
-        let message = randomReminderMessage(for: .nightBefore)
         let content = UNMutableNotificationContent()
-        content.title = message.title
-        content.body = message.body
+        // Fun Viking messages for night-before reminder
+        let nightMessages: [(String, String)] = [
+            ("Tomorrow is workout day, Viking! 🪓", "You committed to train tomorrow. Ready to crush it?"),
+            ("Your Viking workout awaits tomorrow", "Don't let your training slip - N4x4 is ready when you are."),
+            ("Heads up, Viking! 📢", "You have a workout scheduled for tomorrow. Let's go!"),
+            ("Training day tomorrow! ⚔️", "Your body is waiting. Tomorrow we ride!"),
+            ("Reminder: Viking duty calls tomorrow", "You've got this. Tomorrow's workout is calling your name.")
+        ]
+        let msg = nightMessages.randomElement()!
+        content.title = msg.0
+        content.body = msg.1
         content.sound = .default
 
         // Schedule for 8pm the day BEFORE the workout day
@@ -935,11 +897,18 @@ class TimerViewModel: ObservableObject {
 
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: followUpDate)
 
-        // Use random morning-of message
-        let message = randomReminderMessage(for: .morningOf)
+        // Random morning-of message
+        let morningMessages: [(String, String)] = [
+            ("Rise and grind, Viking! ☀️", "Your workout is waiting. There's no time like the present!"),
+            ("Morning workout energy! ⚡", "The best time to train is now. Let's go!"),
+            ("Your Viking workout awaits", "Today is your training day. Don't break the streak!"),
+            ("Time to conquer, Viking! 🛡️", "Your body is ready. Are you?"),
+            ("No more waiting - it's go time! 🎯", "You've committed to train today. Let's do this!")
+        ]
+        let msg = morningMessages.randomElement()!
         let content = UNMutableNotificationContent()
-        content.title = message.title
-        content.body = message.body
+        content.title = msg.0
+        content.body = msg.1
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
@@ -984,11 +953,20 @@ class TimerViewModel: ObservableObject {
             notificationComponents.hour = 10  // 10am follow-up
             notificationComponents.minute = 0
             
-            // Use random encouraging message for daily follow-ups
-            let message = randomReminderMessage(for: .missedDay)
+            // Random encouraging message for daily follow-ups
+            let nagMessages: [(String, String)] = [
+                ("You missed one day, Viking. No biggie. 🪓", "It's never too late. There's no time like the present."),
+                ("Yesterday slipped by - no worries! ⏳", "Your streak isn't dead. Train today and come back stronger!"),
+                ("Vikings don't quit - they adapt! ⚔️", "One missed day doesn't define you. Let's get back on the horse!"),
+                ("Hey Viking, you okay? 💪", "We miss your energy. Today's a fresh start - let's go!"),
+                ("Don't let one day become two! 🚨", "Your future self will thank you. Time to train!"),
+                ("The storm doesn't stop the Viking! 🌩️", "Life happens. But your training? That's up to you."),
+                ("Vikings rise, even after a fall! 🆙", "One workout is all it takes to get back on track.")
+            ]
+            let msg = nagMessages.randomElement()!
             let content = UNMutableNotificationContent()
-            content.title = message.title
-            content.body = message.body
+            content.title = msg.0
+            content.body = msg.1
             content.sound = .default
             
             let trigger = UNCalendarNotificationTrigger(dateMatching: notificationComponents, repeats: false)
