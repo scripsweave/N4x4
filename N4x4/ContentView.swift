@@ -229,15 +229,14 @@ private struct OnboardingView: View {
                 .padding(.horizontal, 8)
 
             VStack(spacing: 12) {
-                Stepper(value: $timerViewModel.userAge, in: TimerViewModel.minimumSupportedAge...TimerViewModel.maximumSupportedAge) {
-                    Text("Age: \(timerViewModel.userAge)")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(.white)
+                Picker("Age", selection: $timerViewModel.userAge) {
+                    ForEach(TimerViewModel.minimumSupportedAge...TimerViewModel.maximumSupportedAge, id: \.self) { age in
+                        Text("\(age)").tag(age)
+                    }
                 }
-                .padding(.horizontal, 40)
-                .padding(.vertical, 12)
-                .background(Color.white.opacity(0.15))
-                .cornerRadius(12)
+                .pickerStyle(.wheel)
+                .frame(height: 120)
+                .clipped()
                 
                 Text("Your max heart rate: \(timerViewModel.maximumHeartRate) BPM")
                     .font(.subheadline)
