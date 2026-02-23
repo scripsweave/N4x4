@@ -11,6 +11,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                // Intervals
                 Section(header: Text("Intervals").font(.headline)) {
                     Stepper(value: $viewModel.numberOfIntervals, in: 1...10) {
                         Text("Number of Intervals: \(viewModel.numberOfIntervals)")
@@ -18,6 +19,7 @@ struct SettingsView: View {
                     }
                 }
 
+                // Durations (part of Intervals)
                 Section(header: Text("Durations (Minutes)").font(.headline)) {
                     Stepper(value: $viewModel.warmupDuration, in: 0...600, step: 60) {
                         Text("Warmup Duration: \(Int(viewModel.warmupDuration / 60)) min")
@@ -35,11 +37,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text("Heart Rate Guide").font(.headline)) {
-                    HeartRateGuidanceCard(viewModel: viewModel)
-                        .listRowInsets(EdgeInsets())
-                }
-
+                // Alarm
                 Section(header: Text("Alarm").font(.headline)) {
                     VStack(alignment: .leading) {
                         Toggle("Alarm at End of Interval", isOn: $viewModel.alarmEnabled)
@@ -51,11 +49,13 @@ struct SettingsView: View {
                     }
                 }
 
+                // Display
                 Section(header: Text("Display").font(.headline)) {
                     Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
                         .font(.body)
                 }
 
+                // Interval Notifications
                 Section(header: Text("Interval Notifications").font(.headline)) {
                     Toggle("Notification at Start of Interval", isOn: $viewModel.notificationsEnabled)
                         .font(.body)
@@ -68,7 +68,8 @@ struct SettingsView: View {
                     }
                 }
 
-                Section(header: Text("Workout Reminders").font(.headline)) {
+                // Reminder Notifications
+                Section(header: Text("Reminder Notifications").font(.headline)) {
                     Toggle("Reminder Notifications", isOn: $viewModel.workoutRemindersEnabled)
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -80,19 +81,18 @@ struct SettingsView: View {
                             ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
                                 Button(action: {
                                     viewModel.toggleWeekday(option.value)
-                                    }) {
-                                        Text(String(option.title.prefix(3)))
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(viewModel.isWeekdaySelected(option.value) ? .white : .primary)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .fill(viewModel.isWeekdaySelected(option.value) ? Color.accentColor : Color.gray.opacity(0.2))
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
+                                }) {
+                                    Text(String(option.title.prefix(3)))
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(viewModel.isWeekdaySelected(option.value) ? .white : .primary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(viewModel.isWeekdaySelected(option.value) ? Color.accentColor : Color.gray.opacity(0.2))
+                                        )
                                 }
+                                .buttonStyle(.plain)
                             }
                             
                             if !viewModel.selectedWeekdays.isEmpty {
@@ -115,6 +115,13 @@ struct SettingsView: View {
                     }
                 }
 
+                // Heart Rate Guide
+                Section(header: Text("Heart Rate Guide").font(.headline)) {
+                    HeartRateGuidanceCard(viewModel: viewModel)
+                        .listRowInsets(EdgeInsets())
+                }
+
+                // Apple Health
                 Section(header: Text("Apple Health").font(.headline)) {
                     Toggle("Enable Apple Health", isOn: $viewModel.healthKitEnabled)
                         .onChange(of: viewModel.healthKitEnabled) { _, enabled in
@@ -140,6 +147,7 @@ struct SettingsView: View {
                         .foregroundColor(viewModel.healthAuthorizationGranted ? .green : .secondary)
                 }
 
+                // Onboarding
                 Section(header: Text("Onboarding").font(.headline)) {
                     Text("You can replay the first-run guide any time.")
                         .font(.footnote)
@@ -151,7 +159,8 @@ struct SettingsView: View {
                     }
                 }
 
-                Section {
+                // Reset
+                Section(header: Text("Reset").font(.headline)) {
                     Button(action: {
                         showResetAlert = true
                     }) {
@@ -195,4 +204,4 @@ struct SettingsView: View {
         }
         .padding(.vertical, 4)
     }
-
+}
