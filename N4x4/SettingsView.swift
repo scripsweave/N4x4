@@ -84,9 +84,33 @@ struct SettingsView: View {
                             Text("Every \(viewModel.workoutReminderDays) day(s)")
                         }
                     } else {
-                        Picker("Reminder Day", selection: $viewModel.workoutReminderWeekday) {
-                            ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
-                                Text(option.title).tag(option.value)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Select workout days")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                                ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
+                                    Button(action: {
+                                        viewModel.toggleWeekday(option.value)
+                                    }) {
+                                        Text(String(option.title.prefix(3)))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(viewModel.isWeekdaySelected(option.value) ? .white : .primary)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .fill(viewModel.isWeekdaySelected(option.value) ? Color.accentColor : Color.gray.opacity(0.2))
+                                            )
+                                    }
+                                }
+                            }
+                            
+                            if !viewModel.selectedWeekdays.isEmpty {
+                                Text("\(viewModel.selectedWeekdays.count) day\(viewModel.selectedWeekdays.count == 1 ? "" : "s") selected per week")
+                                    .font(.footnote)
+                                    .foregroundColor(.secondary)
                             }
                         }
                     }
