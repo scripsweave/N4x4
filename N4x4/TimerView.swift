@@ -27,6 +27,24 @@ struct TimerView: View {
         }
     }
 
+    var heartRateZoneText: String? {
+        guard viewModel.intervals.indices.contains(viewModel.currentIntervalIndex) else {
+            return nil
+        }
+        let interval = viewModel.intervals[viewModel.currentIntervalIndex]
+        
+        switch interval.type {
+        case .highIntensity:
+            let range = viewModel.highIntensityTargetRange
+            return "❤️ Target Zone: \(range.lowerBound)-\(range.upperBound) BPM"
+        case .rest:
+            let range = viewModel.recoveryTargetRange
+            return "💚 Recovery Zone: \(range.lowerBound)-\(range.upperBound) BPM"
+        case .warmup:
+            return nil
+        }
+    }
+
     var currentIntervalName: String {
         guard viewModel.intervals.indices.contains(viewModel.currentIntervalIndex) else {
             return "Ready"
@@ -80,6 +98,13 @@ struct TimerView: View {
                             .foregroundColor(.primary)
                     }
                     .frame(width: 250, height: 250)
+
+                    if let hrZone = heartRateZoneText {
+                        Text(hrZone)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                    }
 
                     HStack(spacing: 50) {
                         Button(action: {
