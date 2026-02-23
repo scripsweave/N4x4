@@ -194,6 +194,9 @@ class TimerViewModel: ObservableObject {
     @AppStorage("workoutReminderWeekdays") var workoutReminderWeekdays: String = "" {
         didSet {
             guard oldValue != workoutReminderWeekdays else { return }
+            // Skip sync if this change came from our own @Published setter (infinite loop prevention)
+            guard !isSyncingFromPublished else { return }
+            
             // Sync @Published property when AppStorage changes externally
             if workoutReminderWeekdays.isEmpty {
                 selectedWeekdaysList = []
@@ -208,6 +211,9 @@ class TimerViewModel: ObservableObject {
             }
         }
     }
+    
+    // Flag to prevent circular sync between @Published and @AppStorage
+    private var isSyncingFromPublished = false
 
     // Legacy support for single weekday
     @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
@@ -258,9 +264,11 @@ class TimerViewModel: ObservableObject {
     // @Published property for stable in-memory state (synced with AppStorage)
     @Published var selectedWeekdaysList: [Int] = [] {
         didSet {
-            // Sync to AppStorage when value changes
+            // Sync to AppStorage when value changes (via flag to prevent circular sync)
+            isSyncingFromPublished = true
             let sorted = selectedWeekdaysList.sorted()
             workoutReminderWeekdays = sorted.map { String($0) }.joined(separator: ",")
+            isSyncingFromPublished = false
         }
     }
 
