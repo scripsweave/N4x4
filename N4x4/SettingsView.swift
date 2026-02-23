@@ -70,29 +70,15 @@ struct SettingsView: View {
                 Section(header: Text("Workout Reminders").font(.headline)) {
                     Toggle("Reminder Notifications", isOn: $viewModel.workoutRemindersEnabled)
 
-                    Picker("Reminder Schedule", selection: Binding(
-                        get: { viewModel.workoutReminderMode },
-                        set: { viewModel.workoutReminderMode = $0 }
-                    )) {
-                        ForEach(WorkoutReminderMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-
-                    if viewModel.workoutReminderMode == .everyXDays {
-                        Stepper(value: $viewModel.workoutReminderDays, in: 1...30) {
-                            Text("Every \(viewModel.workoutReminderDays) day(s)")
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Select workout days")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                                ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
-                                    Button(action: {
-                                        viewModel.toggleWeekday(option.value)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Select workout days")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
+                                Button(action: {
+                                    viewModel.toggleWeekday(option.value)
                                     }) {
                                         Text(String(option.title.prefix(3)))
                                             .font(.caption.weight(.semibold))

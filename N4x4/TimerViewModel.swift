@@ -15,14 +15,12 @@ enum PermissionState: Equatable {
 }
 
 enum WorkoutReminderMode: String, CaseIterable, Identifiable {
-    case everyXDays
     case weeklyWeekday
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .everyXDays: return "Every X days"
         case .weeklyWeekday: return "Weekly on weekday"
         }
     }
@@ -175,14 +173,14 @@ class TimerViewModel: ObservableObject {
                 return
             }
             guard oldValue != workoutReminderDays else { return }
-            if workoutRemindersEnabled, workoutReminderMode == .everyXDays {
+            if workoutRemindersEnabled {
                 scheduleWorkoutReminder()
             }
         }
     }
-    @AppStorage("workoutReminderMode") private var workoutReminderModeRaw: String = WorkoutReminderMode.everyXDays.rawValue {
+    @AppStorage("workoutReminderMode") private var workoutReminderModeRaw: String = WorkoutReminderMode.weeklyWeekday.rawValue {
         didSet {
-            let sanitized = WorkoutReminderMode(rawValue: workoutReminderModeRaw)?.rawValue ?? WorkoutReminderMode.everyXDays.rawValue
+            let sanitized = WorkoutReminderMode(rawValue: workoutReminderModeRaw)?.rawValue ?? WorkoutReminderMode.weeklyWeekday.rawValue
             if sanitized != workoutReminderModeRaw {
                 workoutReminderModeRaw = sanitized
                 return
@@ -245,7 +243,7 @@ class TimerViewModel: ObservableObject {
     @Published var healthKitPermissionState: PermissionState = .unknown
 
     var workoutReminderMode: WorkoutReminderMode {
-        get { WorkoutReminderMode(rawValue: workoutReminderModeRaw) ?? .everyXDays }
+        get { WorkoutReminderMode(rawValue: workoutReminderModeRaw) ?? .weeklyWeekday }
         set {
             let sanitized = newValue
             guard workoutReminderModeRaw != sanitized.rawValue else { return }
@@ -289,6 +287,19 @@ class TimerViewModel: ObservableObject {
             days.append(weekday)
         }
         selectedWeekdaysList = days
+    }
+    
+    /// Force sync selected days to AppStorage and schedule reminders
+    /// Used by onboarding to ensure reminders are scheduled after user selects days
+    func enableRemindersWithSelectedDays() {
+        workoutReminderMode = .weeklyWeekday
+        // Force sync to AppStorage immediately
+        isSyncingFromPublished = true
+        let sorted = selectedWeekdaysList.sorted()
+        workoutReminderWeekdays = sorted.map { String($0) }.joined(separator: ",")
+        isSyncingFromPublished = false
+        // Now enable reminders (this will trigger scheduling)
+        workoutRemindersEnabled = true
     }
 
     func isWeekdaySelected(_ weekday: Int) -> Bool {
@@ -432,8 +443,8 @@ class TimerViewModel: ObservableObject {
         if workoutReminderDays < 1 {
             workoutReminderDays = 7
         }
-        if WorkoutReminderMode(rawValue: workoutReminderModeRaw) == nil {
-            workoutReminderModeRaw = WorkoutReminderMode.everyXDays.rawValue
+        if workoutReminderModeRaw.isEmpty {
+            workoutReminderModeRaw = WorkoutReminderMode.weeklyWeekday.rawValue
         }
         if workoutReminderMode == .weeklyWeekday && workoutReminderWeekday == 0 {
             workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
@@ -697,31 +708,18 @@ class TimerViewModel: ObservableObject {
         cancelWorkoutReminder()
         cancelMissedWorkoutFollowUpReminder()
 
-        switch workoutReminderMode {
-        case .everyXDays:
-            let days = max(1, workoutReminderDays)
-            let seconds = days * 24 * 60 * 60
-            scheduleNotification(
-                identifier: "workoutReminder",
-                title: "Time for your N4x4 session",
-                body: "It's been \(days) day(s). Ready for your next workout?",
-                in: TimeInterval(seconds),
-                repeats: true
-            )
-        case .weeklyWeekday:
-            // Support multiple days per week
-            let weekdays = selectedWeekdays
-            if weekdays.isEmpty {
-                // Default to today if no days selected
-                let today = Calendar.current.component(.weekday, from: Date())
-                scheduleWeeklyWorkoutReminder(weekday: today)
-                scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: today)
-            } else {
-                // Schedule for each selected weekday
-                for weekday in weekdays {
-                    scheduleWeeklyWorkoutReminder(weekday: weekday)
-                    scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
-                }
+        // Only weekly weekday mode is supported
+        let weekdays = selectedWeekdays
+        if weekdays.isEmpty {
+            // Default to today if no days selected
+            let today = Calendar.current.component(.weekday, from: Date())
+            scheduleWeeklyWorkoutReminder(weekday: today)
+            scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: today)
+        } else {
+            // Schedule for each selected weekday
+            for weekday in weekdays {
+                scheduleWeeklyWorkoutReminder(weekday: weekday)
+                scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday: weekday)
             }
         }
     }
@@ -1007,7 +1005,7 @@ class TimerViewModel: ObservableObject {
         notificationsEnabled = false
         workoutRemindersEnabled = false
         workoutReminderDays = 7
-        workoutReminderMode = .everyXDays
+        workoutReminderMode = .weeklyWeekday
         workoutReminderWeekdays = ""
         
         // Reset streaks but keep commitment

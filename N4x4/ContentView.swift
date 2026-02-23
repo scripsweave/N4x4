@@ -254,8 +254,7 @@ private struct OnboardingView: View {
             VStack(spacing: 12) {
                 Button(selectedCount > 0 ? "Save My Training Days" : "Skip for now") { 
                     if selectedCount > 0 {
-                        timerViewModel.workoutReminderMode = .weeklyWeekday
-                        timerViewModel.workoutRemindersEnabled = true
+                        timerViewModel.enableRemindersWithSelectedDays()
                     }
                     saveReminderWeekdayAndContinue()
                 }
