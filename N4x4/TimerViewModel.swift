@@ -586,6 +586,7 @@ class TimerViewModel: ObservableObject {
         guard isRunning else { return }
 
         speakIntervalCueIfNeeded()
+        speakWarmupStartIfNeeded()
 
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         scheduleNextIntervalNotification()
@@ -1188,6 +1189,20 @@ class TimerViewModel: ObservableObject {
         }
     }
 
+    private func speakWarmupStartIfNeeded() {
+        guard audioMode == .voice else { return }
+        guard currentIntervalIndex == 0 else { return }
+        guard intervals.indices.contains(0), intervals[0].type == .warmup else { return }
+        let minutes = Int(intervals[0].duration / 60)
+        let descriptor: String
+        if minutes <= 0 {
+            descriptor = formatTimeRemaining(intervals[0].duration)
+        } else {
+            descriptor = minutes == 1 ? "1 minute" : "\(minutes) minutes"
+        }
+        SpeechManager.shared.speak("Workout started. Warm up for \(descriptor).")
+    }
+
     /// Halfway prompt: HIT gets time remaining + Viking phrase; Recovery gets time remaining only.
     private func speakHalfway() {
         guard audioMode == .voice, !halfwayPromptFired else { return }
@@ -1204,6 +1219,10 @@ class TimerViewModel: ObservableObject {
             halfwayPromptFired = true
             let timeStr = formatTimeRemaining(timeRemaining)
             SpeechManager.shared.speak("Halfway through recovery. \(timeStr) remaining.")
+        case .warmup:
+            halfwayPromptFired = true
+            let timeStr = formatTimeRemaining(timeRemaining)
+            SpeechManager.shared.speak("Halfway through warmup. \(timeStr) remaining.")
         default:
             break
         }
