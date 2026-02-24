@@ -62,7 +62,10 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     }
 
     var year: Int {
-        Calendar.current.component(.year, from: completedAt)
+        // Use yearForWeekOfYear (not .year) so the ISO week year matches weekOfYear.
+        // Without this, Dec 29–31 in ISO week 1 of the next year gets year N-1, week 1 —
+        // causing year-boundary streaks to break.
+        Calendar.current.component(.yearForWeekOfYear, from: completedAt)
     }
 }
 
@@ -91,6 +94,10 @@ class TimerViewModel: ObservableObject {
     
     private func missedWorkoutFollowUpIdentifier(for weekday: Int) -> String {
         return Self.missedWorkoutFollowUpIdentifierPrefix + "\(weekday)"
+    }
+
+    private func morningOfReminderIdentifier(for weekday: Int) -> String {
+        return "workoutReminderMorningOf_\(weekday)"
     }
 
     // User settings stored in UserDefaults
@@ -321,7 +328,8 @@ class TimerViewModel: ObservableObject {
         let now = Date()
         var streak = 0
         var currentWeek = calendar.component(.weekOfYear, from: now)
-        var currentYear = calendar.component(.year, from: now)
+        // Must use yearForWeekOfYear to stay consistent with WorkoutLogEntry.year (S2)
+        var currentYear = calendar.component(.yearForWeekOfYear, from: now)
 
         // Get unique weeks from workout entries using a Hashable key
         struct WeekKey: Hashable { let year: Int; let week: Int }
@@ -331,6 +339,21 @@ class TimerViewModel: ObservableObject {
             return lhs.week > rhs.week
         }
 
+        // Steps back one ISO week, crossing year boundaries correctly.
+        // Dec 28 is always in the final ISO week of its year — safe to use for last-week lookup.
+        // Replaces hardcoded 52 (S3) and removes the force-unwrap (S4).
+        func stepBackOneWeek() {
+            currentWeek -= 1
+            if currentWeek < 1 {
+                currentYear -= 1
+                if let lastDay = calendar.date(from: DateComponents(year: currentYear, month: 12, day: 28)) {
+                    currentWeek = calendar.component(.weekOfYear, from: lastDay)
+                } else {
+                    currentWeek = 52 // fallback; in practice calendar.date never fails for Dec 28
+                }
+            }
+        }
+
         // Check from current week backwards
         for key in sortedWeeks {
             let year = key.year
@@ -338,19 +361,13 @@ class TimerViewModel: ObservableObject {
 
             if year == currentYear && week == currentWeek {
                 streak += 1
-                currentWeek -= 1
-                if currentWeek < 1 {
-                    currentYear -= 1
-                    let lastWeek = calendar.component(.weekOfYear, from: calendar.date(from: DateComponents(year: currentYear, month: 12, day: 28))!)
-                    currentWeek = lastWeek
-                }
+                stepBackOneWeek()
             } else if year == currentYear && week == currentWeek - 1 {
+                // One-week gap at the head — user hasn't trained yet this week but has a
+                // prior streak. Count the prior week and continue looking backwards.
                 streak += 1
-                currentWeek = week - 1
-                if currentWeek < 1 {
-                    currentYear -= 1
-                    currentWeek = 52
-                }
+                currentWeek = week
+                stepBackOneWeek()
             } else {
                 break
             }
@@ -360,12 +377,18 @@ class TimerViewModel: ObservableObject {
     }
 
     func updateStreakOnWorkoutComplete() {
-        let newStreak = currentWeekStreak
-        if newStreak > currentStreak {
-            currentStreak = newStreak
-        }
+        // Always recalculate — the stored value could be stale (e.g. user missed weeks since last open).
+        currentStreak = calculateCurrentStreak()
         if currentStreak > longestStreak {
             longestStreak = currentStreak
+        }
+    }
+
+    /// Recalculates and syncs the stored streak. Call on app foreground and app launch.
+    func refreshStreak() {
+        let recalculated = calculateCurrentStreak()
+        if recalculated != currentStreak {
+            currentStreak = recalculated
         }
     }
 
@@ -435,12 +458,9 @@ class TimerViewModel: ObservableObject {
                 .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
                 .filter { (1...7).contains($0) }
         }
-        
-        // Reschedule reminders on app launch to handle missed days
-        rescheduleRemindersOnAppLaunch()
-        
+
         if numberOfIntervals < 1 {
-            numberOfIntervals = 4 // Default value
+            numberOfIntervals = 4
         }
         if workoutReminderDays < 1 {
             workoutReminderDays = 7
@@ -456,12 +476,24 @@ class TimerViewModel: ObservableObject {
         setupIntervals()
         loadWorkoutLogEntries()
 
-        refreshNotificationPermissionState()
-        refreshHealthKitAuthorizationState()
+        // Sync the stored streak value immediately on launch (S1).
+        // Previously currentStreak was only ever increased, so a missed-week streak
+        // would never be reflected until the user started a new run of workouts.
+        refreshStreak()
 
-        if workoutRemindersEnabled {
-            scheduleWorkoutReminder()
+        // N1 fix: refreshNotificationPermissionState is async. Previously, scheduling
+        // calls were made synchronously after it returned, so notificationPermissionState
+        // was still .unknown and every guard failed silently. Now we schedule inside the
+        // completion block where the state is guaranteed to be current.
+        refreshNotificationPermissionState { [weak self] in
+            guard let self else { return }
+            if self.workoutRemindersEnabled {
+                self.rescheduleRemindersOnAppLaunch()
+                self.scheduleWorkoutReminder()
+            }
         }
+
+        refreshHealthKitAuthorizationState()
 
         if healthKitEnabled {
             requestHealthKitAuthorizationIfNeeded()
@@ -701,8 +733,11 @@ class TimerViewModel: ObservableObject {
 
         guard workoutRemindersEnabled else { return }
         guard notificationPermissionState == .granted else {
-            if workoutRemindersEnabled {
-                workoutRemindersEnabled = false
+            // Only turn off the toggle when permission is definitively denied/unavailable.
+            // If state is .unknown or .notDetermined the async refresh hasn't settled yet —
+            // silently disabling reminders here would lose the user's setting (G4).
+            if notificationPermissionState == .denied || notificationPermissionState == .unavailable {
+                if workoutRemindersEnabled { workoutRemindersEnabled = false }
             }
             return
         }
@@ -773,11 +808,13 @@ class TimerViewModel: ObservableObject {
     }
     
     private func cancelAllWeeklyReminders() {
-        // Cancel all possible weekday reminders
+        // Cancel night-before, morning-of (N4: new repeating trigger), and legacy identifiers.
+        var identifiers = ["workoutReminder"]
         for weekday in 1...7 {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder_\(weekday)"])
+            identifiers.append("workoutReminder_\(weekday)")
+            identifiers.append(morningOfReminderIdentifier(for: weekday))
         }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["workoutReminder"])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
 
@@ -854,53 +891,36 @@ class TimerViewModel: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(workoutLogEntries), let json = String(data: data, encoding: .utf8) {
             workoutLogEntriesData = json
+        } else {
+            // G5: surface encode failures so they're visible in logs rather than silently losing data.
+            print("[N4x4] Warning: Failed to persist workout log entries — workout data may not be saved.")
         }
     }
 
     private func cancelMissedWorkoutFollowUpReminder(for weekday: Int? = nil) {
-        if let weekday = weekday {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [missedWorkoutFollowUpIdentifier(for: weekday)])
-        } else {
-            // Cancel all weekday-specific follow-ups
-            for wd in 1...7 {
-                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [missedWorkoutFollowUpIdentifier(for: wd)])
+        // N2 fix: also cancel the _daily_DD one-shot identifiers produced by scheduleRecurringFollowUp.
+        // Previously only the base identifier was cancelled, so daily follow-ups accumulated in the
+        // system and kept firing even after the user logged a workout.
+        let weekdaysToCancel = weekday.map { [$0] } ?? Array(1...7)
+        var identifiers: [String] = []
+        for wd in weekdaysToCancel {
+            identifiers.append(missedWorkoutFollowUpIdentifier(for: wd)) // legacy one-shot morning-of
+            for day in 1...31 {
+                identifiers.append("\(missedWorkoutFollowUpIdentifier(for: wd))_daily_\(day)")
             }
         }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
     private func scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday weekday: Int) {
         guard notificationPermissionState == .granted else { return }
 
-        let calendar = Calendar.current
-        let now = Date()
-
-        // Find the next scheduled workout day
-        guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: now) else {
-            return
-        }
-        
-        // Check if workout already logged on that day
-        if hasLoggedWorkout(on: scheduledDate) {
-            // Workout was logged, cancel any pending follow-up
-            cancelMissedWorkoutFollowUpReminder(for: weekday)
-            return
-        }
-
-        // Determine when to send follow-up: next day at 8am
-        guard let followUpDate = followUpDate(from: scheduledDate) else {
-            return
-        }
-        
-        // Only schedule if follow-up is in the future
-        guard followUpDate > now else {
-            // Follow-up time has passed, schedule for tomorrow
-            scheduleRecurringFollowUp(from: now, weekday: weekday)
-            return
-        }
-
-        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: followUpDate)
-
-        // Random morning-of message
+        // N4 fix: use a weekly repeating calendar trigger instead of a one-shot date trigger.
+        // The old approach only fired once; since rescheduleRemindersOnAppLaunch was broken (N1),
+        // the morning-of notification effectively never repeated after the first week.
+        // A repeating trigger persists in the system without needing the app to launch.
+        // The identifier is replaced each time this runs (e.g. app foreground), which also
+        // rotates the message — slightly better UX than always the same baked-in string.
         let morningMessages: [(String, String)] = [
             ("Rise and grind, Viking! ☀️", "Your workout is waiting. There's no time like the present!"),
             ("Morning workout energy! ⚡", "The best time to train is now. Let's go!"),
@@ -909,43 +929,55 @@ class TimerViewModel: ObservableObject {
             ("No more waiting - it's go time! 🎯", "You've committed to train today. Let's do this!")
         ]
         let msg = morningMessages.randomElement()!
-        let content = UNMutableNotificationContent()
-        content.title = msg.0
-        content.body = msg.1
-        content.sound = .default
+        let morningContent = UNMutableNotificationContent()
+        morningContent.title = msg.0
+        morningContent.body = msg.1
+        morningContent.sound = .default
 
-        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
-        let identifier = missedWorkoutFollowUpIdentifier(for: weekday)
-        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+        var morningComponents = DateComponents()
+        morningComponents.weekday = weekday
+        morningComponents.hour = 8
+        morningComponents.minute = 0
 
-        UNUserNotificationCenter.current().add(request) { error in
+        let morningTrigger = UNCalendarNotificationTrigger(dateMatching: morningComponents, repeats: true)
+        let morningRequest = UNNotificationRequest(
+            identifier: morningOfReminderIdentifier(for: weekday),
+            content: morningContent,
+            trigger: morningTrigger
+        )
+        UNUserNotificationCenter.current().add(morningRequest) { error in
             if let error = error {
-                print("Error scheduling follow-up reminder: \(error.localizedDescription)")
+                print("Error scheduling morning-of reminder: \(error.localizedDescription)")
             }
         }
-        
-        // Also schedule a recursive follow-up for every day until workout is logged OR next scheduled reminder
-        scheduleRecurringFollowUp(from: now, weekday: weekday)
+
+        // One-shot daily follow-ups for each day until the next workout day.
+        // These are cancelled immediately when the user logs a workout (cancelMissedWorkoutFollowUpIfCompletedToday).
+        scheduleRecurringFollowUp(from: Date(), weekday: weekday)
     }
     
     private func scheduleRecurringFollowUp(from startDate: Date, weekday: Int) {
         guard notificationPermissionState == .granted else { return }
-        
+
         let calendar = Calendar.current
-        
+
+        // The old code called hasLoggedWorkout(on: scheduledDate) where scheduledDate was always
+        // a future date — so the check was always false and effectively dead code. The correct
+        // guard is: if today IS a workout day and the user already trained, skip follow-ups.
+        let today = Date()
+        let todayWeekday = calendar.component(.weekday, from: today)
+        if todayWeekday == weekday && hasLoggedWorkout(on: today) {
+            return
+        }
+
         // Find next scheduled workout day
         guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: startDate) else {
             return
         }
-        
-        // If workout already logged, stop
-        if hasLoggedWorkout(on: scheduledDate) {
-            return
-        }
-        
+
         // Schedule daily follow-ups starting from tomorrow until the day before next scheduled workout
         var currentDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
-        
+
         // Find when the next scheduled reminder will fire (day before scheduled workout)
         let dayBeforeScheduled = calendar.date(byAdding: .day, value: -1, to: scheduledDate) ?? scheduledDate
         
@@ -1140,9 +1172,12 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    // Shared notification helper
+    // Shared notification helper — used only for in-workout interval cues.
+    // N6 fix: guard only on notificationsEnabled. The old guard also passed when
+    // workoutRemindersEnabled was true, which caused interval cues to fire even when
+    // the user had explicitly disabled them.
     func scheduleNotification(identifier: String, title: String, body: String, in timeInterval: TimeInterval, repeats: Bool) {
-        guard notificationsEnabled || workoutRemindersEnabled else { return }
+        guard notificationsEnabled else { return }
         guard notificationPermissionState == .granted else { return }
 
         let content = UNMutableNotificationContent()
@@ -1275,6 +1310,24 @@ class TimerViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Called when the app returns to the foreground. Refreshes streaks, permissions,
+    /// and reschedules one-shot daily follow-up notifications.
+    func refreshOnForeground() {
+        // S1: keep the stored streak in sync with the log (it was previously only ever increased).
+        refreshStreak()
+
+        // N1: reschedule one-shot daily follow-ups inside the async permission completion,
+        // so notificationPermissionState is guaranteed to be current when we check it.
+        refreshNotificationPermissionState { [weak self] in
+            guard let self else { return }
+            if self.workoutRemindersEnabled {
+                self.rescheduleRemindersOnAppLaunch()
+            }
+        }
+
+        refreshHealthKitAuthorizationState()
     }
 
     func openAppSettings() {

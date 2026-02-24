@@ -185,8 +185,9 @@ struct TimerView: View {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
-                    viewModel.refreshNotificationPermissionState()
-                    viewModel.refreshHealthKitAuthorizationState()
+                    // refreshOnForeground handles streak sync (S1), permission refresh,
+                    // reminder rescheduling (N1), and health auth in one place.
+                    viewModel.refreshOnForeground()
                     if viewModel.isRunning {
                         viewModel.reconcileTimerState(now: Date(), playAlarm: false)
                     }
@@ -228,7 +229,6 @@ struct TimerView: View {
         }
     }
 
-    @ViewBuilder
     // Helper functions inside TimerView
     func timeString(time: TimeInterval) -> String {
         let minutes = Int(time) / 60 % 60
@@ -428,13 +428,10 @@ private struct StreakHistoryView: View {
     private func workoutOnDay(_ day: Int) -> WorkoutLogEntry? {
         let calendar = Calendar.current
         guard let monthInterval = calendar.dateInterval(of: .month, for: Date()) else { return nil }
-        for entry in viewModel.workoutLogEntries {
-            if monthInterval.contains(entry.completedAt) {
-                if calendar.component(.day, from: entry.completedAt) == day {
-                    return entry
-                }
-            }
-        }
-        return nil
+        // G3: return the most recent workout on this day rather than the first match,
+        // so that multiple same-day entries (e.g. reset + redo) show the latest one.
+        return viewModel.workoutLogEntries
+            .filter { monthInterval.contains($0.completedAt) && calendar.component(.day, from: $0.completedAt) == day }
+            .max(by: { $0.completedAt < $1.completedAt })
     }
 }
