@@ -93,15 +93,6 @@ private struct OnboardingView: View {
                         .foregroundStyle(.white.opacity(0.8))
 
                     Spacer()
-
-                    if flow.currentStep != .launch {
-                        Button("Skip") {
-                            onComplete()
-                            dismiss()
-                        }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                    }
                 }
 
                 Spacer(minLength: 0)
@@ -296,6 +287,12 @@ private struct OnboardingView: View {
                     description: "No audio alerts — keep an eye on the screen."
                 )
             }
+
+            Button("Confirm Selection") {
+                flow.next()
+            }
+            .buttonStyle(OnboardingPrimaryButtonStyle())
+            .padding(.top, 8)
         }
         .padding(28)
         .frame(maxWidth: .infinity)
@@ -306,7 +303,6 @@ private struct OnboardingView: View {
     private func audioModeRow(mode: AudioMode, icon: String, description: String) -> some View {
         Button {
             timerViewModel.audioMode = mode
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { flow.next() }
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: icon)
