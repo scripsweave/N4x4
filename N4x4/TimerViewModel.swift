@@ -5,6 +5,7 @@ import Combine
 import AVFoundation
 import UserNotifications
 import HealthKit
+import ActivityKit
 
 enum PermissionState: Equatable {
     case unknown
@@ -454,6 +455,9 @@ class TimerViewModel: ObservableObject {
     var intervalEndTime: Date?
     var workoutStartDate: Date?
 
+    // Live Activity
+    private var liveActivity: Activity<N4x4LiveActivityAttributes>?
+
     // Voice prompt state — reset on every interval change, reset, and skip
     private var halfwayPromptFired = false
     private var tenSecondPromptFired = false
@@ -579,6 +583,7 @@ class TimerViewModel: ObservableObject {
         if workoutStartDate == nil {
             workoutStartDate = Date()
         }
+        startLiveActivity()
         if intervalEndTime == nil {
             intervalEndTime = Date().addingTimeInterval(timeRemaining)
         }
@@ -671,6 +676,7 @@ class TimerViewModel: ObservableObject {
 
     func finishWorkout() {
         triggerCompletionHaptic()
+        endLiveActivity()
         stopTimer()
         speakWorkoutComplete()
         intervalEndTime = nil
@@ -706,6 +712,7 @@ class TimerViewModel: ObservableObject {
             updateCounts()
             if isRunning {
                 scheduleNextIntervalNotification()
+                updateLiveActivity(isRunning: true)
             }
         } else {
             finishWorkout()
@@ -718,10 +725,12 @@ class TimerViewModel: ObservableObject {
             timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
             stopTimer()
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+            updateLiveActivity(isRunning: false)
         } else {
             intervalEndTime = Date().addingTimeInterval(timeRemaining)
             scheduleNextIntervalNotification()
             startTimer()
+            updateLiveActivity(isRunning: true)
         }
     }
 
@@ -746,6 +755,7 @@ class TimerViewModel: ObservableObject {
     func reset() {
         SpeechManager.shared.stopSpeaking()
         resetPromptFlags()
+        endLiveActivity()
         stopTimer()
         setupIntervals()
         loadWorkoutLogEntries()
@@ -1129,6 +1139,90 @@ class TimerViewModel: ObservableObject {
         vo2DataPoints = []
         cancelWorkoutReminder()
         cancelMissedWorkoutFollowUpReminder()
+    }
+
+    // MARK: - Live Activity
+
+    /// Builds the current ContentState from live timer state.
+    private func liveActivityContentState(isRunning: Bool) -> N4x4LiveActivityAttributes.ContentState {
+        guard intervals.indices.contains(currentIntervalIndex) else {
+            return N4x4LiveActivityAttributes.ContentState(
+                intervalName: "Workout",
+                phase: .warmup,
+                intervalEndTime: Date(),
+                isRunning: false,
+                currentInterval: 1,
+                totalIntervals: numberOfIntervals,
+                hrLow: 0, hrHigh: 0
+            )
+        }
+        let interval = intervals[currentIntervalIndex]
+        let phase: WorkoutPhase = {
+            switch interval.type {
+            case .warmup:        return .warmup
+            case .highIntensity: return .highIntensity
+            case .rest:          return .rest
+            }
+        }()
+        let completedHIT = intervals[0...currentIntervalIndex]
+            .filter { $0.type == .highIntensity }.count
+        let totalHIT = max(1, intervals.filter { $0.type == .highIntensity }.count)
+        let endTime = isRunning
+            ? (intervalEndTime ?? Date().addingTimeInterval(timeRemaining))
+            : Date().addingTimeInterval(timeRemaining)
+        let maxHR = 220 - userAge
+        let (hrLow, hrHigh): (Int, Int) = {
+            switch phase {
+            case .highIntensity: return (Int(Double(maxHR) * 0.85), Int(Double(maxHR) * 0.95))
+            case .warmup, .rest: return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
+            }
+        }()
+        return N4x4LiveActivityAttributes.ContentState(
+            intervalName: interval.name,
+            phase: phase,
+            intervalEndTime: endTime,
+            isRunning: isRunning,
+            currentInterval: max(1, completedHIT),
+            totalIntervals: totalHIT,
+            hrLow: hrLow,
+            hrHigh: hrHigh
+        )
+    }
+
+    func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard liveActivity == nil else { return }
+        let attributes = N4x4LiveActivityAttributes(workoutStartTime: workoutStartDate ?? Date())
+        let state = liveActivityContentState(isRunning: true)
+        do {
+            liveActivity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: state, staleDate: nil),
+                pushType: nil
+            )
+        } catch {
+            print("Live Activity start failed: \(error)")
+        }
+    }
+
+    func updateLiveActivity(isRunning: Bool) {
+        guard let activity = liveActivity else { return }
+        let state = liveActivityContentState(isRunning: isRunning)
+        Task {
+            await activity.update(.init(state: state, staleDate: nil))
+        }
+    }
+
+    func endLiveActivity() {
+        guard let activity = liveActivity else { return }
+        let finalState = liveActivityContentState(isRunning: false)
+        Task {
+            await activity.end(
+                .init(state: finalState, staleDate: nil),
+                dismissalPolicy: .after(Date.now.addingTimeInterval(5))
+            )
+        }
+        liveActivity = nil
     }
 
     private func triggerIntervalHaptic() {
