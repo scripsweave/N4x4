@@ -64,6 +64,8 @@ struct SettingsView: View {
                 Section(header: Text("Display").font(.headline)) {
                     Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
                         .font(.body)
+                    Toggle("Haptic Feedback at Interval Changes", isOn: $viewModel.hapticsEnabled)
+                        .font(.body)
                 }
 
                 // Interval Notifications

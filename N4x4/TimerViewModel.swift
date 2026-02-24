@@ -146,6 +146,7 @@ class TimerViewModel: ObservableObject {
     }
 
     @AppStorage("preventSleep") var preventSleep: Bool = true
+    @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true
     @AppStorage("userAge") var userAge: Int = 40 {
         didSet {
             let sanitized = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
@@ -669,6 +670,7 @@ class TimerViewModel: ObservableObject {
     }
 
     func finishWorkout() {
+        triggerCompletionHaptic()
         stopTimer()
         speakWorkoutComplete()
         intervalEndTime = nil
@@ -694,6 +696,7 @@ class TimerViewModel: ObservableObject {
 
     func moveToNextInterval() {
         resetPromptFlags()
+        triggerIntervalHaptic()
         if currentIntervalIndex + 1 < intervals.count {
             currentIntervalIndex += 1
             timeRemaining = intervals[currentIntervalIndex].duration
@@ -1107,6 +1110,7 @@ class TimerViewModel: ObservableObject {
         restDuration = 3 * 60
         alarmEnabled = true
         preventSleep = true
+        hapticsEnabled = true
         userAge = 40
 
         notificationsEnabled = false
@@ -1125,6 +1129,16 @@ class TimerViewModel: ObservableObject {
         vo2DataPoints = []
         cancelWorkoutReminder()
         cancelMissedWorkoutFollowUpReminder()
+    }
+
+    private func triggerIntervalHaptic() {
+        guard hapticsEnabled else { return }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+    }
+
+    private func triggerCompletionHaptic() {
+        guard hapticsEnabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     func playAlarmIfNeeded() {
