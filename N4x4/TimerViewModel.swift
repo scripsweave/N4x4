@@ -341,9 +341,9 @@ class TimerViewModel: ObservableObject {
         let calendar = Calendar.current
         let now = Date()
         var streak = 0
-        var currentWeek = calendar.component(.weekOfYear, from: now)
+        var expectedWeek = calendar.component(.weekOfYear, from: now)
         // Must use yearForWeekOfYear to stay consistent with WorkoutLogEntry.year (S2)
-        var currentYear = calendar.component(.yearForWeekOfYear, from: now)
+        var expectedYear = calendar.component(.yearForWeekOfYear, from: now)
 
         // Get unique weeks from workout entries using a Hashable key
         struct WeekKey: Hashable { let year: Int; let week: Int }
@@ -353,38 +353,43 @@ class TimerViewModel: ObservableObject {
             return lhs.week > rhs.week
         }
 
-        // Steps back one ISO week, crossing year boundaries correctly.
-        // Dec 28 is always in the final ISO week of its year — safe to use for last-week lookup.
-        // Replaces hardcoded 52 (S3) and removes the force-unwrap (S4).
-        func stepBackOneWeek() {
-            currentWeek -= 1
-            if currentWeek < 1 {
-                currentYear -= 1
-                if let lastDay = calendar.date(from: DateComponents(year: currentYear, month: 12, day: 28)) {
-                    currentWeek = calendar.component(.weekOfYear, from: lastDay)
+        // Steps back one ISO week, crossing year boundaries without hard-coding 52.
+        func previousWeek(fromYear year: Int, week: Int) -> (Int, Int) {
+            var newWeek = week - 1
+            var newYear = year
+            if newWeek < 1 {
+                newYear -= 1
+                if let lastDay = calendar.date(from: DateComponents(year: newYear, month: 12, day: 28)) {
+                    newWeek = calendar.component(.weekOfYear, from: lastDay)
                 } else {
-                    currentWeek = 52 // fallback; in practice calendar.date never fails for Dec 28
+                    newWeek = 52 // fallback; in practice calendar.date never fails for Dec 28
                 }
             }
+            return (newYear, newWeek)
         }
 
-        // Check from current week backwards
-        for key in sortedWeeks {
-            let year = key.year
-            let week = key.week
+        var allowedHeadGap = true
 
-            if year == currentYear && week == currentWeek {
+        // Check from current week backwards, allowing a single head gap when the
+        // user hasn't trained yet this week but has a streak leading into it.
+        for key in sortedWeeks {
+            if key.year == expectedYear && key.week == expectedWeek {
                 streak += 1
-                stepBackOneWeek()
-            } else if year == currentYear && week == currentWeek - 1 {
-                // One-week gap at the head — user hasn't trained yet this week but has a
-                // prior streak. Count the prior week and continue looking backwards.
-                streak += 1
-                currentWeek = week
-                stepBackOneWeek()
-            } else {
-                break
+                (expectedYear, expectedWeek) = previousWeek(fromYear: expectedYear, week: expectedWeek)
+                continue
             }
+
+            if allowedHeadGap {
+                let (gapYear, gapWeek) = previousWeek(fromYear: expectedYear, week: expectedWeek)
+                if key.year == gapYear && key.week == gapWeek {
+                    allowedHeadGap = false
+                    streak += 1
+                    (expectedYear, expectedWeek) = previousWeek(fromYear: gapYear, week: gapWeek)
+                    continue
+                }
+            }
+
+            break
         }
 
         return streak
@@ -997,42 +1002,38 @@ class TimerViewModel: ObservableObject {
 
         // One-shot daily follow-ups for each day until the next workout day.
         // These are cancelled immediately when the user logs a workout (cancelMissedWorkoutFollowUpIfCompletedToday).
-        scheduleRecurringFollowUp(from: Date(), weekday: weekday)
+        scheduleRecurringFollowUp(for: weekday)
     }
     
-    private func scheduleRecurringFollowUp(from startDate: Date, weekday: Int) {
+    private func scheduleRecurringFollowUp(for weekday: Int) {
         guard notificationPermissionState == .granted else { return }
 
         let calendar = Calendar.current
+        let now = Date()
 
-        // The old code called hasLoggedWorkout(on: scheduledDate) where scheduledDate was always
-        // a future date — so the check was always false and effectively dead code. The correct
-        // guard is: if today IS a workout day and the user already trained, skip follow-ups.
-        let today = Date()
-        let todayWeekday = calendar.component(.weekday, from: today)
-        if todayWeekday == weekday && hasLoggedWorkout(on: today) {
+        guard let lastScheduled = previousOccurrence(ofWeekday: weekday, from: now) else { return }
+        let startOfLast = calendar.startOfDay(for: lastScheduled)
+        guard let nextScheduled = calendar.date(byAdding: .day, value: 7, to: startOfLast) else { return }
+
+        // Follow-ups only start the day *after* the scheduled workout day.
+        guard let followUpWindowStart = calendar.date(byAdding: .day, value: 1, to: startOfLast), now >= followUpWindowStart else {
             return
         }
 
-        // Find next scheduled workout day
-        guard let scheduledDate = nextOccurrence(ofWeekday: weekday, from: startDate) else {
+        // If a workout was logged during this weekly cycle already, skip nagging.
+        if didLogWorkout(between: startOfLast, and: nextScheduled) {
             return
         }
 
-        // Schedule daily follow-ups starting from tomorrow until the day before next scheduled workout
-        var currentDate = calendar.date(byAdding: .day, value: 1, to: startDate) ?? startDate
+        // Start scheduling from either the day after the missed workout or today, whichever is later.
+        var currentDate = max(followUpWindowStart, calendar.startOfDay(for: now))
+        let dayBeforeNext = calendar.date(byAdding: .day, value: -1, to: nextScheduled) ?? nextScheduled
 
-        // Find when the next scheduled reminder will fire (day before scheduled workout)
-        let dayBeforeScheduled = calendar.date(byAdding: .day, value: -1, to: scheduledDate) ?? scheduledDate
-        
-        // Keep scheduling until we reach the day before the next scheduled workout
-        while currentDate <= dayBeforeScheduled {
-            let components = calendar.dateComponents([.year, .month, .day], from: currentDate)
-            var notificationComponents = components
+        while currentDate <= dayBeforeNext {
+            var notificationComponents = calendar.dateComponents([.year, .month, .day], from: currentDate)
             notificationComponents.hour = 10  // 10am follow-up
             notificationComponents.minute = 0
-            
-            // Random encouraging message for daily follow-ups
+
             let nagMessages: [(String, String)] = [
                 ("You missed one day, Viking. No biggie. 🪓", "It's never too late. There's no time like the present."),
                 ("Yesterday slipped by - no worries! ⏳", "Your streak isn't dead. Train today and come back stronger!"),
@@ -1047,22 +1048,23 @@ class TimerViewModel: ObservableObject {
             content.title = msg.0
             content.body = msg.1
             content.sound = .default
-            
+
             let trigger = UNCalendarNotificationTrigger(dateMatching: notificationComponents, repeats: false)
             let identifier = "\(missedWorkoutFollowUpIdentifier(for: weekday))_daily_\(calendar.component(.day, from: currentDate))"
             let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
-            
+
             UNUserNotificationCenter.current().add(request) { error in
                 if let error = error {
                     print("Error scheduling daily follow-up: \(error.localizedDescription)")
                 }
             }
-            
-            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+
+            guard let nextDay = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
+            currentDate = nextDay
         }
     }
 
-    private func nextOccurrence(ofWeekday weekday: Int, from date: Date) -> Date? {
+    private func previousOccurrence(ofWeekday weekday: Int, from date: Date) -> Date? {
         var comps = DateComponents()
         comps.weekday = weekday
         comps.hour = 9
@@ -1072,15 +1074,14 @@ class TimerViewModel: ObservableObject {
             after: date,
             matching: comps,
             matchingPolicy: .nextTime,
-            direction: .forward
+            direction: .backward
         )
     }
 
-    private func followUpDate(from scheduledDate: Date) -> Date? {
-        // Follow-up fires at 8am on the workout day itself (since reminder fires night before)
-        let calendar = Calendar.current
-        let dayComponents = calendar.dateComponents([.year, .month, .day], from: scheduledDate)
-        return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: calendar.date(from: dayComponents) ?? scheduledDate)
+    private func didLogWorkout(between start: Date, and end: Date) -> Bool {
+        workoutLogEntries.contains { entry in
+            entry.completedAt >= start && entry.completedAt < end
+        }
     }
 
     private func hasLoggedWorkout(on date: Date) -> Bool {
@@ -1088,17 +1089,9 @@ class TimerViewModel: ObservableObject {
     }
 
     private func cancelMissedWorkoutFollowUpIfCompletedToday() {
-        let today = Date()
-        let todayWeekday = Calendar.current.component(.weekday, from: today)
-        
         guard workoutReminderMode == .weeklyWeekday else { return }
-        
-        // Cancel follow-ups for any weekday matching today
-        for weekday in selectedWeekdaysList {
-            if weekday == todayWeekday {
-                cancelMissedWorkoutFollowUpReminder(for: weekday)
-            }
-        }
+        // Any logged workout counts as a comeback, so clear all pending follow-ups.
+        cancelMissedWorkoutFollowUpReminder()
     }
 
     func resetSettingsToDefaults() {
@@ -1533,4 +1526,3 @@ enum AudioPrompts {
         "Odin counted every second. He's impressed."
     ]
 }
-

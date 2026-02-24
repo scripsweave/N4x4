@@ -143,7 +143,7 @@ struct HelpView: View {
                         
                         Button(action: {
                             // Open Privacy Policy
-                            if let url = URL(string: "privacy.txt") {
+                            if let url = URL(string: "https://n4x4.app/privacy.txt") {
                                 UIApplication.shared.open(url)
                             }
                         }) {

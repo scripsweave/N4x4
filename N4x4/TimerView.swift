@@ -266,6 +266,12 @@ private struct PostWorkoutSummaryView: View {
             .navigationTitle("Session on \(sessionDateText)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Discard") {
+                        viewModel.closePostWorkoutSummaryWithoutSaving()
+                        dismiss()
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         viewModel.saveWorkoutLogEntryAndResetSession()
@@ -274,6 +280,7 @@ private struct PostWorkoutSummaryView: View {
                 }
             }
         }
+        .interactiveDismissDisabled(true)
     }
     
     private var sessionDateText: String {

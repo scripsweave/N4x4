@@ -205,9 +205,9 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(flow.currentStep, .reminderDay)
     }
 
-    func testWorkoutReminderModeDefaultsToEveryXDays() {
+    func testWorkoutReminderModeDefaultsToWeeklyWeekday() {
         let vm = TimerViewModel()
-        XCTAssertEqual(vm.workoutReminderMode, .everyXDays)
+        XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
     }
 
     func testSelectingWeeklyModeAutoPopulatesWeekday() {
@@ -300,11 +300,8 @@ final class N4x4Tests: XCTestCase {
         let weeklyDay = vm.workoutReminderWeekday
         XCTAssertTrue((1...7).contains(weeklyDay))
 
-        vm.workoutReminderMode = .everyXDays
-        XCTAssertEqual(vm.workoutReminderMode, .everyXDays)
-
         vm.workoutReminderMode = .weeklyWeekday
-        XCTAssertTrue((1...7).contains(vm.workoutReminderWeekday))
+        XCTAssertEqual(vm.workoutReminderWeekday, weeklyDay)
     }
 
 }
