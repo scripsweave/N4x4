@@ -281,14 +281,14 @@ private struct OnboardingView: View {
 
             VStack(spacing: 10) {
                 audioModeRow(
-                    mode: .alarm,
-                    icon: "bell.fill",
-                    description: "A sharp beep at every interval change."
-                )
-                audioModeRow(
                     mode: .voice,
                     icon: "waveform",
                     description: "Hear what's coming and get hyped up. Music softens while we speak."
+                )
+                audioModeRow(
+                    mode: .alarm,
+                    icon: "bell.fill",
+                    description: "A sharp beep at every interval change."
                 )
                 audioModeRow(
                     mode: .silent,

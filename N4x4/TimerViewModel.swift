@@ -15,8 +15,8 @@ enum PermissionState: Equatable {
 }
 
 enum AudioMode: String, CaseIterable, Identifiable {
-    case alarm  = "Alarm"
     case voice  = "Voice Prompts"
+    case alarm  = "Alarm"
     case silent = "Silent"
     var id: String { rawValue }
 }
@@ -490,9 +490,11 @@ class TimerViewModel: ObservableObject {
         }
         userAge = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
 
-        // One-time migration from the old alarmEnabled bool to AudioMode
+        // One-time migration from the old alarmEnabled bool to AudioMode.
+        // Users who had alarm on (or are brand new) get Voice Prompts as the new default.
+        // Only users who explicitly disabled alarm stay on Silent.
         if UserDefaults.standard.object(forKey: "audioModeRaw") == nil {
-            audioMode = alarmEnabled ? .alarm : .silent
+            audioMode = alarmEnabled ? .voice : .silent
         }
 
         setupIntervals()
