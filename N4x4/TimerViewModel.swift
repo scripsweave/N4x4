@@ -728,7 +728,9 @@ class TimerViewModel: ObservableObject {
         // Cancel any in-flight speech for the interval we're leaving so
         // prompts don't bleed into the next interval after a skip.
         SpeechManager.shared.stopSpeaking()
-        playAlarmIfNeeded()
+        if audioMode != .voice {
+            playAlarmIfNeeded()
+        }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         let wasRunning = isRunning
         moveToNextInterval()
