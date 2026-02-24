@@ -450,6 +450,7 @@ class TimerViewModel: ObservableObject {
 
     // Voice prompt state — reset on every interval change, reset, and skip
     private var halfwayPromptFired = false
+    private var tenSecondPromptFired = false
 
     var maximumHeartRate: Int {
         max(1, 220 - userAge)
@@ -618,10 +619,15 @@ class TimerViewModel: ObservableObject {
         if now < endTime {
             timeRemaining = max(0, endTime.timeIntervalSince(now))
 
-            // Halfway voice prompt (HIT intervals only)
+            // Halfway voice prompt
             let halfwayPoint = intervals[currentIntervalIndex].duration / 2
             if timeRemaining <= halfwayPoint {
                 speakHalfway()
+            }
+
+            // 10-second warning
+            if timeRemaining <= 10 && timeRemaining > 0 {
+                speakTenSeconds()
             }
 
             return
@@ -1148,6 +1154,24 @@ class TimerViewModel: ObservableObject {
 
     private func resetPromptFlags() {
         halfwayPromptFired = false
+        tenSecondPromptFired = false
+    }
+
+    /// Returns a natural-language string for a duration in seconds, e.g. "2 minutes", "1 minute and 30 seconds".
+    private func formatTimeRemaining(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        let mins = total / 60
+        let secs = total % 60
+        switch (mins, secs) {
+        case (0, let s):
+            return s == 1 ? "1 second" : "\(s) seconds"
+        case (let m, 0):
+            return m == 1 ? "1 minute" : "\(m) minutes"
+        default:
+            let mPart = mins == 1 ? "1 minute" : "\(mins) minutes"
+            let sPart = secs == 1 ? "1 second" : "\(secs) seconds"
+            return "\(mPart) and \(sPart)"
+        }
     }
 
     /// Speaks an HR-target cue at the start of every High Intensity and every Recovery interval.
@@ -1171,22 +1195,41 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    /// Fires a random Viking encouragement at the halfway point of High Intensity intervals only.
+    /// Halfway prompt: HIT gets time remaining + Viking phrase; Recovery gets time remaining only.
     private func speakHalfway() {
         guard audioMode == .voice, !halfwayPromptFired else { return }
         guard intervals.indices.contains(currentIntervalIndex) else { return }
         let interval = intervals[currentIntervalIndex]
-        guard interval.type == .highIntensity else { return }
         guard interval.duration >= 60 else { return }
-        halfwayPromptFired = true
-        SpeechManager.shared.speak(AudioPrompts.halfway.randomElement()!)
+        switch interval.type {
+        case .highIntensity:
+            halfwayPromptFired = true
+            let timeStr = formatTimeRemaining(timeRemaining)
+            let phrase = AudioPrompts.halfway.randomElement()!
+            SpeechManager.shared.speak("Halfway through interval. \(timeStr) remaining. \(phrase)")
+        case .rest:
+            halfwayPromptFired = true
+            let timeStr = formatTimeRemaining(timeRemaining)
+            SpeechManager.shared.speak("Halfway through recovery. \(timeStr) remaining.")
+        default:
+            break
+        }
     }
 
-    /// Fires a random Viking celebration phrase when the workout finishes.
+    /// 10-second warning before any interval ends.
+    private func speakTenSeconds() {
+        guard audioMode == .voice, !tenSecondPromptFired else { return }
+        guard intervals.indices.contains(currentIntervalIndex) else { return }
+        guard intervals[currentIntervalIndex].duration > 10 else { return }
+        tenSecondPromptFired = true
+        SpeechManager.shared.speak("10 seconds of interval remaining.")
+    }
+
+    /// Fires a Viking celebration phrase when the workout finishes.
     private func speakWorkoutComplete() {
         guard audioMode == .voice else { return }
         let phrase = AudioPrompts.workoutComplete.randomElement()!
-        SpeechManager.shared.speak("Workout complete! \(phrase)")
+        SpeechManager.shared.speak("Workout complete. Well done! \(phrase)")
     }
 
     func ensureNotificationPermissionForToggles() {
