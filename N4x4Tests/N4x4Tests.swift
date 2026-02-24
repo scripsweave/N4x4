@@ -199,6 +199,8 @@ final class N4x4Tests: XCTestCase {
         let flow = OnboardingFlowViewModel()
 
         flow.next() // structure
+        flow.next() // age
+        flow.next() // audioMode
         flow.next() // notifications
         flow.next() // reminder day
 
