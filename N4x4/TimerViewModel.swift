@@ -1150,7 +1150,7 @@ class TimerViewModel: ObservableObject {
         halfwayPromptFired = false
     }
 
-    /// Speaks an HR-target cue at the start of the 1st High Intensity and 1st Recovery intervals only.
+    /// Speaks an HR-target cue at the start of every High Intensity and every Recovery interval.
     func speakIntervalCueIfNeeded() {
         guard audioMode == .voice else { return }
         guard intervals.indices.contains(currentIntervalIndex) else { return }
@@ -1158,11 +1158,11 @@ class TimerViewModel: ObservableObject {
         let mins = Int(interval.duration / 60)
         let minWord = mins == 1 ? "minute" : "minutes"
         switch interval.type {
-        case .highIntensity where highIntensityCount == 1:
+        case .highIntensity:
             let lower = highIntensityTargetRange.lowerBound
             let upper = highIntensityTargetRange.upperBound
             SpeechManager.shared.speak("High intensity starting now for \(mins) \(minWord). Target heart rate: \(lower) to \(upper) beats per minute.")
-        case .rest where restCount == 1:
+        case .rest:
             let lower = recoveryTargetRange.lowerBound
             let upper = recoveryTargetRange.upperBound
             SpeechManager.shared.speak("Recovery starting now for \(mins) \(minWord). Bring your heart rate down to \(lower) to \(upper) beats per minute.")
