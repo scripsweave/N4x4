@@ -25,6 +25,10 @@
 		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
 		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
 		F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
+		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
+		CD72E7EF59294BC6B17C3451 /* N4x4LiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */; };
+		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
+		9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -41,6 +45,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 3DF13A402C9389C100DD18E7;
 			remoteInfo = N4x4;
+		};
+		680ED961569A45E894B29CD4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3DF13A392C9389C100DD18E7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2615661FD081463A8F34A193;
+			remoteInfo = N4x4LiveActivity;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -67,6 +78,9 @@
 		5739937EF07648BE8983755B /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
 		9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityAttributes.swift; sourceTree = "<group>"; };
+		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityBundle.swift; sourceTree = "<group>"; };
+		80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +105,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D04F74E6A20F4776BFD4525C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				3DF13A432C9389C100DD18E7 /* N4x4 */,
+				BABF05A41C95414D87FCD532 /* N4x4LiveActivity */,
 				3DF13A542C9389C200DD18E7 /* N4x4Tests */,
 				3DF13A5E2C9389C200DD18E7 /* N4x4UITests */,
 				3DF13A422C9389C100DD18E7 /* Products */,
@@ -110,8 +132,18 @@
 				3DF13A412C9389C100DD18E7 /* N4x4.app */,
 				3DF13A512C9389C200DD18E7 /* N4x4Tests.xctest */,
 				3DF13A5B2C9389C200DD18E7 /* N4x4UITests.xctest */,
+				877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		BABF05A41C95414D87FCD532 /* N4x4LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */,
+				80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */,
+			);
+			path = N4x4LiveActivity;
 			sourceTree = "<group>";
 		};
 		3DF13A432C9389C100DD18E7 /* N4x4 */ = {
@@ -180,15 +212,34 @@
 				3DF13A3D2C9389C100DD18E7 /* Sources */,
 				3DF13A3E2C9389C100DD18E7 /* Frameworks */,
 				3DF13A3F2C9389C100DD18E7 /* Resources */,
+				55D2367A38B64576AC4EEB89 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E5678DB42A014910911F3436 /* PBXTargetDependency */,
 			);
 			name = N4x4;
 			productName = N4x4;
 			productReference = 3DF13A412C9389C100DD18E7 /* N4x4.app */;
 			productType = "com.apple.product-type.application";
+		};
+		2615661FD081463A8F34A193 /* N4x4LiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 31B8CAB233824E878095829E /* Build configuration list for PBXNativeTarget "N4x4LiveActivity" */;
+			buildPhases = (
+				F64724D5922C40FCA80C3B47 /* Sources */,
+				D04F74E6A20F4776BFD4525C /* Frameworks */,
+				2C098ABE4F2F4A4D87DE78FE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = N4x4LiveActivity;
+			productName = N4x4LiveActivity;
+			productReference = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		3DF13A502C9389C200DD18E7 /* N4x4Tests */ = {
 			isa = PBXNativeTarget;
@@ -247,6 +298,9 @@
 						CreatedOnToolsVersion = 15.4;
 						TestTargetID = 3DF13A402C9389C100DD18E7;
 					};
+					2615661FD081463A8F34A193 = {
+						CreatedOnToolsVersion = 15.4;
+					};
 				};
 			};
 			buildConfigurationList = 3DF13A3C2C9389C100DD18E7 /* Build configuration list for PBXProject "N4x4" */;
@@ -263,6 +317,7 @@
 			projectRoot = "";
 			targets = (
 				3DF13A402C9389C100DD18E7 /* N4x4 */,
+				2615661FD081463A8F34A193 /* N4x4LiveActivity */,
 				3DF13A502C9389C200DD18E7 /* N4x4Tests */,
 				3DF13A5A2C9389C200DD18E7 /* N4x4UITests */,
 			);
@@ -294,7 +349,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		2C098ABE4F2F4A4D87DE78FE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		55D2367A38B64576AC4EEB89 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3DF13A3D2C9389C100DD18E7 /* Sources */ = {
@@ -333,6 +409,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F64724D5922C40FCA80C3B47 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD72E7EF59294BC6B17C3451 /* N4x4LiveActivityBundle.swift in Sources */,
+				B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */,
+				A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -345,6 +431,11 @@
 			isa = PBXTargetDependency;
 			target = 3DF13A402C9389C100DD18E7 /* N4x4 */;
 			targetProxy = 3DF13A5C2C9389C200DD18E7 /* PBXContainerItemProxy */;
+		};
+		E5678DB42A014910911F3436 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2615661FD081463A8F34A193 /* N4x4LiveActivity */;
+			targetProxy = 680ED961569A45E894B29CD4 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -620,6 +711,62 @@
 			};
 			name = Release;
 		};
+		AFCBDA0F967E4829A5E54A88 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "N4x4 Live Activity";
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphodesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AEC5234DA71B42B186719C82 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "N4x4 Live Activity";
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.1;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -655,6 +802,15 @@
 			buildConfigurations = (
 				3DF13A6C2C9389C200DD18E7 /* Debug */,
 				3DF13A6D2C9389C200DD18E7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		31B8CAB233824E878095829E /* Build configuration list for PBXNativeTarget "N4x4LiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AFCBDA0F967E4829A5E54A88 /* Debug */,
+				AEC5234DA71B42B186719C82 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
