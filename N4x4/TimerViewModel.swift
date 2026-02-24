@@ -138,7 +138,7 @@ class TimerViewModel: ObservableObject {
         }
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
-    @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.alarm.rawValue
+    @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.voice.rawValue
 
     var audioMode: AudioMode {
         get { AudioMode(rawValue: audioModeRaw) ?? .alarm }
@@ -450,7 +450,6 @@ class TimerViewModel: ObservableObject {
 
     // Voice prompt state — reset on every interval change, reset, and skip
     private var halfwayPromptFired = false
-    private var thirtySecondPromptFired = false
 
     var maximumHeartRate: Int {
         max(1, 220 - userAge)
@@ -578,7 +577,7 @@ class TimerViewModel: ObservableObject {
         reconcileTimerState(now: Date(), playAlarm: false)
         guard isRunning else { return }
 
-        speakIntervalStart()
+        speakIntervalCueIfNeeded()
 
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         scheduleNextIntervalNotification()
@@ -617,15 +616,10 @@ class TimerViewModel: ObservableObject {
         if now < endTime {
             timeRemaining = max(0, endTime.timeIntervalSince(now))
 
-            // Halfway voice prompt
+            // Halfway voice prompt (HIT intervals only)
             let halfwayPoint = intervals[currentIntervalIndex].duration / 2
             if timeRemaining <= halfwayPoint {
                 speakHalfway()
-            }
-
-            // 30-second voice prompt
-            if timeRemaining <= 30 && timeRemaining > 0 {
-                speakThirtySeconds()
             }
 
             return
@@ -662,6 +656,7 @@ class TimerViewModel: ObservableObject {
 
     func finishWorkout() {
         stopTimer()
+        speakWorkoutComplete()
         intervalEndTime = nil
         timeRemaining = 0
         showCompletionMessage = false
@@ -1131,7 +1126,7 @@ class TimerViewModel: ObservableObject {
             playAlarm()
         case .voice:
             resetPromptFlags()
-            speakIntervalStart()
+            speakIntervalCueIfNeeded()
         case .silent:
             break
         }
@@ -1151,36 +1146,45 @@ class TimerViewModel: ObservableObject {
 
     private func resetPromptFlags() {
         halfwayPromptFired = false
-        thirtySecondPromptFired = false
     }
 
-    func speakIntervalStart() {
+    /// Speaks an HR-target cue at the start of the 1st High Intensity and 1st Recovery intervals only.
+    func speakIntervalCueIfNeeded() {
         guard audioMode == .voice else { return }
         guard intervals.indices.contains(currentIntervalIndex) else { return }
         let interval = intervals[currentIntervalIndex]
         let mins = Int(interval.duration / 60)
         let minWord = mins == 1 ? "minute" : "minutes"
-        let phrase = AudioPrompts.start.randomElement()!
-        SpeechManager.shared.speak("\(interval.name) starting now for \(mins) \(minWord). \(phrase)")
+        switch interval.type {
+        case .highIntensity where highIntensityCount == 1:
+            let lower = highIntensityTargetRange.lowerBound
+            let upper = highIntensityTargetRange.upperBound
+            SpeechManager.shared.speak("High intensity starting now for \(mins) \(minWord). Target heart rate: \(lower) to \(upper) beats per minute.")
+        case .rest where restCount == 1:
+            let lower = recoveryTargetRange.lowerBound
+            let upper = recoveryTargetRange.upperBound
+            SpeechManager.shared.speak("Recovery starting now for \(mins) \(minWord). Bring your heart rate down to \(lower) to \(upper) beats per minute.")
+        default:
+            break
+        }
     }
 
+    /// Fires a random Viking encouragement at the halfway point of High Intensity intervals only.
     private func speakHalfway() {
         guard audioMode == .voice, !halfwayPromptFired else { return }
         guard intervals.indices.contains(currentIntervalIndex) else { return }
-        guard intervals[currentIntervalIndex].duration >= 60 else { return }
+        let interval = intervals[currentIntervalIndex]
+        guard interval.type == .highIntensity else { return }
+        guard interval.duration >= 60 else { return }
         halfwayPromptFired = true
         SpeechManager.shared.speak(AudioPrompts.halfway.randomElement()!)
     }
 
-    private func speakThirtySeconds() {
-        guard audioMode == .voice, !thirtySecondPromptFired else { return }
-        guard intervals.indices.contains(currentIntervalIndex) else { return }
-        guard intervals[currentIntervalIndex].duration > 60 else { return }
-        thirtySecondPromptFired = true
-        let phrase = AudioPrompts.thirtySeconds.randomElement()!
-        let isLast = currentIntervalIndex + 1 >= intervals.count
-        let lead = isLast ? "30 seconds to finish." : "30 seconds to go."
-        SpeechManager.shared.speak("\(lead) \(phrase)")
+    /// Fires a random Viking celebration phrase when the workout finishes.
+    private func speakWorkoutComplete() {
+        guard audioMode == .voice else { return }
+        let phrase = AudioPrompts.workoutComplete.randomElement()!
+        SpeechManager.shared.speak("Workout complete! \(phrase)")
     }
 
     func ensureNotificationPermissionForToggles() {
@@ -1436,29 +1440,7 @@ class TimerViewModel: ObservableObject {
 // MARK: - AudioPrompts
 
 enum AudioPrompts {
-    static let start: [String] = [
-        "Unleash your inner Viking!",
-        "Odin is watching — give him a show!",
-        "Time to raid your limits!",
-        "For glory and gains, warrior!",
-        "Channel your inner berserker!",
-        "Your ancestors trained harder — now it's your turn!",
-        "Valhalla is earned, not given — earn it now!",
-        "No surrender. Only forward.",
-        "This is where legends are forged!",
-        "Pick up the hammer and charge!",
-        "Your VO2 max is your battle axe — sharpen it now!",
-        "The longship has set sail — row hard!",
-        "Feel the burn — that's just Odin testing you!",
-        "Every interval is a saga. Write a good one.",
-        "You chose this. Now conquer it.",
-        "Make Thor proud — he's watching!",
-        "Warriors don't hesitate — they charge!",
-        "The forge is hot. Strike now!",
-        "Your saga isn't written yet — go write it!",
-        "Vikings don't pace themselves — they dominate!"
-    ]
-
+    /// Played at the halfway point of each High Intensity interval.
     static let halfway: [String] = [
         "Halfway there, Viking — the hard part's already behind you!",
         "Halfway done — Odin smiles upon you!",
@@ -1482,27 +1464,28 @@ enum AudioPrompts {
         "Half done — unleash everything you have left!"
     ]
 
-    static let thirtySeconds: [String] = [
-        "Drain the tank completely!",
-        "Leave nothing on the longship!",
-        "30 seconds of pure Viking glory — seize it!",
-        "Odin counts every one of these seconds!",
-        "Make these 30 seconds legendary!",
-        "Your ancestors didn't come this far to slow down now!",
-        "Unleash your final berserker fury!",
-        "30 seconds to add to your saga!",
-        "The mead hall is 30 seconds away!",
-        "Prove yourself in these final 30 seconds!",
-        "Channel every last drop of berserker energy!",
-        "30 seconds to Valhalla — go!",
-        "All or nothing, Viking. All or nothing!",
-        "Seal your legend in these last 30 seconds!",
-        "Pure will — that's all it takes now!",
-        "Finish like the warrior you are!",
-        "Rest is coming — earn it!",
-        "The raid is almost won — push through!",
-        "Make Odin proud in these final seconds!",
-        "This is your moment. Take it!"
+    /// Played when the full workout finishes.
+    static let workoutComplete: [String] = [
+        "Valhalla is earned, not given — and today you earned it!",
+        "Another saga written. Odin is proud.",
+        "The raid is complete. You conquered every interval!",
+        "Warriors don't quit — and you proved it today!",
+        "The longship has returned victorious. Well done, Viking!",
+        "You showed up, you pushed hard, and you won.",
+        "Your VO2 max just got a little stronger. That's a Viking win.",
+        "The mead hall awaits. You've earned your rest.",
+        "Every interval, every drop of sweat — it all counted.",
+        "Thor himself would raise a horn to that effort!",
+        "Legend built, one interval at a time. See you next session!",
+        "The forge has made you stronger. Rest now, warrior.",
+        "Not everyone trains like a Viking — you just proved you do.",
+        "That's how sagas begin. Keep showing up.",
+        "You're writing your fitness story one workout at a time. Chapter done.",
+        "Strength, grit, and glory — you brought all three today.",
+        "The ancestors are smiling. That was a great workout.",
+        "Done. Stronger. Ready for the next raid.",
+        "That's the N4x4 way. Feel that — that's progress.",
+        "Odin counted every second. He's impressed."
     ]
 }
 
