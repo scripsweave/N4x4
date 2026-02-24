@@ -23,6 +23,7 @@
 		3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A762C938ABA00DD18E7 /* Extensions.swift */; };
 		3DF13A802C94D28B00DD18E7 /* alarm.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */; };
 		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
+		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 		3DF13A762C938ABA00DD18E7 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = alarm.mp3; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
+		5739937EF07648BE8983755B /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -127,6 +129,7 @@
 				3DF13A762C938ABA00DD18E7 /* Extensions.swift */,
 				3D516A642CAB347F001279C0 /* HelpView.swift */,
 				A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */,
+				5739937EF07648BE8983755B /* SpeechManager.swift */,
 			);
 			path = N4x4;
 			sourceTree = "<group>";
@@ -305,6 +308,7 @@
 				3DF13A6F2C938A4F00DD18E7 /* Interval.swift in Sources */,
 				3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */,
+				CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -484,7 +488,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -521,7 +525,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

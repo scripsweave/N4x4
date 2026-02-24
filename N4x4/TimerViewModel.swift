@@ -14,6 +14,13 @@ enum PermissionState: Equatable {
     case unavailable
 }
 
+enum AudioMode: String, CaseIterable, Identifiable {
+    case alarm  = "Alarm"
+    case voice  = "Voice Prompts"
+    case silent = "Silent"
+    var id: String { rawValue }
+}
+
 enum WorkoutReminderMode: String, CaseIterable, Identifiable {
     case weeklyWeekday
 
@@ -131,6 +138,13 @@ class TimerViewModel: ObservableObject {
         }
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
+    @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.alarm.rawValue
+
+    var audioMode: AudioMode {
+        get { AudioMode(rawValue: audioModeRaw) ?? .alarm }
+        set { audioModeRaw = newValue.rawValue }
+    }
+
     @AppStorage("preventSleep") var preventSleep: Bool = true
     @AppStorage("userAge") var userAge: Int = 40 {
         didSet {
@@ -434,6 +448,10 @@ class TimerViewModel: ObservableObject {
     var intervalEndTime: Date?
     var workoutStartDate: Date?
 
+    // Voice prompt state — reset on every interval change, reset, and skip
+    private var halfwayPromptFired = false
+    private var thirtySecondPromptFired = false
+
     var maximumHeartRate: Int {
         max(1, 220 - userAge)
     }
@@ -472,6 +490,11 @@ class TimerViewModel: ObservableObject {
             workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
         }
         userAge = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
+
+        // One-time migration from the old alarmEnabled bool to AudioMode
+        if UserDefaults.standard.object(forKey: "audioModeRaw") == nil {
+            audioMode = alarmEnabled ? .alarm : .silent
+        }
 
         setupIntervals()
         loadWorkoutLogEntries()
@@ -555,6 +578,8 @@ class TimerViewModel: ObservableObject {
         reconcileTimerState(now: Date(), playAlarm: false)
         guard isRunning else { return }
 
+        speakIntervalStart()
+
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         scheduleNextIntervalNotification()
 
@@ -591,6 +616,18 @@ class TimerViewModel: ObservableObject {
 
         if now < endTime {
             timeRemaining = max(0, endTime.timeIntervalSince(now))
+
+            // Halfway voice prompt
+            let halfwayPoint = intervals[currentIntervalIndex].duration / 2
+            if timeRemaining <= halfwayPoint {
+                speakHalfway()
+            }
+
+            // 30-second voice prompt
+            if timeRemaining <= 30 && timeRemaining > 0 {
+                speakThirtySeconds()
+            }
+
             return
         }
 
@@ -647,6 +684,7 @@ class TimerViewModel: ObservableObject {
     }
 
     func moveToNextInterval() {
+        resetPromptFlags()
         if currentIntervalIndex + 1 < intervals.count {
             currentIntervalIndex += 1
             timeRemaining = intervals[currentIntervalIndex].duration
@@ -664,6 +702,7 @@ class TimerViewModel: ObservableObject {
 
     func pause() {
         if isRunning {
+            SpeechManager.shared.stopSpeaking()
             timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
             stopTimer()
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
@@ -688,6 +727,8 @@ class TimerViewModel: ObservableObject {
     }
 
     func reset() {
+        SpeechManager.shared.stopSpeaking()
+        resetPromptFlags()
         stopTimer()
         setupIntervals()
         loadWorkoutLogEntries()
@@ -1085,8 +1126,14 @@ class TimerViewModel: ObservableObject {
     }
 
     func playAlarmIfNeeded() {
-        if alarmEnabled {
+        switch audioMode {
+        case .alarm:
             playAlarm()
+        case .voice:
+            resetPromptFlags()
+            speakIntervalStart()
+        case .silent:
+            break
         }
     }
 
@@ -1098,6 +1145,42 @@ class TimerViewModel: ObservableObject {
         } catch {
             print("Error playing alarm sound: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Voice Prompts
+
+    private func resetPromptFlags() {
+        halfwayPromptFired = false
+        thirtySecondPromptFired = false
+    }
+
+    func speakIntervalStart() {
+        guard audioMode == .voice else { return }
+        guard intervals.indices.contains(currentIntervalIndex) else { return }
+        let interval = intervals[currentIntervalIndex]
+        let mins = Int(interval.duration / 60)
+        let minWord = mins == 1 ? "minute" : "minutes"
+        let phrase = AudioPrompts.start.randomElement()!
+        SpeechManager.shared.speak("\(interval.name) starting now for \(mins) \(minWord). \(phrase)")
+    }
+
+    private func speakHalfway() {
+        guard audioMode == .voice, !halfwayPromptFired else { return }
+        guard intervals.indices.contains(currentIntervalIndex) else { return }
+        guard intervals[currentIntervalIndex].duration >= 60 else { return }
+        halfwayPromptFired = true
+        SpeechManager.shared.speak(AudioPrompts.halfway.randomElement()!)
+    }
+
+    private func speakThirtySeconds() {
+        guard audioMode == .voice, !thirtySecondPromptFired else { return }
+        guard intervals.indices.contains(currentIntervalIndex) else { return }
+        guard intervals[currentIntervalIndex].duration > 60 else { return }
+        thirtySecondPromptFired = true
+        let phrase = AudioPrompts.thirtySeconds.randomElement()!
+        let isLast = currentIntervalIndex + 1 >= intervals.count
+        let lead = isLast ? "30 seconds to finish." : "30 seconds to go."
+        SpeechManager.shared.speak("\(lead) \(phrase)")
     }
 
     func ensureNotificationPermissionForToggles() {
@@ -1348,5 +1431,78 @@ class TimerViewModel: ObservableObject {
     func totalWorkoutDuration() -> TimeInterval {
         intervals.reduce(0) { $0 + $1.duration }
     }
+}
+
+// MARK: - AudioPrompts
+
+enum AudioPrompts {
+    static let start: [String] = [
+        "Unleash your inner Viking!",
+        "Odin is watching — give him a show!",
+        "Time to raid your limits!",
+        "For glory and gains, warrior!",
+        "Channel your inner berserker!",
+        "Your ancestors trained harder — now it's your turn!",
+        "Valhalla is earned, not given — earn it now!",
+        "No surrender. Only forward.",
+        "This is where legends are forged!",
+        "Pick up the hammer and charge!",
+        "Your VO2 max is your battle axe — sharpen it now!",
+        "The longship has set sail — row hard!",
+        "Feel the burn — that's just Odin testing you!",
+        "Every interval is a saga. Write a good one.",
+        "You chose this. Now conquer it.",
+        "Make Thor proud — he's watching!",
+        "Warriors don't hesitate — they charge!",
+        "The forge is hot. Strike now!",
+        "Your saga isn't written yet — go write it!",
+        "Vikings don't pace themselves — they dominate!"
+    ]
+
+    static let halfway: [String] = [
+        "Halfway there, Viking — the hard part's already behind you!",
+        "Halfway done — Odin smiles upon you!",
+        "Half the battle won — finish what you started!",
+        "The longship is halfway home — keep rowing!",
+        "Your ancestors didn't stop halfway through a raid!",
+        "Half done! The mead hall is getting closer!",
+        "You're at the midpoint — stay fierce!",
+        "Halfway through the storm — hold your ground!",
+        "The finish is now closer than the start — push on!",
+        "Half done — your VO2 max is climbing right now!",
+        "Midpoint cleared — the Viking in you is just warming up!",
+        "Halfway through — don't waste the effort you've already put in!",
+        "You've made it halfway. No turning back now!",
+        "The sagas are written in the second half — go write yours!",
+        "Halfway done — your future self will thank you at the mead hall!",
+        "Keep going, warrior — you're on the home stretch!",
+        "Halfway! Valhalla gets closer with every second!",
+        "You've conquered half — now finish the conquest!",
+        "Halfway! Remember why you started — own the finish!",
+        "Half done — unleash everything you have left!"
+    ]
+
+    static let thirtySeconds: [String] = [
+        "Drain the tank completely!",
+        "Leave nothing on the longship!",
+        "30 seconds of pure Viking glory — seize it!",
+        "Odin counts every one of these seconds!",
+        "Make these 30 seconds legendary!",
+        "Your ancestors didn't come this far to slow down now!",
+        "Unleash your final berserker fury!",
+        "30 seconds to add to your saga!",
+        "The mead hall is 30 seconds away!",
+        "Prove yourself in these final 30 seconds!",
+        "Channel every last drop of berserker energy!",
+        "30 seconds to Valhalla — go!",
+        "All or nothing, Viking. All or nothing!",
+        "Seal your legend in these last 30 seconds!",
+        "Pure will — that's all it takes now!",
+        "Finish like the warrior you are!",
+        "Rest is coming — earn it!",
+        "The raid is almost won — push through!",
+        "Make Odin proud in these final seconds!",
+        "This is your moment. Take it!"
+    ]
 }
 

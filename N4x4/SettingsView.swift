@@ -37,16 +37,27 @@ struct SettingsView: View {
                     }
                 }
 
-                // Alarm
-                Section(header: Text("Alarm").font(.headline)) {
-                    VStack(alignment: .leading) {
-                        Toggle("Alarm at End of Interval", isOn: $viewModel.alarmEnabled)
-                            .font(.body)
-                        Text("(only works when N4x4 is in the foreground)")
-                            .font(.footnote)
-                            .foregroundColor(.gray)
-                            .padding(.leading, 4)
+                // Audio Alerts
+                Section(header: Text("Audio Alerts").font(.headline)) {
+                    Picker("Audio Alerts", selection: $viewModel.audioMode) {
+                        ForEach(AudioMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
                     }
+                    .pickerStyle(.segmented)
+
+                    Group {
+                        switch viewModel.audioMode {
+                        case .alarm:
+                            Text("A beep plays at each interval change (foreground only).")
+                        case .voice:
+                            Text("Voice cues at start, halfway, and 30 seconds to go. Music softens while speaking.")
+                        case .silent:
+                            Text("No audio alerts. Watch the screen for interval changes.")
+                        }
+                    }
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
                 }
 
                 // Display

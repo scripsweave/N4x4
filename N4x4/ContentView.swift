@@ -5,6 +5,7 @@ final class OnboardingFlowViewModel: ObservableObject {
         case welcome
         case structure
         case age
+        case audioMode
         case notifications
         case reminderDay
         case health
@@ -15,6 +16,7 @@ final class OnboardingFlowViewModel: ObservableObject {
             case .welcome: return "Welcome to N4x4"
             case .structure: return "Train with purpose"
             case .age: return "Set your heart rate zones"
+            case .audioMode: return "How should we guide you?"
             case .notifications: return "Stay consistent"
             case .reminderDay: return "Pick your workout day"
             case .health: return "Track your progress"
@@ -120,6 +122,8 @@ private struct OnboardingView: View {
                         )
                     case .age:
                         ageCard
+                    case .audioMode:
+                        audioModeCard
                     case .notifications:
                         permissionCard(
                             icon: "bell.badge.fill",
@@ -255,6 +259,80 @@ private struct OnboardingView: View {
         .padding(28)
         .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private var audioModeCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("How should we guide you?")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+
+            Text("You can change this any time in Settings.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.85))
+
+            VStack(spacing: 10) {
+                audioModeRow(
+                    mode: .alarm,
+                    icon: "bell.fill",
+                    description: "A sharp beep at every interval change."
+                )
+                audioModeRow(
+                    mode: .voice,
+                    icon: "waveform",
+                    description: "Hear what's coming and get hyped up. Music softens while we speak."
+                )
+                audioModeRow(
+                    mode: .silent,
+                    icon: "speaker.slash.fill",
+                    description: "No audio alerts — keep an eye on the screen."
+                )
+            }
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38),
+                    in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private func audioModeRow(mode: AudioMode, icon: String, description: String) -> some View {
+        Button {
+            timerViewModel.audioMode = mode
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { flow.next() }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .frame(width: 28)
+                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(mode.rawValue)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(description)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                Spacer()
+                Image(systemName: timerViewModel.audioMode == mode
+                      ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(.white)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(timerViewModel.audioMode == mode
+                          ? Color.white.opacity(0.22) : Color.white.opacity(0.08))
+            )
+        }
     }
 
     private var reminderDayCard: some View {
