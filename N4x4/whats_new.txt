@@ -1,0 +1,28 @@
+What's New in N4x4
+
+Major Update: The Ultimate Norwegian 4x4 Experience
+
+Streak Tracking
+- Track your workout streaks with a beautiful visual calendar
+- See your current streak and all-time best
+- Tap any completed workout day to view details
+
+Smarter Reminders
+- Reminders now sent at 8pm the day BEFORE your scheduled workout
+- Daily follow-up nudges until you log your workout
+- Fun, encouraging Viking-themed messages to keep you motivated
+
+Personalized Heart Rate Zones
+- Enter your age during onboarding for accurate target heart rate zones
+- See your target zones (85-95% for high intensity, 60-70% for recovery) displayed during each interval
+- Train at the right intensity for maximum VO2 max improvement
+
+Apple Health Integration
+- Automatically save workouts to Apple Health
+- Toggle on/off in Settings
+- Track your VO2 max trends over time
+
+UI Improvements
+- Simplified post-workout flow
+- Reorganized Settings for better usability
+- Various bug fixes and performance improvements

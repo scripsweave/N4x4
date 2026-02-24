@@ -233,6 +233,7 @@ class TimerViewModel: ObservableObject {
     @Published var selectedWorkoutType: WorkoutType = .norwegian4x4
     @Published var workoutNotesDraft: String = ""
     @Published var showPostWorkoutSummary: Bool = false
+    @Published var showWeeklyStreaks: Bool = false
 
     // HealthKit
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
@@ -792,6 +793,7 @@ class TimerViewModel: ObservableObject {
         persistWorkoutLogEntries()
         cancelMissedWorkoutFollowUpIfCompletedToday()
         showPostWorkoutSummary = false
+        showWeeklyStreaks = true
         reset()
     }
 

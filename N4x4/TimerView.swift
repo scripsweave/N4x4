@@ -161,6 +161,12 @@ struct TimerView: View {
             .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
                 PostWorkoutSummaryView(viewModel: viewModel)
             }
+            .sheet(isPresented: $viewModel.showWeeklyStreaks) {
+                StreakHistoryView(viewModel: viewModel)
+                    .onDisappear {
+                        viewModel.showWeeklyStreaks = false
+                    }
+            }
             .alert(isPresented: $showResetAlert) {
                 Alert(
                     title: Text("Reset Session"),
@@ -297,7 +303,7 @@ private struct StreakHistoryView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Streaks")
+            .navigationTitle("Weekly Streaks")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
