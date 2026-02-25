@@ -81,6 +81,7 @@
 		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityBundle.swift; sourceTree = "<group>"; };
 		80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityView.swift; sourceTree = "<group>"; };
+		55D2367A38B64576AC4EEB00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +143,7 @@
 			children = (
 				5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */,
 				80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */,
+				55D2367A38B64576AC4EEB00 /* Info.plist */,
 			);
 			path = N4x4LiveActivity;
 			sourceTree = "<group>";
@@ -720,9 +722,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8VG9JUJ855;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "N4x4 Live Activity";
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_FILE = N4x4LiveActivity/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -748,9 +748,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8VG9JUJ855;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "N4x4 Live Activity";
-				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				INFOPLIST_FILE = N4x4LiveActivity/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
