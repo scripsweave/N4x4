@@ -3,7 +3,6 @@ import SwiftUI
 final class OnboardingFlowViewModel: ObservableObject {
     enum Step: Int, CaseIterable {
         case welcome
-        case structure
         case age
         case audioMode
         case notifications
@@ -15,7 +14,6 @@ final class OnboardingFlowViewModel: ObservableObject {
         var title: String {
             switch self {
             case .welcome: return "Welcome to N4x4"
-            case .structure: return "Train with purpose"
             case .age: return "Set your heart rate zones"
             case .audioMode: return "How should we guide you?"
             case .notifications: return "Stay consistent"
@@ -103,15 +101,9 @@ private struct OnboardingView: View {
                     switch flow.currentStep {
                     case .welcome:
                         onboardingCard(
-                            icon: "figure.run",
-                            title: "Hit peak effort in less time.",
-                            subtitle: "N4x4 guides each interval so you can focus on effort, not clock-watching."
-                        )
-                    case .structure:
-                        onboardingCard(
-                            icon: "timer",
-                            title: "Built around proven 4x4 intervals.",
-                            subtitle: "Warm up, push hard, recover, repeat. Clean cues keep your workout sharp and simple."
+                            icon: "chart.line.uptrend.xyaxis",
+                            title: "N4x4 — the ultimate way to improve your VO₂ max",
+                            subtitle: "N4x4 helps you train consistently to reach your VO₂ max goals through High Intensity Interval Training."
                         )
                     case .age:
                         ageCard
@@ -162,18 +154,9 @@ private struct OnboardingView: View {
 
                 Spacer(minLength: 0)
 
-                if flow.currentStep == .welcome || flow.currentStep == .structure {
-                    HStack(spacing: 12) {
-                        if flow.currentStep != .welcome {
-                            Button("Back") { flow.back() }
-                                .buttonStyle(OnboardingSecondaryButtonStyle())
-                        }
-
-                        Button(flow.currentStep == .structure ? "Continue" : "Next") {
-                            flow.next()
-                        }
+                if flow.currentStep == .welcome {
+                    Button("Next") { flow.next() }
                         .buttonStyle(OnboardingPrimaryButtonStyle())
-                    }
                 }
             }
             .padding(24)
