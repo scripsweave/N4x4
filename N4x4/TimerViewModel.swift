@@ -1519,7 +1519,7 @@ class TimerViewModel: ObservableObject {
         guard healthKitEnabled else { return }
         guard let vo2Type = HKObjectType.quantityType(forIdentifier: .vo2Max) else { return }
 
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
         let query = HKSampleQuery(sampleType: vo2Type, predicate: nil, limit: 60, sortDescriptors: [sortDescriptor]) { _, samples, error in
             if let error = error {
                 print("VO2 fetch error: \(error.localizedDescription)")
@@ -1529,7 +1529,7 @@ class TimerViewModel: ObservableObject {
             let unit = HKUnit(from: "mL/kg*min")
             let mapped = (samples as? [HKQuantitySample])?.map { sample in
                 VO2DataPoint(date: sample.startDate, value: sample.quantity.doubleValue(for: unit))
-            } ?? []
+            }.reversed().map { $0 } ?? []
 
             DispatchQueue.main.async {
                 self.vo2DataPoints = mapped
