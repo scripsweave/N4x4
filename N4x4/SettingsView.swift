@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showResetAlert = false
+    @State private var showTips = false
 
     var body: some View {
         NavigationView {
@@ -203,6 +204,28 @@ struct SettingsView: View {
                     Text(viewModel.healthAuthorizationGranted ? "Connected" : "Not connected")
                         .font(.footnote)
                         .foregroundColor(viewModel.healthAuthorizationGranted ? .green : .secondary)
+                }
+
+                // Tips
+                Section(header: Text("Training Tips").font(.headline)) {
+                    Button(action: { showTips = true }) {
+                        HStack {
+                            Image(systemName: "bolt.heart.fill")
+                                .foregroundStyle(.orange)
+                            Text("Advanced 4×4 Tips")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("Science-backed techniques to push from good to elite.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+                .sheet(isPresented: $showTips) {
+                    TipsView()
                 }
 
                 // Onboarding
