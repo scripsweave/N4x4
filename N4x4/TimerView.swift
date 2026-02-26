@@ -199,6 +199,9 @@ struct TimerView: View {
             .onDisappear {
                 UIApplication.shared.isIdleTimerDisabled = false
             }
+            .onAppear {
+                updateIdleTimer()
+            }
         }
     }
 

@@ -397,9 +397,6 @@ private struct OnboardingView: View {
 
             VStack(spacing: 12) {
                 Button(selectedCount > 0 ? "Save My Training Days" : "Skip for now") {
-                    if selectedCount > 0 {
-                        timerViewModel.enableRemindersWithSelectedDays()
-                    }
                     saveReminderWeekdayAndContinue()
                 }
                 .buttonStyle(OnboardingPrimaryButtonStyle())
@@ -567,11 +564,9 @@ private struct OnboardingView: View {
             switch timerViewModel.notificationPermissionState {
             case .granted:
                 timerViewModel.notificationsEnabled = true
-                timerViewModel.workoutRemindersEnabled = true
                 flow.next()
             case .notDetermined, .unknown:
                 timerViewModel.notificationsEnabled = true
-                timerViewModel.workoutRemindersEnabled = true
                 timerViewModel.requestNotificationPermission()
                 flow.next()
             case .denied, .unavailable:
@@ -586,18 +581,28 @@ private struct OnboardingView: View {
 
         timerViewModel.refreshNotificationPermissionState {
             defer { isRequestingNotificationPermission = false }
+            let hasSelection = !timerViewModel.selectedWeekdaysList.isEmpty
 
             switch timerViewModel.notificationPermissionState {
             case .granted:
                 timerViewModel.notificationsEnabled = true
-                timerViewModel.workoutRemindersEnabled = true
+                if hasSelection {
+                    timerViewModel.enableRemindersWithSelectedDays()
+                } else {
+                    timerViewModel.workoutRemindersEnabled = false
+                }
                 flow.next()
             case .notDetermined, .unknown:
                 timerViewModel.notificationsEnabled = true
-                timerViewModel.workoutRemindersEnabled = true
+                if hasSelection {
+                    timerViewModel.enableRemindersWithSelectedDays()
+                } else {
+                    timerViewModel.workoutRemindersEnabled = false
+                }
                 timerViewModel.requestNotificationPermission()
                 flow.next()
             case .denied, .unavailable:
+                timerViewModel.workoutRemindersEnabled = false
                 flow.next()
             }
         }

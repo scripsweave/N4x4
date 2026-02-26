@@ -128,7 +128,12 @@ class TimerViewModel: ObservableObject {
     static let minimumSupportedAge = 13
     static let maximumSupportedAge = 100
     private static let missedWorkoutFollowUpIdentifierPrefix = "workoutReminderFollowup_"
-    
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     private func missedWorkoutFollowUpIdentifier(for weekday: Int) -> String {
         return Self.missedWorkoutFollowUpIdentifierPrefix + "\(weekday)"
     }
@@ -276,9 +281,12 @@ class TimerViewModel: ObservableObject {
             guard oldValue != workoutRemindersEnabled else { return }
             if workoutRemindersEnabled {
                 ensureNotificationPermissionForToggles()
+                ensureDefaultReminderSelection()
+                reminderActivationDate = Date()
                 scheduleWorkoutReminder()
             } else {
                 cancelWorkoutReminder()
+                reminderActivationDate = nil
             }
         }
     }
@@ -330,16 +338,28 @@ class TimerViewModel: ObservableObject {
             }
         }
     }
-    
+
     // Flag to prevent circular sync between @Published and @AppStorage
     private var isSyncingFromPublished = false
+
+    @AppStorage("workoutReminderActivationDate") private var workoutReminderActivationDateRaw: String = ""
+
+    private var reminderActivationDate: Date? {
+        get {
+            guard !workoutReminderActivationDateRaw.isEmpty else { return nil }
+            return Self.iso8601Formatter.date(from: workoutReminderActivationDateRaw)
+        }
+        set {
+            workoutReminderActivationDateRaw = newValue.map { Self.iso8601Formatter.string(from: $0) } ?? ""
+        }
+    }
 
     // Legacy support for single weekday
     @AppStorage("workoutReminderWeekday") var workoutReminderWeekday: Int = 0 {
         didSet {
             // Migrate legacy single weekday to new format
-            if oldValue > 0 && workoutReminderWeekdays.isEmpty {
-                workoutReminderWeekdays = String(oldValue)
+            if workoutReminderWeekday > 0 && workoutReminderWeekdays.isEmpty {
+                workoutReminderWeekdays = String(workoutReminderWeekday)
             }
         }
     }
@@ -385,11 +405,15 @@ class TimerViewModel: ObservableObject {
     // @Published property for stable in-memory state (synced with AppStorage)
     @Published var selectedWeekdaysList: [Int] = [] {
         didSet {
+            guard oldValue.sorted() != selectedWeekdaysList.sorted() else { return }
             // Sync to AppStorage when value changes (via flag to prevent circular sync)
             isSyncingFromPublished = true
             let sorted = selectedWeekdaysList.sorted()
             workoutReminderWeekdays = sorted.map { String($0) }.joined(separator: ",")
             isSyncingFromPublished = false
+            if workoutRemindersEnabled {
+                reminderActivationDate = Date()
+            }
         }
     }
 
@@ -406,6 +430,12 @@ class TimerViewModel: ObservableObject {
             days.append(weekday)
         }
         selectedWeekdaysList = days
+    }
+
+    private func ensureDefaultReminderSelection() {
+        guard selectedWeekdaysList.isEmpty else { return }
+        let today = Calendar.current.component(.weekday, from: Date())
+        selectedWeekdaysList = [today]
     }
     
     /// Force sync selected days to AppStorage and schedule reminders
@@ -548,6 +578,7 @@ class TimerViewModel: ObservableObject {
     var player: AVAudioPlayer?
     var intervalEndTime: Date?
     var workoutStartDate: Date?
+    var workoutCompletionDate: Date?
 
     // Live Activity
     private var liveActivity: Activity<N4x4LiveActivityAttributes>?
@@ -609,6 +640,10 @@ class TimerViewModel: ObservableObject {
         // Previously currentStreak was only ever increased, so a missed-week streak
         // would never be reflected until the user started a new run of workouts.
         refreshStreak()
+
+        if workoutRemindersEnabled && reminderActivationDate == nil {
+            reminderActivationDate = Date()
+        }
 
         // N1 fix: refreshNotificationPermissionState is async. Previously, scheduling
         // calls were made synchronously after it returned, so notificationPermissionState
@@ -772,6 +807,7 @@ class TimerViewModel: ObservableObject {
         triggerCompletionHaptic()
         endLiveActivity()
         stopTimer()
+        workoutCompletionDate = Date()
         speakWorkoutComplete()
         intervalEndTime = nil
         timeRemaining = 0
@@ -858,6 +894,7 @@ class TimerViewModel: ObservableObject {
         showPostWorkoutSummary = false
         intervalEndTime = nil
         workoutStartDate = nil
+        workoutCompletionDate = nil
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
     }
 
@@ -902,6 +939,10 @@ class TimerViewModel: ObservableObject {
                 if workoutRemindersEnabled { workoutRemindersEnabled = false }
             }
             return
+        }
+
+        if reminderActivationDate == nil {
+            reminderActivationDate = Date()
         }
 
         cancelWorkoutReminder()
@@ -983,8 +1024,9 @@ class TimerViewModel: ObservableObject {
 
     func saveWorkoutLogEntryAndResetSession() {
         let trimmedNotes = workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let completionDate = workoutCompletionDate ?? Date()
         let entry = WorkoutLogEntry(
-            completedAt: Date(),
+            completedAt: completionDate,
             workoutType: selectedWorkoutType,
             notes: trimmedNotes
         )
@@ -1123,10 +1165,14 @@ class TimerViewModel: ObservableObject {
 
         let calendar = Calendar.current
         let now = Date()
+        guard let activationDate = reminderActivationDate else { return }
 
         guard let lastScheduled = previousOccurrence(ofWeekday: weekday, from: now) else { return }
         let startOfLast = calendar.startOfDay(for: lastScheduled)
         guard let nextScheduled = calendar.date(byAdding: .day, value: 7, to: startOfLast) else { return }
+        if startOfLast < calendar.startOfDay(for: activationDate) {
+            return
+        }
 
         // Follow-ups only start the day *after* the scheduled workout day.
         guard let followUpWindowStart = calendar.date(byAdding: .day, value: 1, to: startOfLast), now >= followUpWindowStart else {
@@ -1225,6 +1271,7 @@ class TimerViewModel: ObservableObject {
         workoutReminderDays = 7
         workoutReminderMode = .weeklyWeekday
         workoutReminderWeekdays = ""
+        reminderActivationDate = nil
         
         // Reset streaks but keep commitment
         currentStreak = 0
