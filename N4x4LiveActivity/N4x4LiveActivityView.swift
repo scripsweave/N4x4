@@ -35,7 +35,7 @@ struct N4x4LiveActivityWidget: Widget {
                 MinimalView(context: context)
             }
             .widgetURL(URL(string: "n4x4://open"))
-            .keylineTint(Color(context.state.phase.colorName))
+            .keylineTint(context.state.phase.color)
         }
     }
 }
@@ -64,7 +64,7 @@ struct CompactLeadingView: View {
         .padding(.leading, 4)
     }
 
-    var phaseColor: Color { Color(context.state.phase.colorName) }
+    var phaseColor: Color { context.state.phase.color }
 }
 
 /// Right slot: live countdown or paused indicator
@@ -77,6 +77,7 @@ struct CompactTrailingView: View {
                 Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
                     .monospacedDigit()
                     .font(.caption2.bold())
+                    .foregroundStyle(.white)
             } else {
                 Image(systemName: "pause.fill")
                     .font(.caption2)
@@ -96,11 +97,11 @@ struct MinimalView: View {
             Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
                 .monospacedDigit()
                 .font(.caption2.bold())
-                .foregroundStyle(Color(context.state.phase.colorName))
+                .foregroundStyle(context.state.phase.color)
         } else {
             Image(systemName: context.state.phase.symbolName)
                 .font(.caption2)
-                .foregroundStyle(Color(context.state.phase.colorName))
+                .foregroundStyle(context.state.phase.color)
         }
     }
 }
@@ -115,7 +116,7 @@ struct ExpandedLeadingView: View {
         HStack(spacing: 6) {
             Image(systemName: context.state.phase.symbolName)
                 .font(.title3.bold())
-                .foregroundStyle(Color(context.state.phase.colorName))
+                .foregroundStyle(context.state.phase.color)
             VStack(alignment: .leading, spacing: 1) {
                 Text(context.state.intervalName)
                     .font(.caption.bold())
@@ -139,7 +140,7 @@ struct ExpandedTrailingView: View {
         IntervalDotsView(
             current: context.state.currentInterval,
             total: context.state.totalIntervals,
-            colorName: context.state.phase.colorName
+            color: context.state.phase.color
         )
         .padding(.trailing, 8)
     }
@@ -154,7 +155,7 @@ struct ExpandedCenterView: View {
             Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
                 .monospacedDigit()
                 .font(.system(size: 44, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(context.state.phase.colorName))
+                .foregroundStyle(context.state.phase.color)
                 .minimumScaleFactor(0.7)
         } else {
             HStack(spacing: 8) {
@@ -192,7 +193,7 @@ struct LockScreenView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Image(systemName: context.state.phase.symbolName)
                     .font(.title2.bold())
-                    .foregroundStyle(Color(context.state.phase.colorName))
+                    .foregroundStyle(context.state.phase.color)
 
                 if context.state.isRunning {
                     Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
@@ -228,7 +229,7 @@ struct LockScreenView: View {
                 IntervalDotsView(
                     current: context.state.currentInterval,
                     total: context.state.totalIntervals,
-                    colorName: context.state.phase.colorName
+                    color: context.state.phase.color
                 )
             }
         }
@@ -243,13 +244,13 @@ struct LockScreenView: View {
 struct IntervalDotsView: View {
     let current: Int
     let total: Int
-    let colorName: String
+    let color: Color
 
     var body: some View {
         HStack(spacing: 5) {
             ForEach(1...max(1, total), id: \.self) { i in
                 Circle()
-                    .fill(i <= current ? Color(colorName) : Color.white.opacity(0.25))
+                    .fill(i <= current ? color : Color.white.opacity(0.25))
                     .frame(width: 8, height: 8)
             }
         }

@@ -4,6 +4,7 @@
 
 import ActivityKit
 import Foundation
+import SwiftUI
 
 // MARK: - ActivityAttributes
 
@@ -44,12 +45,13 @@ enum WorkoutPhase: String, Codable, Hashable {
     case highIntensity
     case rest
 
-    /// Name of a Color in Assets.xcassets, shared by both targets.
-    var colorName: String {
+    /// Phase colour — hardcoded so it works in both the app and the widget extension
+    /// without requiring Assets.xcassets to be added to the extension bundle.
+    var color: Color {
         switch self {
-        case .warmup:        return "phaseBlue"
-        case .highIntensity: return "phaseRed"
-        case .rest:          return "phaseGreen"
+        case .warmup:        return Color(red: 0.227, green: 0.525, blue: 1.0)
+        case .highIntensity: return Color(red: 1.0,   green: 0.227, blue: 0.361)
+        case .rest:          return Color(red: 0.188, green: 0.820, blue: 0.345)
         }
     }
 
