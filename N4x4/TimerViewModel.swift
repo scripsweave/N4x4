@@ -95,6 +95,81 @@ struct VO2DataPoint: Identifiable {
     let value: Double
 }
 
+// MARK: - Training modality
+
+enum TrainingModality: String, CaseIterable {
+    case treadmill    = "Treadmill"
+    case outdoorRun   = "Outdoor Run"
+    case rowing       = "Rowing Machine"
+    case bike         = "Stationary Bike"
+    case stairClimber = "Stair Climber"
+
+    var icon: String {
+        switch self {
+        case .treadmill:    return "figure.run"
+        case .outdoorRun:   return "leaf.fill"
+        case .rowing:       return "drop.fill"
+        case .bike:         return "bicycle"
+        case .stairClimber: return "arrow.up.circle.fill"
+        }
+    }
+
+    var tagline: String {
+        switch self {
+        case .treadmill:    return "Precision control"
+        case .outdoorRun:   return "The natural way"
+        case .rowing:       return "Full body power"
+        case .bike:         return "Low impact"
+        case .stairClimber: return "Vertical power"
+        }
+    }
+
+    var setup: String {
+        switch self {
+        case .treadmill:
+            return "Set a constant incline of 3–5%. This forces your heart rate up without requiring sprint speeds that are dangerous or hard on joints."
+        case .outdoorRun:
+            return "Find a long, gentle hill (4–6% grade). If no hills are available, use a flat, unobstructed path with no stops."
+        case .rowing:
+            return "Set the damper (drag) to 4 or 6. High drag (10) causes muscle failure before heart failure — defeating the purpose."
+        case .bike:
+            return "Adjust the seat so your leg is almost fully extended at the bottom of the pedal stroke."
+        case .stairClimber:
+            return "Stand upright. Do not lean your weight onto the side handles — this reduces the load and defeats the purpose."
+        }
+    }
+
+    var workPhase: String {
+        switch self {
+        case .treadmill:
+            return "Increase speed until you're at a heavy pant. You should be able to hold this for the full 4 minutes without grabbing the rails."
+        case .outdoorRun:
+            return "Run at a hard-sustainable pace — like a race pace you could only hold for about 10–12 minutes total."
+        case .rowing:
+            return "Focus on a powerful leg drive. Keep your Stroke Rate (SPM) between 24 and 28."
+        case .bike:
+            return "Maintain a high, consistent RPM — 80+ on a road bike or 60+ on an Air/Assault bike. Use your arms on an Air Bike to share the load."
+        case .stairClimber:
+            return "Increase speed until you can't breathe through your nose. Take full, consistent steps — not short choppy ones."
+        }
+    }
+
+    var restPhase: String {
+        switch self {
+        case .treadmill:
+            return "Reduce to a slow walk (2.5–3.0 mph). Keep the incline up to make the transition back to work easier."
+        case .outdoorRun:
+            return "Turn around and walk or jog slowly back down the hill. Movement must stay continuous."
+        case .rowing:
+            return "Keep the handle moving with very light tension. Focus on deep, rhythmic belly breaths."
+        case .bike:
+            return "Pedal very slowly with zero resistance. Do not stop moving your legs."
+        case .stairClimber:
+            return "Drop the machine to Level 1 or 2. Focus on standing tall to open up your lungs."
+        }
+    }
+}
+
 // MARK: - VO₂ max goal
 
 enum BiologicalSex: String, CaseIterable {
@@ -256,6 +331,13 @@ class TimerViewModel: ObservableObject {
         case .elite:   tierIndex = 2
         }
         return table[ageGroup][tierIndex]
+    }
+
+    @AppStorage("preferredModalityRaw") var preferredModalityRaw: String = ""
+
+    var preferredModality: TrainingModality? {
+        get { TrainingModality(rawValue: preferredModalityRaw) }
+        set { preferredModalityRaw = newValue?.rawValue ?? "" }
     }
 
     // Interval notifications
@@ -1265,6 +1347,7 @@ class TimerViewModel: ObservableObject {
         userAge = 40
         userBiologicalSexRaw = BiologicalSex.male.rawValue
         vo2TargetTierRaw = ""
+        preferredModalityRaw = ""
 
         notificationsEnabled = false
         workoutRemindersEnabled = false

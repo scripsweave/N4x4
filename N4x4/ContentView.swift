@@ -3,6 +3,8 @@ import SwiftUI
 final class OnboardingFlowViewModel: ObservableObject {
     enum Step: Int, CaseIterable {
         case welcome
+        case basics
+        case modality
         case age
         case vo2Goal
         case reminderDay
@@ -14,6 +16,8 @@ final class OnboardingFlowViewModel: ObservableObject {
         var title: String {
             switch self {
             case .welcome: return "Welcome to N4x4"
+            case .basics: return "How it works"
+            case .modality: return "Choose your exercise"
             case .age: return "Set your heart rate zones"
             case .vo2Goal: return "Set your VO₂ max goal"
             case .reminderDay: return "Pick your training days"
@@ -100,11 +104,11 @@ private struct OnboardingView: View {
                 Group {
                     switch flow.currentStep {
                     case .welcome:
-                        onboardingCard(
-                            icon: "chart.line.uptrend.xyaxis",
-                            title: "N4x4 — the ultimate way to improve your VO₂ max",
-                            subtitle: "N4x4 helps you train consistently to reach your VO₂ max goals through High Intensity Interval Training."
-                        )
+                        welcomeCard
+                    case .basics:
+                        basicsCard
+                    case .modality:
+                        modalityCard
                     case .age:
                         ageCard
                     case .audioMode:
@@ -154,10 +158,6 @@ private struct OnboardingView: View {
 
                 Spacer(minLength: 0)
 
-                if flow.currentStep == .welcome {
-                    Button("Next") { flow.next() }
-                        .buttonStyle(OnboardingPrimaryButtonStyle())
-                }
             }
             .padding(24)
         }
@@ -419,6 +419,210 @@ private struct OnboardingView: View {
         }
         // Wrap-around: Saturday (7) and Sunday (1)
         return sorted.contains(7) && sorted.contains(1)
+    }
+
+    // MARK: - Welcome card
+
+    private var welcomeCard: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 42, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(18)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("N4x4 — the ultimate way to improve your VO₂ max")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("N4x4 helps you train consistently to reach your VO₂ max goals through High Intensity Interval Training.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.88))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 12) {
+                Button(action: { flow.next() }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "doc.text.magnifyingglass")
+                        Text("Show me how it works")
+                    }
+                }
+                .buttonStyle(OnboardingPrimaryButtonStyle())
+
+                Button(action: { flow.go(to: .age) }) {
+                    Text("Skip intro, get started →")
+                }
+                .buttonStyle(OnboardingSecondaryButtonStyle())
+            }
+            .padding(.top, 4)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    // MARK: - Protocol basics card
+
+    private var basicsCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "doc.text.fill")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("How N4x4 Works")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            // Protocol steps
+            VStack(spacing: 10) {
+                basicsStep(icon: "figure.walk",        color: Color(red: 0.35, green: 0.60, blue: 1.0),
+                           label: "Warm-up",    detail: "5 minutes at an easy, increasing pace")
+                basicsStep(icon: "bolt.fill",           color: .orange,
+                           label: "Work Hard",  detail: "4 minutes · 85–95% max heart rate")
+                basicsStep(icon: "heart.fill",          color: Color(red: 0.15, green: 0.80, blue: 0.50),
+                           label: "Active Rest", detail: "3 minutes · 60–70% max heart rate")
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.5))
+                    Text("Repeat Work + Rest × 4 times")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.65))
+                }
+                basicsStep(icon: "figure.walk.motion", color: .cyan,
+                           label: "Cool-down",  detail: "5 minutes of light movement")
+            }
+            .padding(14)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+
+            // Key notes
+            VStack(alignment: .leading, spacing: 6) {
+                basicsNote("Can't speak in full sentences? You're at the right intensity.")
+                basicsNote("Start with 2 intervals and build up to 4 over several weeks.")
+                basicsNote("Allow 48–72 hours of recovery between sessions.")
+                basicsNote("⚠️ Consult a healthcare professional if you have any health conditions.",
+                           muted: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+
+            VStack(spacing: 12) {
+                Button("Choose Your Exercise →") { flow.next() }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                Button("Skip") { flow.go(to: .age) }
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
+            }
+            .padding(.top, 4)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private func basicsStep(icon: String, color: Color, label: String, detail: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(color.opacity(0.18)).frame(width: 36, height: 36)
+                Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(color)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Text(detail).font(.caption).foregroundStyle(.white.opacity(0.65))
+            }
+            Spacer()
+        }
+    }
+
+    private func basicsNote(_ text: String, muted: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle().fill(Color.white.opacity(muted ? 0.2 : 0.4)).frame(width: 4, height: 4).padding(.top, 6)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(muted ? 0.55 : 0.85))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Modality card
+
+    private var modalityCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "figure.run.circle.fill")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("How will you train?")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("Pick your exercise and see how to set it up for the best results.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 8) {
+                ForEach(TrainingModality.allCases, id: \.rawValue) { modality in
+                    let isSelected = timerViewModel.preferredModality == modality
+                    Button { timerViewModel.preferredModality = isSelected ? nil : modality } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: modality.icon)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 32, height: 32)
+                                .background(Color.white.opacity(isSelected ? 0.25 : 0.10), in: Circle())
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(modality.rawValue).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                                Text(modality.tagline).font(.caption).foregroundStyle(.white.opacity(0.65))
+                            }
+                            Spacer()
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(.white)
+                        }
+                        .padding(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(isSelected ? Color.white.opacity(0.20) : Color.white.opacity(0.08))
+                        )
+                    }
+
+                    if isSelected {
+                        VStack(alignment: .leading, spacing: 8) {
+                            modalityDetailRow(icon: "gearshape.fill", color: .white.opacity(0.6),
+                                              label: "Setup", text: modality.setup)
+                            modalityDetailRow(icon: "bolt.fill", color: .orange,
+                                              label: "Work (4 min)", text: modality.workPhase)
+                            modalityDetailRow(icon: "heart.fill", color: Color(red: 0.15, green: 0.80, blue: 0.50),
+                                              label: "Rest (3 min)", text: modality.restPhase)
+                        }
+                        .padding(14)
+                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+
+            Button(timerViewModel.preferredModality != nil ? "Let's Go!" : "Skip") { flow.next() }
+                .buttonStyle(OnboardingPrimaryButtonStyle())
+                .padding(.top, 4)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private func modalityDetailRow(icon: String, color: Color, label: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(label, systemImage: icon).font(.caption.weight(.bold)).foregroundStyle(color)
+            Text(text).font(.caption).foregroundStyle(.white.opacity(0.82)).fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var vo2GoalCard: some View {
