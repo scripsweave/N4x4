@@ -139,6 +139,33 @@ struct SettingsView: View {
                         .listRowInsets(EdgeInsets())
                 }
 
+                // VO₂ max goal
+                Section(header: Text("VO₂ Max Goal").font(.headline)) {
+                    Picker("Biological Sex", selection: $viewModel.userBiologicalSexRaw) {
+                        ForEach(BiologicalSex.allCases, id: \.rawValue) { sex in
+                            Text(sex.rawValue).tag(sex.rawValue)
+                        }
+                    }
+
+                    Picker("Goal", selection: $viewModel.vo2TargetTierRaw) {
+                        Text("None").tag("")
+                        ForEach(VO2TargetTier.allCases, id: \.rawValue) { tier in
+                            let value = TimerViewModel.vo2TargetValue(
+                                age: viewModel.userAge,
+                                sex: viewModel.userBiologicalSex,
+                                tier: tier
+                            )
+                            Text("\(tier.rawValue) — \(Int(value)) mL/kg/min").tag(tier.rawValue)
+                        }
+                    }
+
+                    if let target = viewModel.vo2MaxTarget, let tier = viewModel.vo2TargetTier {
+                        Text("Target: \(Int(target)) mL/kg/min (\(tier.description))")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 // Apple Health
                 Section(header: Text("Apple Health").font(.headline)) {
                     Toggle("Enable Apple Health", isOn: $viewModel.healthKitEnabled)

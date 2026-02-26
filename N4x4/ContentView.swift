@@ -9,6 +9,7 @@ final class OnboardingFlowViewModel: ObservableObject {
         case notifications
         case reminderDay
         case health
+        case vo2Goal
         case launch
 
         var title: String {
@@ -20,6 +21,7 @@ final class OnboardingFlowViewModel: ObservableObject {
             case .notifications: return "Stay consistent"
             case .reminderDay: return "Pick your workout day"
             case .health: return "Track your progress"
+            case .vo2Goal: return "Set your VO₂ max goal"
             case .launch: return "You're ready"
             }
         }
@@ -137,6 +139,8 @@ private struct OnboardingView: View {
                             primaryAction: requestHealth,
                             secondaryAction: flow.next
                         )
+                    case .vo2Goal:
+                        vo2GoalCard
                     case .launch:
                         permissionCard(
                             icon: "bolt.heart.fill",
@@ -389,6 +393,96 @@ private struct OnboardingView: View {
                     .buttonStyle(OnboardingPrimaryButtonStyle())
                 Button("I'll decide later") { skipReminderWeekdayAndContinue() }
                     .buttonStyle(OnboardingSecondaryButtonStyle())
+            }
+            .padding(.top, 8)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    private var vo2GoalCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "chart.line.uptrend.xyaxis")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("Set a VO₂ max goal")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+
+            Text("We'll draw a target line on your progress chart. Adjust your sex below so the values match your physiology.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.85))
+                .padding(.horizontal, 4)
+
+            Picker("Biological Sex", selection: $timerViewModel.userBiologicalSexRaw) {
+                ForEach(BiologicalSex.allCases, id: \.rawValue) { sex in
+                    Text(sex.rawValue).tag(sex.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 8)
+
+            VStack(spacing: 10) {
+                ForEach(VO2TargetTier.allCases, id: \.rawValue) { tier in
+                    let targetValue = TimerViewModel.vo2TargetValue(
+                        age: timerViewModel.userAge,
+                        sex: timerViewModel.userBiologicalSex,
+                        tier: tier
+                    )
+                    let isSelected = timerViewModel.vo2TargetTier == tier
+                    Button {
+                        timerViewModel.vo2TargetTier = tier
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: tier.symbolName)
+                                .font(.title3)
+                                .frame(width: 28)
+                                .foregroundStyle(.white)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(tier.rawValue)
+                                        .font(.headline)
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                    Text("\(Int(targetValue)) mL/kg/min")
+                                        .font(.subheadline.monospacedDigit())
+                                        .foregroundStyle(.white)
+                                }
+                                Text(tier.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.75))
+                            }
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(.white)
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.08))
+                        )
+                    }
+                }
+            }
+
+            VStack(spacing: 12) {
+                Button(timerViewModel.vo2TargetTier != nil ? "Set My Goal" : "Skip") {
+                    flow.next()
+                }
+                .buttonStyle(OnboardingPrimaryButtonStyle())
+
+                if timerViewModel.vo2TargetTier != nil {
+                    Button("Skip") {
+                        timerViewModel.vo2TargetTier = nil
+                        flow.next()
+                    }
+                    .buttonStyle(OnboardingSecondaryButtonStyle())
+                }
             }
             .padding(.top, 8)
         }

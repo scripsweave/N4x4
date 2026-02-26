@@ -95,6 +95,35 @@ struct VO2DataPoint: Identifiable {
     let value: Double
 }
 
+// MARK: - VO₂ max goal
+
+enum BiologicalSex: String, CaseIterable {
+    case male   = "Male"
+    case female = "Female"
+}
+
+enum VO2TargetTier: String, CaseIterable {
+    case good    = "Good"
+    case amazing = "Amazing"
+    case elite   = "Elite"
+
+    var description: String {
+        switch self {
+        case .good:    return "Above average — a solid fitness baseline."
+        case .amazing: return "Excellent cardio health, well ahead of most people."
+        case .elite:   return "Top-tier athletic endurance."
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .good:    return "checkmark.circle.fill"
+        case .amazing: return "star.circle.fill"
+        case .elite:   return "trophy.circle.fill"
+        }
+    }
+}
+
 class TimerViewModel: ObservableObject {
     static let minimumSupportedAge = 13
     static let maximumSupportedAge = 100
@@ -158,6 +187,70 @@ class TimerViewModel: ObservableObject {
             }
             guard oldValue != userAge else { return }
         }
+    }
+
+    @AppStorage("userBiologicalSexRaw") var userBiologicalSexRaw: String = BiologicalSex.male.rawValue
+    @AppStorage("vo2TargetTierRaw") var vo2TargetTierRaw: String = ""
+
+    var userBiologicalSex: BiologicalSex {
+        get { BiologicalSex(rawValue: userBiologicalSexRaw) ?? .male }
+        set { userBiologicalSexRaw = newValue.rawValue }
+    }
+
+    var vo2TargetTier: VO2TargetTier? {
+        get { VO2TargetTier(rawValue: vo2TargetTierRaw) }
+        set { vo2TargetTierRaw = newValue?.rawValue ?? "" }
+    }
+
+    /// The target VO₂ max value (mL/kg/min) for the user's age, sex, and chosen tier.
+    var vo2MaxTarget: Double? {
+        guard let tier = vo2TargetTier else { return nil }
+        return Self.vo2TargetValue(age: userAge, sex: userBiologicalSex, tier: tier)
+    }
+
+    /// Lookup table — thresholds (mL/kg/min) by age group, sex, and tier.
+    /// Sources: ACSM Guidelines for Exercise Testing and Prescription.
+    static func vo2TargetValue(age: Int, sex: BiologicalSex, tier: VO2TargetTier) -> Double {
+        let ageGroup: Int
+        switch age {
+        case ..<30:   ageGroup = 0
+        case 30..<40: ageGroup = 1
+        case 40..<50: ageGroup = 2
+        case 50..<60: ageGroup = 3
+        case 60..<70: ageGroup = 4
+        default:      ageGroup = 5
+        }
+
+        // [ageGroup][tier: good / amazing / elite]
+        let table: [[Double]]
+        switch sex {
+        case .male:
+            table = [
+                [42, 52, 60], // <30
+                [40, 49, 57], // 30–39
+                [37, 45, 53], // 40–49
+                [34, 41, 49], // 50–59
+                [31, 37, 45], // 60–69
+                [28, 33, 41], // 70+
+            ]
+        case .female:
+            table = [
+                [33, 41, 50], // <30
+                [31, 38, 46], // 30–39
+                [28, 35, 43], // 40–49
+                [25, 31, 39], // 50–59
+                [22, 28, 35], // 60–69
+                [20, 25, 32], // 70+
+            ]
+        }
+
+        let tierIndex: Int
+        switch tier {
+        case .good:    tierIndex = 0
+        case .amazing: tierIndex = 1
+        case .elite:   tierIndex = 2
+        }
+        return table[ageGroup][tierIndex]
     }
 
     // Interval notifications
@@ -1124,6 +1217,8 @@ class TimerViewModel: ObservableObject {
         hapticsEnabled = true
         liveActivitiesEnabled = true
         userAge = 40
+        userBiologicalSexRaw = BiologicalSex.male.rawValue
+        vo2TargetTierRaw = ""
 
         notificationsEnabled = false
         workoutRemindersEnabled = false

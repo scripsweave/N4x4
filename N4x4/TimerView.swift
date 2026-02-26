@@ -207,17 +207,37 @@ struct TimerView: View {
         if viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2 {
 #if canImport(Charts)
             VStack(alignment: .leading, spacing: 8) {
-                Text("VO₂ Max Trend")
-                    .font(.headline)
-                Chart(viewModel.vo2DataPoints) { point in
-                    LineMark(
-                        x: .value("Date", point.date),
-                        y: .value("VO₂", point.value)
-                    )
-                    PointMark(
-                        x: .value("Date", point.date),
-                        y: .value("VO₂", point.value)
-                    )
+                HStack {
+                    Text("VO₂ Max Trend")
+                        .font(.headline)
+                    Spacer()
+                    if let tier = viewModel.vo2TargetTier, let target = viewModel.vo2MaxTarget {
+                        Text("Goal: \(tier.rawValue) \(Int(target))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Chart {
+                    ForEach(viewModel.vo2DataPoints) { point in
+                        LineMark(
+                            x: .value("Date", point.date),
+                            y: .value("VO₂", point.value)
+                        )
+                        PointMark(
+                            x: .value("Date", point.date),
+                            y: .value("VO₂", point.value)
+                        )
+                    }
+                    if let target = viewModel.vo2MaxTarget {
+                        RuleMark(y: .value("Goal", target))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                            .foregroundStyle(.secondary)
+                            .annotation(position: .top, alignment: .trailing) {
+                                Text(viewModel.vo2TargetTier?.rawValue ?? "")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                    }
                 }
                 .frame(height: 160)
             }
