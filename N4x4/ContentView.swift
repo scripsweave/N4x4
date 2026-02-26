@@ -5,9 +5,9 @@ final class OnboardingFlowViewModel: ObservableObject {
         case welcome
         case age
         case vo2Goal
+        case reminderDay
         case audioMode
         case notifications
-        case reminderDay
         case health
         case launch
 
@@ -16,9 +16,9 @@ final class OnboardingFlowViewModel: ObservableObject {
             case .welcome: return "Welcome to N4x4"
             case .age: return "Set your heart rate zones"
             case .vo2Goal: return "Set your VO₂ max goal"
+            case .reminderDay: return "Pick your training days"
             case .audioMode: return "How should we guide you?"
             case .notifications: return "Stay consistent"
-            case .reminderDay: return "Pick your training days"
             case .health: return "Track your progress"
             case .launch: return "You're ready"
             }
