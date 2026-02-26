@@ -22,13 +22,13 @@
 		3DF13A752C938A9E00DD18E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A742C938A9E00DD18E7 /* SettingsView.swift */; };
 		3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A762C938ABA00DD18E7 /* Extensions.swift */; };
 		3DF13A802C94D28B00DD18E7 /* alarm.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */; };
-		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
-		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
-		F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
-		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
-		CD72E7EF59294BC6B17C3451 /* N4x4LiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */; };
-		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
 		9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
+		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
+		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
+		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
+		CD72E7EF59294BC6B17C3451 /* N4x4LiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */; };
+		F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,6 +55,20 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		55D2367A38B64576AC4EEB89 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		3D516A642CAB347F001279C0 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		3D53FCC72CA0667200E4A09A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -75,13 +89,13 @@
 		3DF13A742C938A9E00DD18E7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		3DF13A762C938ABA00DD18E7 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = alarm.mp3; sourceTree = "<group>"; };
-		5739937EF07648BE8983755B /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
-		9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityAttributes.swift; sourceTree = "<group>"; };
-		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityBundle.swift; sourceTree = "<group>"; };
-		80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityView.swift; sourceTree = "<group>"; };
 		55D2367A38B64576AC4EEB00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5739937EF07648BE8983755B /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
+		80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityView.swift; sourceTree = "<group>"; };
+		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityAttributes.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,16 +150,6 @@
 				877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		BABF05A41C95414D87FCD532 /* N4x4LiveActivity */ = {
-			isa = PBXGroup;
-			children = (
-				5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */,
-				80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */,
-				55D2367A38B64576AC4EEB00 /* Info.plist */,
-			);
-			path = N4x4LiveActivity;
 			sourceTree = "<group>";
 		};
 		3DF13A432C9389C100DD18E7 /* N4x4 */ = {
@@ -204,9 +208,36 @@
 			path = Sounds;
 			sourceTree = "<group>";
 		};
+		BABF05A41C95414D87FCD532 /* N4x4LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */,
+				80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */,
+				55D2367A38B64576AC4EEB00 /* Info.plist */,
+			);
+			path = N4x4LiveActivity;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2615661FD081463A8F34A193 /* N4x4LiveActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 31B8CAB233824E878095829E /* Build configuration list for PBXNativeTarget "N4x4LiveActivity" */;
+			buildPhases = (
+				F64724D5922C40FCA80C3B47 /* Sources */,
+				D04F74E6A20F4776BFD4525C /* Frameworks */,
+				2C098ABE4F2F4A4D87DE78FE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = N4x4LiveActivity;
+			productName = N4x4LiveActivity;
+			productReference = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		3DF13A402C9389C100DD18E7 /* N4x4 */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3DF13A652C9389C200DD18E7 /* Build configuration list for PBXNativeTarget "N4x4" */;
@@ -225,23 +256,6 @@
 			productName = N4x4;
 			productReference = 3DF13A412C9389C100DD18E7 /* N4x4.app */;
 			productType = "com.apple.product-type.application";
-		};
-		2615661FD081463A8F34A193 /* N4x4LiveActivity */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 31B8CAB233824E878095829E /* Build configuration list for PBXNativeTarget "N4x4LiveActivity" */;
-			buildPhases = (
-				F64724D5922C40FCA80C3B47 /* Sources */,
-				D04F74E6A20F4776BFD4525C /* Frameworks */,
-				2C098ABE4F2F4A4D87DE78FE /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = N4x4LiveActivity;
-			productName = N4x4LiveActivity;
-			productReference = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 		3DF13A502C9389C200DD18E7 /* N4x4Tests */ = {
 			isa = PBXNativeTarget;
@@ -289,6 +303,9 @@
 				LastSwiftUpdateCheck = 1540;
 				LastUpgradeCheck = 1540;
 				TargetAttributes = {
+					2615661FD081463A8F34A193 = {
+						CreatedOnToolsVersion = 15.4;
+					};
 					3DF13A402C9389C100DD18E7 = {
 						CreatedOnToolsVersion = 15.4;
 					};
@@ -299,9 +316,6 @@
 					3DF13A5A2C9389C200DD18E7 = {
 						CreatedOnToolsVersion = 15.4;
 						TestTargetID = 3DF13A402C9389C100DD18E7;
-					};
-					2615661FD081463A8F34A193 = {
-						CreatedOnToolsVersion = 15.4;
 					};
 				};
 			};
@@ -327,6 +341,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2C098ABE4F2F4A4D87DE78FE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3DF13A3F2C9389C100DD18E7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -351,28 +372,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2C098ABE4F2F4A4D87DE78FE /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		55D2367A38B64576AC4EEB89 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3DF13A3D2C9389C100DD18E7 /* Sources */ = {
@@ -589,7 +589,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -630,7 +630,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -715,32 +715,6 @@
 			};
 			name = Release;
 		};
-		AFCBDA0F967E4829A5E54A88 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPLICATION_EXTENSION_API_ONLY = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8VG9JUJ855;
-				INFOPLIST_FILE = N4x4LiveActivity/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 2.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
 		AEC5234DA71B42B186719C82 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -755,7 +729,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -767,9 +741,44 @@
 			};
 			name = Release;
 		};
+		AFCBDA0F967E4829A5E54A88 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
+				INFOPLIST_FILE = N4x4LiveActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		31B8CAB233824E878095829E /* Build configuration list for PBXNativeTarget "N4x4LiveActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AFCBDA0F967E4829A5E54A88 /* Debug */,
+				AEC5234DA71B42B186719C82 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		3DF13A3C2C9389C100DD18E7 /* Build configuration list for PBXProject "N4x4" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -802,15 +811,6 @@
 			buildConfigurations = (
 				3DF13A6C2C9389C200DD18E7 /* Debug */,
 				3DF13A6D2C9389C200DD18E7 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		31B8CAB233824E878095829E /* Build configuration list for PBXNativeTarget "N4x4LiveActivity" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AFCBDA0F967E4829A5E54A88 /* Debug */,
-				AEC5234DA71B42B186719C82 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
