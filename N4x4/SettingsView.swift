@@ -121,6 +121,15 @@ struct SettingsView: View {
                         }
                     }
 
+                    if hasConsecutiveDays(viewModel.selectedWeekdays) {
+                        Label(
+                            "Consecutive days aren't recommended — allow 48–72 hours of recovery between sessions.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(.footnote)
+                        .foregroundColor(.orange)
+                    }
+
                     Text("Pick the style that feels easiest to keep.")
                         .font(.footnote)
                         .foregroundColor(.gray)
@@ -237,6 +246,15 @@ struct SettingsView: View {
                 viewModel.refreshHealthKitAuthorizationState()
             }
         }
+    }
+
+    private func hasConsecutiveDays(_ days: [Int]) -> Bool {
+        guard days.count >= 2 else { return false }
+        let sorted = days.sorted()
+        for i in 0..<(sorted.count - 1) {
+            if sorted[i + 1] - sorted[i] == 1 { return true }
+        }
+        return sorted.contains(7) && sorted.contains(1)
     }
 
     @ViewBuilder

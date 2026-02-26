@@ -4,22 +4,22 @@ final class OnboardingFlowViewModel: ObservableObject {
     enum Step: Int, CaseIterable {
         case welcome
         case age
+        case vo2Goal
         case audioMode
         case notifications
         case reminderDay
         case health
-        case vo2Goal
         case launch
 
         var title: String {
             switch self {
             case .welcome: return "Welcome to N4x4"
             case .age: return "Set your heart rate zones"
+            case .vo2Goal: return "Set your VO₂ max goal"
             case .audioMode: return "How should we guide you?"
             case .notifications: return "Stay consistent"
-            case .reminderDay: return "Pick your workout day"
+            case .reminderDay: return "Pick your training days"
             case .health: return "Track your progress"
-            case .vo2Goal: return "Set your VO₂ max goal"
             case .launch: return "You're ready"
             }
         }
@@ -319,27 +319,42 @@ private struct OnboardingView: View {
     }
 
     private var reminderDayCard: some View {
-        VStack(spacing: 18) {
+        let selectedCount = timerViewModel.selectedWeekdays.count
+        let hasConsecutive = hasConsecutiveDays(timerViewModel.selectedWeekdays)
+
+        return VStack(spacing: 18) {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 38, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(16)
                 .background(Circle().fill(Color.white.opacity(0.16)))
 
-            Text("How often will you train?")
+            Text("Pick your training days")
                 .font(.system(size: 26, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Health experts recommend at least 1 Norwegian 4x4 per week. Choose days that work for you - you can always adjust later.")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.9))
-                .padding(.horizontal, 8)
+            // Recommendation based on goal tier
+            Group {
+                switch timerViewModel.vo2TargetTier {
+                case .good:
+                    Text("For your Good goal, 1 session per week is ideal. Consistency matters more than frequency.")
+                case .amazing:
+                    Text("For your Amazing goal, aim for 2 sessions per week to keep the adaptations coming.")
+                case .elite:
+                    Text("For your Elite goal, 3 sessions per week will drive serious VO₂ max gains.")
+                case nil:
+                    Text("Health experts recommend at least 1 Norwegian 4x4 per week. You can always adjust later.")
+                }
+            }
+            .font(.body)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.white.opacity(0.9))
+            .padding(.horizontal, 8)
 
-            // Multi-day selection with toggle buttons
+            // Day grid
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                 ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
                     Button(action: {
@@ -359,11 +374,25 @@ private struct OnboardingView: View {
             }
             .padding(.horizontal, 8)
 
-            let selectedCount = timerViewModel.selectedWeekdays.count
             if selectedCount > 0 {
                 Text("\(selectedCount) day\(selectedCount == 1 ? "" : "s") selected per week")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.8))
+            }
+
+            // Consecutive day warning
+            if hasConsecutive {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.footnote)
+                    Text("Consecutive days aren't recommended — your muscles need 48–72 hours to recover and adapt between sessions.")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                .padding(12)
+                .background(Color.yellow.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 4)
             }
 
             VStack(spacing: 12) {
@@ -373,15 +402,26 @@ private struct OnboardingView: View {
                     }
                     saveReminderWeekdayAndContinue()
                 }
-                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                .buttonStyle(OnboardingPrimaryButtonStyle())
                 Button("I'll decide later") { skipReminderWeekdayAndContinue() }
                     .buttonStyle(OnboardingSecondaryButtonStyle())
             }
-            .padding(.top, 8)
+            .padding(.top, 4)
         }
         .padding(28)
         .frame(maxWidth: .infinity)
         .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    /// Returns true if any two selected weekdays are adjacent in the calendar week.
+    private func hasConsecutiveDays(_ days: [Int]) -> Bool {
+        guard days.count >= 2 else { return false }
+        let sorted = days.sorted()
+        for i in 0..<(sorted.count - 1) {
+            if sorted[i + 1] - sorted[i] == 1 { return true }
+        }
+        // Wrap-around: Saturday (7) and Sunday (1)
+        return sorted.contains(7) && sorted.contains(1)
     }
 
     private var vo2GoalCard: some View {
