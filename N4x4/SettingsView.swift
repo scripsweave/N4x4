@@ -12,6 +12,25 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                // Tips
+                Section(header: Text("Training Tips").font(.headline)) {
+                    Button(action: { showTips = true }) {
+                        HStack {
+                            Image(systemName: "bolt.heart.fill")
+                                .foregroundStyle(.orange)
+                            Text("4×4 Training Tips")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("Beginner and advanced techniques to train smarter.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+
                 // Intervals
                 Section(header: Text("Intervals").font(.headline)) {
                     Stepper(value: $viewModel.numberOfIntervals, in: 1...10) {
@@ -206,28 +225,6 @@ struct SettingsView: View {
                         .foregroundColor(viewModel.healthAuthorizationGranted ? .green : .secondary)
                 }
 
-                // Tips
-                Section(header: Text("Training Tips").font(.headline)) {
-                    Button(action: { showTips = true }) {
-                        HStack {
-                            Image(systemName: "bolt.heart.fill")
-                                .foregroundStyle(.orange)
-                            Text("Advanced 4×4 Tips")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text("Science-backed techniques to push from good to elite.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-                .sheet(isPresented: $showTips) {
-                    TipsView()
-                }
-
                 // Onboarding
                 Section(header: Text("Onboarding").font(.headline)) {
                     Text("You can replay the first-run guide any time.")
@@ -267,6 +264,9 @@ struct SettingsView: View {
             .onAppear {
                 viewModel.refreshNotificationPermissionState()
                 viewModel.refreshHealthKitAuthorizationState()
+            }
+            .sheet(isPresented: $showTips) {
+                TipsView()
             }
         }
     }
