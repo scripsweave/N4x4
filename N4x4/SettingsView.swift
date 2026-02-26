@@ -66,6 +66,11 @@ struct SettingsView: View {
                         .font(.body)
                     Toggle("Haptic Feedback at Interval Changes", isOn: $viewModel.hapticsEnabled)
                         .font(.body)
+                    Toggle("Live Activity / Dynamic Island", isOn: $viewModel.liveActivitiesEnabled)
+                        .font(.body)
+                    Text("Shows interval countdown on the Lock Screen and Dynamic Island during a workout.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
 
                 // Interval Notifications

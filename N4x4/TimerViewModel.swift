@@ -148,6 +148,7 @@ class TimerViewModel: ObservableObject {
 
     @AppStorage("preventSleep") var preventSleep: Bool = true
     @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true
+    @AppStorage("liveActivitiesEnabled") var liveActivitiesEnabled: Bool = true
     @AppStorage("userAge") var userAge: Int = 40 {
         didSet {
             let sanitized = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
@@ -1121,6 +1122,7 @@ class TimerViewModel: ObservableObject {
         alarmEnabled = true
         preventSleep = true
         hapticsEnabled = true
+        liveActivitiesEnabled = true
         userAge = 40
 
         notificationsEnabled = false
@@ -1190,6 +1192,7 @@ class TimerViewModel: ObservableObject {
     }
 
     func startLiveActivity() {
+        guard liveActivitiesEnabled else { return }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         guard liveActivity == nil else { return }
         let attributes = N4x4LiveActivityAttributes(workoutStartTime: workoutStartDate ?? Date())
