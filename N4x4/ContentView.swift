@@ -441,6 +441,7 @@ private struct OnboardingView: View {
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.white.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 4)
 
             Picker("Biological Sex", selection: $timerViewModel.userBiologicalSexRaw) {
@@ -480,6 +481,7 @@ private struct OnboardingView: View {
                                 Text(tier.description)
                                     .font(.caption)
                                     .foregroundStyle(.white.opacity(0.75))
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(.white)
