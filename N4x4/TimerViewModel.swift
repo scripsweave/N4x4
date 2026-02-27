@@ -539,9 +539,20 @@ class TimerViewModel: ObservableObject {
     @Published var selectedWeekdaysList: [Int] = [] {
         didSet {
             guard oldValue.sorted() != selectedWeekdaysList.sorted() else { return }
+
+            var normalized = selectedWeekdaysList
+            if normalized.isEmpty, workoutRemindersEnabled {
+                // Keep reminder scheduling deterministic: if the user deselects every day while
+                // reminders remain enabled, immediately pin the schedule to "today" and surface it
+                // back in the UI instead of silently falling back each time we reschedule.
+                normalized = [Calendar.current.component(.weekday, from: Date())]
+                selectedWeekdaysList = normalized
+                return
+            }
+
             // Sync to AppStorage when value changes (via flag to prevent circular sync)
             isSyncingFromPublished = true
-            let sorted = selectedWeekdaysList.sorted()
+            let sorted = normalized.sorted()
             workoutReminderWeekdays = sorted.map { String($0) }.joined(separator: ",")
             isSyncingFromPublished = false
             if workoutRemindersEnabled {
