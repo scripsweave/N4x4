@@ -280,7 +280,14 @@ private struct PostWorkoutSummaryView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Workout complete")) {
+                // Science card — rotates per session
+                Section {
+                    ScienceCardView(fact: currentFact)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                }
+
+                Section(header: Text("Log this session")) {
                     Picker("Type", selection: $viewModel.selectedWorkoutType) {
                         ForEach(WorkoutType.allCases) { type in
                             Text(type.rawValue).tag(type)
@@ -310,11 +317,114 @@ private struct PostWorkoutSummaryView: View {
         }
         .interactiveDismissDisabled(true)
     }
-    
+
+    private var currentFact: ScienceFact {
+        ScienceFact.all[viewModel.workoutLogEntries.count % ScienceFact.all.count]
+    }
+
     private var sessionDateText: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: viewModel.workoutStartDate ?? Date())
+    }
+}
+
+// MARK: - Science facts
+
+private struct ScienceFact {
+    let icon: String
+    let color: Color
+    let title: String
+    let body: String
+
+    static let all: [ScienceFact] = [
+        ScienceFact(
+            icon: "bolt.heart.fill",
+            color: Color(red: 1.0, green: 0.3, blue: 0.3),
+            title: "Your metabolism stays elevated",
+            body: "EPOC — excess post-exercise oxygen consumption — keeps your metabolic rate elevated for up to 24 hours after high-intensity intervals. You're still burning extra energy while you rest."
+        ),
+        ScienceFact(
+            icon: "waveform.path.ecg",
+            color: Color(red: 0.3, green: 0.7, blue: 1.0),
+            title: "New blood vessels are forming",
+            body: "High-intensity exercise triggers VEGF, a growth factor that signals your muscles to sprout new capillaries. More vessels means more oxygen delivery — which is exactly what raises VO₂ max."
+        ),
+        ScienceFact(
+            icon: "atom",
+            color: Color(red: 0.4, green: 0.9, blue: 0.5),
+            title: "Your cells are building power plants",
+            body: "PGC-1α, activated by hard intervals, is now triggering mitochondrial biogenesis — your muscle cells are literally building new mitochondria, the engines that convert oxygen into energy."
+        ),
+        ScienceFact(
+            icon: "heart.fill",
+            color: Color(red: 1.0, green: 0.4, blue: 0.6),
+            title: "Your heart is getting stronger",
+            body: "Repeated high-intensity efforts train the left ventricle to pump more blood per beat (stroke volume). Over months, this is the primary mechanism behind a rising VO₂ max."
+        ),
+        ScienceFact(
+            icon: "brain.head.profile",
+            color: Color(red: 0.7, green: 0.4, blue: 1.0),
+            title: "Your brain just got a boost",
+            body: "Hard exercise floods the brain with BDNF — Brain-Derived Neurotrophic Factor. It sharpens focus, improves memory consolidation, and protects against cognitive decline. You're sharper right now."
+        ),
+        ScienceFact(
+            icon: "gauge.with.dots.needle.67percent",
+            color: .orange,
+            title: "Your lactate threshold just moved",
+            body: "Your muscles repeatedly produced and cleared lactate during those work intervals. Each session nudges the intensity level at which lactate starts to accumulate — meaning you can go harder before hitting the wall."
+        ),
+        ScienceFact(
+            icon: "staroflife.fill",
+            color: Color(red: 0.2, green: 0.85, blue: 0.75),
+            title: "Repair is already underway",
+            body: "Satellite cells — your muscles' repair crew — are already mobilising to fix micro-tears from the effort. The slight soreness tomorrow is controlled inflammation: your body rebuilding slightly stronger than before."
+        ),
+        ScienceFact(
+            icon: "chart.line.uptrend.xyaxis",
+            color: Color(red: 1.0, green: 0.75, blue: 0.2),
+            title: "The most effective VO₂ max stimulus",
+            body: "Studies consistently show that 4×4 high-intensity intervals produce greater VO₂ max improvements than any other training format — including longer, slower cardio. You chose the right tool."
+        ),
+    ]
+}
+
+private struct ScienceCardView: View {
+    let fact: ScienceFact
+    @State private var appeared = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: fact.icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(fact.color)
+                Text("What's happening in your body")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(fact.title)
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            Text(fact.body)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(fact.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(fact.color.opacity(0.25), lineWidth: 1)
+        )
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 12)
+        .animation(.easeOut(duration: 0.4).delay(0.15), value: appeared)
+        .onAppear { appeared = true }
     }
 }
 
