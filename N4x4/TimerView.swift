@@ -161,6 +161,11 @@ struct TimerView: View {
             .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
                 PostWorkoutSummaryView(viewModel: viewModel)
             }
+            .fullScreenCover(isPresented: $viewModel.showMilestoneCelebration) {
+                MilestoneCelebrationView(count: viewModel.pendingMilestoneCount) {
+                    viewModel.dismissMilestoneCelebration()
+                }
+            }
             .sheet(isPresented: $viewModel.showWeeklyStreaks) {
                 StreakHistoryView(viewModel: viewModel)
                     .onDisappear {
@@ -463,5 +468,158 @@ private struct StreakHistoryView: View {
         return viewModel.workoutLogEntries
             .filter { monthInterval.contains($0.completedAt) && calendar.component(.day, from: $0.completedAt) == day }
             .max(by: { $0.completedAt < $1.completedAt })
+    }
+}
+
+// MARK: - Milestone celebration
+
+private struct MilestoneCelebrationView: View {
+    let count: Int
+    let onContinue: () -> Void
+
+    @State private var scaleIn = false
+    @State private var fadeIn  = false
+
+    private var milestone: (icon: String, title: String, message: String) {
+        switch count {
+        case 1:
+            return ("flag.checkered", "First Session Done!", "Every elite athlete started exactly here. The most important rep is always the first one.")
+        case 5:
+            return ("flame.fill", "5 Sessions Strong!", "You've shown up 5 times. Your heart is already adapting — blood vessels are growing, mitochondria multiplying.")
+        case 10:
+            return ("star.fill", "10 Sessions!", "Science says habits take about 10 repetitions to start sticking. You're there. This is becoming part of who you are.")
+        case 25:
+            return ("bolt.circle.fill", "25 Sessions!", "A quarter-century of intervals. Your VO₂ max has almost certainly improved. The data is in your body.")
+        case 50:
+            return ("diamond.fill", "50 Sessions!", "This is elite consistency. Most people never make it this far. You are not most people.")
+        case 100:
+            return ("trophy.fill", "100 Sessions!", "You are the Norwegian 4x4 program. This level of commitment is exceptional. You've genuinely changed your cardiovascular system.")
+        default:
+            return ("checkmark.seal.fill", "Session \(count) Complete!", "Another session in the books. Keep building.")
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Background
+                LinearGradient(
+                    colors: [Color(red: 0.05, green: 0.05, blue: 0.15), Color(red: 0.1, green: 0.0, blue: 0.25)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .ignoresSafeArea()
+
+                // Confetti
+                ConfettiView(width: geo.size.width, height: geo.size.height)
+                    .ignoresSafeArea()
+
+                // Content
+                VStack(spacing: 32) {
+                    Spacer()
+
+                    // Icon
+                    Image(systemName: milestone.icon)
+                        .font(.system(size: 80, weight: .bold))
+                        .foregroundStyle(
+                            LinearGradient(colors: [.yellow, .orange], startPoint: .top, endPoint: .bottom)
+                        )
+                        .scaleEffect(scaleIn ? 1.0 : 0.3)
+                        .opacity(scaleIn ? 1.0 : 0.0)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1), value: scaleIn)
+
+                    // Count badge
+                    Text("\(count)")
+                        .font(.system(size: 96, weight: .black, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(colors: [.white, .white.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+                        )
+                        .opacity(fadeIn ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.5).delay(0.3), value: fadeIn)
+
+                    Text(milestone.title)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .opacity(fadeIn ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.5).delay(0.45), value: fadeIn)
+
+                    Text(milestone.message)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 32)
+                        .opacity(fadeIn ? 1.0 : 0.0)
+                        .animation(.easeOut(duration: 0.5).delay(0.6), value: fadeIn)
+
+                    Spacer()
+
+                    Button(action: onContinue) {
+                        Text("Keep Going →")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                            .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 48)
+                    .opacity(fadeIn ? 1.0 : 0.0)
+                    .animation(.easeOut(duration: 0.5).delay(0.8), value: fadeIn)
+                }
+            }
+        }
+        .onAppear {
+            scaleIn = true
+            fadeIn  = true
+        }
+    }
+}
+
+private struct ConfettiView: View {
+    struct Piece: Identifiable {
+        let id    = UUID()
+        let color : Color
+        let startX: CGFloat
+        let endX  : CGFloat
+        let size  : CGSize
+        let duration : Double
+        let delay    : Double
+        let endRotation: Double
+    }
+
+    @State private var animate = false
+    let pieces: [Piece]
+    let height: CGFloat
+
+    init(width: CGFloat, height: CGFloat) {
+        self.height = height
+        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .white]
+        pieces = (0..<60).map { _ in
+            Piece(
+                color:      colors.randomElement()!,
+                startX:     CGFloat.random(in: 0...width),
+                endX:       CGFloat.random(in: 0...width),
+                size:       CGSize(width: CGFloat.random(in: 6...14), height: CGFloat.random(in: 8...18)),
+                duration:   Double.random(in: 2.5...4.5),
+                delay:      Double.random(in: 0...1.8),
+                endRotation: Double.random(in: 180...1080)
+            )
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(pieces) { p in
+                Rectangle()
+                    .fill(p.color.opacity(0.85))
+                    .frame(width: p.size.width, height: p.size.height)
+                    .rotationEffect(.degrees(animate ? p.endRotation : 0))
+                    .position(x: animate ? p.endX : p.startX,
+                              y: animate ? height + 60 : -20)
+                    .animation(.easeIn(duration: p.duration).delay(p.delay), value: animate)
+            }
+        }
+        .onAppear { animate = true }
     }
 }

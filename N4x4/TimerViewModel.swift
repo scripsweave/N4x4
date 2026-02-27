@@ -468,11 +468,42 @@ class TimerViewModel: ObservableObject {
 
 
     @AppStorage("workoutLogEntriesData") private var workoutLogEntriesData: String = "[]"
+    @AppStorage("shownMilestonesData") private var shownMilestonesData: String = "[]"
     @Published var workoutLogEntries: [WorkoutLogEntry] = []
     @Published var selectedWorkoutType: WorkoutType = .norwegian4x4
     @Published var workoutNotesDraft: String = ""
     @Published var showPostWorkoutSummary: Bool = false
     @Published var showWeeklyStreaks: Bool = false
+    @Published var showMilestoneCelebration: Bool = false
+    @Published var pendingMilestoneCount: Int = 0
+
+    private static let milestones = [1, 5, 10, 25, 50, 100]
+
+    private var shownMilestones: Set<Int> {
+        get {
+            let arr = (try? JSONDecoder().decode([Int].self, from: Data(shownMilestonesData.utf8))) ?? []
+            return Set(arr)
+        }
+        set {
+            let arr = Array(newValue).sorted()
+            shownMilestonesData = (try? String(data: JSONEncoder().encode(arr), encoding: .utf8)) ?? "[]"
+        }
+    }
+
+    private func checkForMilestone() {
+        let count = workoutLogEntries.count
+        guard Self.milestones.contains(count), !shownMilestones.contains(count) else { return }
+        var shown = shownMilestones
+        shown.insert(count)
+        shownMilestones = shown
+        pendingMilestoneCount = count
+        showMilestoneCelebration = true
+    }
+
+    func dismissMilestoneCelebration() {
+        showMilestoneCelebration = false
+        showWeeklyStreaks = true
+    }
 
     // HealthKit
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
@@ -1135,8 +1166,11 @@ class TimerViewModel: ObservableObject {
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
         cancelMissedWorkoutFollowUpIfCompletedToday()
+        checkForMilestone()
         showPostWorkoutSummary = false
-        showWeeklyStreaks = true
+        if !showMilestoneCelebration {
+            showWeeklyStreaks = true
+        }
         reset()
     }
 
