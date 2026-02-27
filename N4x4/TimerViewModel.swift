@@ -1119,7 +1119,9 @@ class TimerViewModel: ObservableObject {
     private static let recoveryNudgeIdentifier = "recoveryNudge"
 
     private func scheduleRecoveryNudge(afterCount count: Int) {
-        guard notificationsEnabled, notificationPermissionState == .granted else { return }
+        // Recovery nudges are an extension of workout reminders, not interval cues, so
+        // honor the reminder toggle (and permission state) before queuing the 48h alert.
+        guard workoutRemindersEnabled, notificationPermissionState == .granted else { return }
         UNUserNotificationCenter.current().removePendingNotificationRequests(
             withIdentifiers: [Self.recoveryNudgeIdentifier]
         )
