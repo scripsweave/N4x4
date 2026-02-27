@@ -1,0 +1,22 @@
+Effective date: September 15, 2024
+
+Introduction
+The N4x4 app does not collect or store any of your data, nor does it require a login or any personal info. 
+
+Information We Collect
+None
+
+Use of Data
+Not Applicable
+
+Third-Party Services
+The App does not use any 3rd party services. The website is hosted on AWS and logs are kept of visitors, including IP address and time of visit. 
+
+Changes to this Privacy Policy
+We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "effective date" at the top of this Privacy Policy.
+You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.
+
+Contact Us
+If you have any questions or suggestions about our Privacy Policy, do not hesitate to contact us at: support@n4x4.app
+
+By using our services, you acknowledge that you have read and agree to our privacy policy.

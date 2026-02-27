@@ -1,0 +1,186 @@
+/* Reset body styles */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Montserrat', sans-serif;
+    color: #fff;
+}
+
+/* Background container */
+.background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('images/background2.png');
+    background-size: cover;
+    background-position: center;
+    z-index: -1;
+}
+
+/* Main content container */
+.container {
+    position: relative;
+    z-index: 1;
+    width: 80%;
+    margin: auto;
+    padding: 30px;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+    flex: 1;
+}
+
+/* Header title adjustments */
+.app-title {
+    font-size: 2.5em;
+    font-weight: bold;
+    margin: 20px 0;
+    text-align: center;
+}
+
+/* App logo styling */
+.app-logo {
+    width: 150px;
+    height: 150px;
+    border-radius: 20px;
+}
+
+/* App Store button styling */
+.download-button {
+    display: block;
+    margin: 20px auto;
+    width: 250px;
+    height: auto;
+}
+
+/* Center App Store container */
+.app-store-container {
+    text-align: center;
+}
+
+/* Section styling with image and text */
+.info-section {
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Image inside the section */
+.info-image img {
+    width: 150px;
+    height: 150px;
+    margin-right: 20px;
+    border-radius: 10px;
+    object-fit: cover;
+}
+
+/* Text content inside the section */
+.info-content {
+    flex-grow: 1;
+    font-size: 1em;
+    line-height: 1.6;
+}
+
+.info-content p,
+.info-content li {
+    font-size: 1em;
+    line-height: 1.6;
+}
+
+/* Bold emphasized text */
+.app-description-emphasis {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+/* Headings inside info-content */
+.info-content h2 {
+    font-size: 1.7em;
+    line-height: 1.4;
+}
+
+/* Bullet point list styling */
+.benefits-list {
+    list-style-type: disc;
+    line-height: 1.6;
+    padding-left: 20px;
+}
+
+.sub-item {
+    padding-left: 40px;
+    list-style-type: circle;
+}
+
+/* Responsive video container */
+.responsive-video {
+    position: relative;
+    padding-bottom: 56.25%;
+    padding-top: 25px;
+    height: 0;
+    margin-bottom: 30px;
+}
+
+.responsive-video iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Footer adjustments */
+.footer {
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    color: #ccc;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* Link styling */
+a {
+    color: #00aced;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Media query for smaller screens (e.g., mobile) */
+@media (max-width: 600px) {
+    body {
+        font-size: 16px;
+    }
+
+    /* Adjust headings to maintain hierarchy */
+    .app-title {
+        font-size: 1.4em;
+    }
+
+    .info-content h2 {
+        font-size: 1.3em;
+    }
+
+    .app-description-emphasis {
+        font-size: 1.1em;
+    }
+
+    /* Stack content vertically on mobile */
+    .info-section {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* Center images and adjust margins on mobile */
+    .info-image img {
+        margin-right: 0;
+        margin-bottom: 20px;
+    }
+}
