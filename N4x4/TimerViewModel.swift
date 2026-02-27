@@ -366,6 +366,10 @@ class TimerViewModel: ObservableObject {
             guard oldValue != notificationsEnabled else { return }
             if notificationsEnabled {
                 ensureNotificationPermissionForToggles()
+            } else {
+                // Interval cues share the same notification channel as recovery nudges,
+                // so clearing this toggle should also clear any pending nudge requests.
+                cancelRecoveryNudge()
             }
         }
     }
@@ -388,6 +392,7 @@ class TimerViewModel: ObservableObject {
                 scheduleWorkoutReminder()
             } else {
                 cancelWorkoutReminder()
+                cancelRecoveryNudge()
                 reminderActivationDate = nil
             }
         }
