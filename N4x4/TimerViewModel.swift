@@ -841,6 +841,7 @@ class TimerViewModel: ObservableObject {
         timer?.cancel()
         timer = nil
 
+        cancelRecoveryNudge()
         isRunning = true
         if workoutStartDate == nil {
             workoutStartDate = Date()
@@ -1102,6 +1103,41 @@ class TimerViewModel: ObservableObject {
         cancelMissedWorkoutFollowUpReminder()
     }
 
+    // MARK: - 48h recovery nudge
+
+    private static let recoveryNudgeIdentifier = "recoveryNudge"
+
+    private func scheduleRecoveryNudge(afterCount count: Int) {
+        guard notificationsEnabled, notificationPermissionState == .granted else { return }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [Self.recoveryNudgeIdentifier]
+        )
+        let nextCount = count + 1
+        let bodies = [
+            "Your muscles have rebuilt. Ready for session #\(nextCount)?",
+            "48 hours of recovery done. Your body is primed — session #\(nextCount) is waiting.",
+            "Recovery complete. Time to earn session #\(nextCount).",
+            "Your cardiovascular system is ready. Session #\(nextCount) is calling.",
+        ]
+        let content = UNMutableNotificationContent()
+        content.title = "Ready to train again"
+        content.body = bodies[count % bodies.count]
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 48 * 3600, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: Self.recoveryNudgeIdentifier, content: content, trigger: trigger
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error { print("Error scheduling recovery nudge: \(error)") }
+        }
+    }
+
+    private func cancelRecoveryNudge() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [Self.recoveryNudgeIdentifier]
+        )
+    }
+
     private func scheduleWeeklyWorkoutReminder(weekday: Int) {
         guard (1...7).contains(weekday) else { return }
         guard notificationPermissionState == .granted else { return }
@@ -1166,6 +1202,7 @@ class TimerViewModel: ObservableObject {
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
         cancelMissedWorkoutFollowUpIfCompletedToday()
+        scheduleRecoveryNudge(afterCount: workoutLogEntries.count)
         checkForMilestone()
         showPostWorkoutSummary = false
         if !showMilestoneCelebration {
