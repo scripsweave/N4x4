@@ -393,7 +393,7 @@ struct TipsView: View {
 
     private func modalityDetail(_ modality: TrainingModality) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            detailSection(icon: "gearshape.fill", color: .white.opacity(0.6), label: "Setup", text: modality.setup)
+            detailSection(icon: "gearshape.fill", color: .white.opacity(0.85), label: "Setup", text: modality.setup)
             Divider().background(Color.white.opacity(0.1))
             detailSection(icon: "bolt.fill", color: .orange, label: "Work — 4 min", text: modality.workPhase)
             Divider().background(Color.white.opacity(0.1))

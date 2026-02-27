@@ -103,6 +103,7 @@ enum TrainingModality: String, CaseIterable {
     case rowing       = "Rowing Machine"
     case bike         = "Stationary Bike"
     case stairClimber = "Stair Climber"
+    case other        = "Other"
 
     var icon: String {
         switch self {
@@ -111,6 +112,7 @@ enum TrainingModality: String, CaseIterable {
         case .rowing:       return "drop.fill"
         case .bike:         return "bicycle"
         case .stairClimber: return "arrow.up.circle.fill"
+        case .other:        return "ellipsis.circle.fill"
         }
     }
 
@@ -121,6 +123,7 @@ enum TrainingModality: String, CaseIterable {
         case .rowing:       return "Full body power"
         case .bike:         return "Low impact"
         case .stairClimber: return "Vertical power"
+        case .other:        return "Any cardio works"
         }
     }
 
@@ -136,6 +139,8 @@ enum TrainingModality: String, CaseIterable {
             return "Adjust the seat so your leg is almost fully extended at the bottom of the pedal stroke."
         case .stairClimber:
             return "Stand upright. Do not lean your weight onto the side handles — this reduces the load and defeats the purpose."
+        case .other:
+            return "Choose any continuous cardio activity — elliptical, swimming, jump rope, cross-trainer. Warm up for 5 minutes at moderate effort before starting intervals."
         }
     }
 
@@ -151,6 +156,8 @@ enum TrainingModality: String, CaseIterable {
             return "Maintain a high, consistent RPM — 80+ on a road bike or 60+ on an Air/Assault bike. Use your arms on an Air Bike to share the load."
         case .stairClimber:
             return "Increase speed until you can't breathe through your nose. Take full, consistent steps — not short choppy ones."
+        case .other:
+            return "Push to 85–95% of your max heart rate. Speaking more than a few words should feel impossible. Maintain this intensity for the full 4 minutes."
         }
     }
 
@@ -166,6 +173,19 @@ enum TrainingModality: String, CaseIterable {
             return "Pedal very slowly with zero resistance. Do not stop moving your legs."
         case .stairClimber:
             return "Drop the machine to Level 1 or 2. Focus on standing tall to open up your lungs."
+        case .other:
+            return "Drop to 60–70% max heart rate — a pace where you can speak in short sentences. Keep moving; don't stop completely."
+        }
+    }
+
+    var workoutType: WorkoutType {
+        switch self {
+        case .treadmill:    return .treadmill
+        case .outdoorRun:   return .run
+        case .rowing:       return .rowing
+        case .bike:         return .cycle
+        case .stairClimber: return .stairs
+        case .other:        return .other
         }
     }
 }
@@ -896,7 +916,7 @@ class TimerViewModel: ObservableObject {
         showCompletionMessage = false
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
 
-        selectedWorkoutType = .norwegian4x4
+        selectedWorkoutType = preferredModality?.workoutType ?? .norwegian4x4
         workoutNotesDraft = ""
         showPostWorkoutSummary = true
         

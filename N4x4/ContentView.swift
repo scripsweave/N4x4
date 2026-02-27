@@ -92,11 +92,25 @@ private struct OnboardingView: View {
 
             VStack(spacing: 24) {
                 HStack {
+                    if flow.currentStep != .welcome && !flow.isLastStep {
+                        Button(action: { flow.back() }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Back")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .foregroundStyle(.white.opacity(0.8))
+                        }
+                    } else {
+                        Color.clear.frame(width: 50, height: 20)
+                    }
+
+                    Spacer()
+
                     Text(flow.progressText)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.8))
-
-                    Spacer()
                 }
 
                 Spacer(minLength: 0)
@@ -186,7 +200,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private var ageCard: some View {
@@ -236,7 +250,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private var audioModeCard: some View {
@@ -283,8 +297,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38),
-                    in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private func audioModeRow(mode: AudioMode, icon: String, description: String) -> some View {
@@ -407,7 +420,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     /// Returns true if any two selected weekdays are adjacent in the calendar week.
@@ -462,7 +475,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     // MARK: - Protocol basics card
@@ -489,15 +502,15 @@ private struct OnboardingView: View {
                            label: "Active Rest", detail: "3 minutes · 60–70% max heart rate")
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.5))
+                        .font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.75))
                     Text("Repeat Work + Rest × 4 times")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.65))
+                        .font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
                 }
                 basicsStep(icon: "figure.walk.motion", color: .cyan,
                            label: "Cool-down",  detail: "5 minutes of light movement")
             }
             .padding(14)
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .background(Color.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
 
             // Key notes
             VStack(alignment: .leading, spacing: 6) {
@@ -509,7 +522,7 @@ private struct OnboardingView: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 12))
 
             VStack(spacing: 12) {
                 Button("Choose Your Exercise →") { flow.next() }
@@ -521,18 +534,21 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private func basicsStep(icon: String, color: Color, label: String, detail: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             ZStack {
-                Circle().fill(color.opacity(0.18)).frame(width: 36, height: 36)
+                Circle().fill(color.opacity(0.22)).frame(width: 36, height: 36)
                 Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(color)
             }
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                Text(detail).font(.caption).foregroundStyle(.white.opacity(0.65))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
         }
@@ -543,7 +559,7 @@ private struct OnboardingView: View {
             Circle().fill(Color.white.opacity(muted ? 0.2 : 0.4)).frame(width: 4, height: 4).padding(.top, 6)
             Text(text)
                 .font(.caption)
-                .foregroundStyle(.white.opacity(muted ? 0.55 : 0.85))
+                .foregroundStyle(.white.opacity(muted ? 0.75 : 0.95))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -551,77 +567,87 @@ private struct OnboardingView: View {
     // MARK: - Modality card
 
     private var modalityCard: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "figure.run.circle.fill")
-                .font(.system(size: 38, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(16)
-                .background(Circle().fill(Color.white.opacity(0.16)))
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 18) {
+                Image(systemName: "figure.run.circle.fill")
+                    .font(.system(size: 38, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(16)
+                    .background(Circle().fill(Color.white.opacity(0.16)))
 
-            Text("How will you train?")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                Text("How will you train?")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
 
-            Text("Pick your exercise and see how to set it up for the best results.")
-                .font(.body)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
+                Text("Pick your exercise and we'll show you how to set it up for the best results.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
 
-            VStack(spacing: 8) {
-                ForEach(TrainingModality.allCases, id: \.rawValue) { modality in
-                    let isSelected = timerViewModel.preferredModality == modality
-                    Button { timerViewModel.preferredModality = isSelected ? nil : modality } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: modality.icon)
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 32, height: 32)
-                                .background(Color.white.opacity(isSelected ? 0.25 : 0.10), in: Circle())
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(modality.rawValue).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
-                                Text(modality.tagline).font(.caption).foregroundStyle(.white.opacity(0.65))
+                VStack(spacing: 8) {
+                    ForEach(TrainingModality.allCases, id: \.rawValue) { modality in
+                        let isSelected = timerViewModel.preferredModality == modality
+                        Button { timerViewModel.preferredModality = isSelected ? nil : modality } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: modality.icon)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.white.opacity(isSelected ? 0.25 : 0.12), in: Circle())
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(modality.rawValue).font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                                    Text(modality.tagline).font(.caption).foregroundStyle(.white.opacity(0.85))
+                                }
+                                Spacer()
+                                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(.white)
                             }
-                            Spacer()
-                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(.white)
+                            .padding(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(isSelected ? Color.white.opacity(0.22) : Color.white.opacity(0.10))
+                            )
                         }
-                        .padding(12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(isSelected ? Color.white.opacity(0.20) : Color.white.opacity(0.08))
-                        )
-                    }
 
-                    if isSelected {
-                        VStack(alignment: .leading, spacing: 8) {
-                            modalityDetailRow(icon: "gearshape.fill", color: .white.opacity(0.6),
-                                              label: "Setup", text: modality.setup)
-                            modalityDetailRow(icon: "bolt.fill", color: .orange,
-                                              label: "Work (4 min)", text: modality.workPhase)
-                            modalityDetailRow(icon: "heart.fill", color: Color(red: 0.15, green: 0.80, blue: 0.50),
-                                              label: "Rest (3 min)", text: modality.restPhase)
+                        if isSelected {
+                            VStack(alignment: .leading, spacing: 10) {
+                                modalityDetailRow(icon: "gearshape.fill", color: .white.opacity(0.8),
+                                                  label: "Setup", text: modality.setup)
+                                Divider().background(Color.white.opacity(0.15))
+                                modalityDetailRow(icon: "bolt.fill", color: .orange,
+                                                  label: "Work (4 min)", text: modality.workPhase)
+                                Divider().background(Color.white.opacity(0.15))
+                                modalityDetailRow(icon: "heart.fill", color: Color(red: 0.15, green: 0.80, blue: 0.50),
+                                                  label: "Rest (3 min)", text: modality.restPhase)
+                            }
+                            .padding(14)
+                            .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                         }
-                        .padding(14)
-                        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
-            }
 
-            Button(timerViewModel.preferredModality != nil ? "Let's Go!" : "Skip") { flow.next() }
-                .buttonStyle(OnboardingPrimaryButtonStyle())
-                .padding(.top, 4)
+                Button(timerViewModel.preferredModality != nil ? "Let's Go!" : "Skip") { flow.next() }
+                    .buttonStyle(OnboardingPrimaryButtonStyle())
+                    .padding(.top, 4)
+            }
+            .padding(28)
+            .frame(maxWidth: .infinity)
         }
-        .padding(28)
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private func modalityDetailRow(icon: String, color: Color, label: String, text: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(label, systemImage: icon).font(.caption.weight(.bold)).foregroundStyle(color)
-            Text(text).font(.caption).foregroundStyle(.white.opacity(0.82)).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 5) {
+            Label(label, systemImage: icon)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(color)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.95))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -714,7 +740,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private func permissionCard(
@@ -755,7 +781,7 @@ private struct OnboardingView: View {
         }
         .padding(28)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial.opacity(0.38), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private func requestNotifications() {
