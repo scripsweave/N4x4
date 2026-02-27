@@ -1379,6 +1379,13 @@ class TimerViewModel: ObservableObject {
             notificationComponents.hour = 10  // 10am follow-up
             notificationComponents.minute = 0
 
+            if let scheduledDate = calendar.date(from: notificationComponents), scheduledDate <= now {
+                // Skip past-due slots so we don't blast the user with an immediate notification
+                // when they open the app after 10am; future dates will still fire at 10am.
+                currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? dayBeforeNext.addingTimeInterval(1)
+                continue
+            }
+
             let nagMessages: [(String, String)] = [
                 ("You missed one day, Viking. No biggie. 🪓", "It's never too late. There's no time like the present."),
                 ("Yesterday slipped by - no worries! ⏳", "Your streak isn't dead. Train today and come back stronger!"),
