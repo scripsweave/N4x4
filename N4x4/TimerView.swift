@@ -200,9 +200,6 @@ struct TimerView: View {
                     if viewModel.isRunning {
                         viewModel.reconcileTimerState(now: Date(), playAlarm: false)
                     }
-                    if viewModel.healthKitEnabled {
-                        viewModel.fetchVO2MaxSamples()
-                    }
                 }
             }
             .onDisappear {

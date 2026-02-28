@@ -81,7 +81,7 @@ struct SettingsView: View {
                         case .alarm:
                             Text("A beep plays at each interval change (foreground only).")
                         case .voice:
-                            Text("Voice cues at start, halfway, and 30 seconds to go. Music softens while speaking.")
+                            Text("Voice cues at start, halfway, and 10 seconds to go. Music softens while speaking.")
                         case .silent:
                             Text("No audio alerts. Watch the screen for interval changes.")
                         }
