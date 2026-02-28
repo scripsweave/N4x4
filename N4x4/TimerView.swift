@@ -149,6 +149,7 @@ struct TimerView: View {
                     }
                 }
                 .padding()
+                .animation(.easeInOut(duration: 0.35), value: viewModel.cooldownCompletionNotice)
             }
             .navigationBarTitle("", displayMode: .inline)
             .navigationBarItems(
