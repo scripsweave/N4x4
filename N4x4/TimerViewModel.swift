@@ -1716,8 +1716,9 @@ class TimerViewModel: ObservableObject {
         let (hrLow, hrHigh): (Int, Int) = {
             switch phase {
             case .highIntensity: return (Int(Double(maxHR) * 0.85), Int(Double(maxHR) * 0.95))
-            case .warmup, .rest: return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
-            case .cooldown:      return (0, 0)
+            case .warmup:        return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
+            case .rest:          return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
+            case .cooldown:      return (Int(Double(maxHR) * 0.50), Int(Double(maxHR) * 0.60))
             }
         }()
         return N4x4LiveActivityAttributes.ContentState(
