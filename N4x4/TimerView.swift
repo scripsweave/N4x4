@@ -371,7 +371,7 @@ private struct PostWorkoutSummaryView: View {
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        let minutes = Int(seconds) / 60
+        let minutes = Int((seconds / 60).rounded())
         if minutes <= 0 { return "0 min" }
         return "\(minutes) min"
     }
