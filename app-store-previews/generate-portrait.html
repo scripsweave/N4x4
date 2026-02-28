@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>N4x4 — Portrait Preview Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #111; color: #fff;
+  font-family: Inter, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  padding: 40px 24px;
+  display: flex; flex-direction: column; align-items: center; gap: 48px;
+}
+h1 { font-size: 26px; font-weight: 800; }
+.sub { color: rgba(255,255,255,0.4); font-size: 14px; margin-top: 6px; text-align: center; }
+.cards-row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+.wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.card-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: rgba(255,255,255,0.35); text-transform: uppercase; }
+canvas {
+  width: 430px; height: 931px;  /* display at 1/3 scale */
+  max-width: 100%;
+  border-radius: 20px;
+  display: block;
+  box-shadow: 0 20px 80px rgba(0,0,0,0.85);
+}
+.dl {
+  padding: 11px 28px;
+  background: linear-gradient(135deg, #FF6B2B, #FF3D57);
+  color: white; border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  font-family: Inter, sans-serif; transition: opacity 0.2s;
+}
+.dl:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<div>
+  <h1>N4x4 · App Store Portrait Previews</h1>
+  <p class="sub">1290 × 2796 px · iPhone 6.7" portrait · Open in Safari for sharpest font rendering</p>
+</div>
+
+<div class="cards-row">
+  <div class="wrap">
+    <div class="card-label">Card 1 — The Protocol</div>
+    <canvas id="c1" width="1290" height="2796"></canvas>
+    <button class="dl" onclick="dl('c1','n4x4-portrait-1-protocol.png')">⬇ Download Card 1</button>
+  </div>
+  <div class="wrap">
+    <div class="card-label">Card 2 — The App</div>
+    <canvas id="c2" width="1290" height="2796"></canvas>
+    <button class="dl" onclick="dl('c2','n4x4-portrait-2-app.png')">⬇ Download Card 2</button>
+  </div>
+  <div class="wrap">
+    <div class="card-label">Card 3 — Free Forever</div>
+    <canvas id="c3" width="1290" height="2796"></canvas>
+    <button class="dl" onclick="dl('c3','n4x4-portrait-3-free.png')">⬇ Download Card 3</button>
+  </div>
+</div>
+
+<script>
+const W = 1290, H = 2796;
+const MX = 88;     // horizontal margin
+const CX = W / 2;  // horizontal center = 645
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+function rrect(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+function radGrad(ctx, cx, cy, r, c0, c1) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, c0); g.addColorStop(1, c1); return g;
+}
+
+function linGrad(ctx, x1, y1, x2, y2, c0, c1) {
+  const g = ctx.createLinearGradient(x1, y1, x2, y2);
+  g.addColorStop(0, c0); g.addColorStop(1, c1); return g;
+}
+
+function drawBase(ctx, gx, gy, gc, gr) {
+  ctx.fillStyle = '#080810'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = radGrad(ctx, gx, gy, gr || 900, gc, 'transparent');
+  ctx.fillRect(0, 0, W, H);
+}
+
+function pill(ctx, x, y, w, h, r, bg, stroke, lw) {
+  rrect(ctx, x, y, w, h, r);
+  ctx.fillStyle = bg; ctx.fill();
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1.5; ctx.stroke(); }
+}
+
+function badge(ctx, x, y) {
+  pill(ctx, x, y, 192, 60, 30, 'rgba(255,107,43,0.12)', 'rgba(255,107,43,0.4)');
+  ctx.beginPath(); ctx.arc(x + 38, y + 30, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#FF6B2B'; ctx.fill();
+  ctx.font = '700 26px Inter'; ctx.fillStyle = '#FF8040'; ctx.textAlign = 'left';
+  ctx.fillText('N4×4', x + 58, y + 38);
+}
+
+function sectionLabel(ctx, text, x, y) {
+  ctx.font = '700 22px Inter'; ctx.fillStyle = 'rgba(255,107,43,0.8)';
+  ctx.textAlign = 'left'; ctx.fillText(text, x, y);
+}
+
+function noise(ctx) {
+  for (let x = 0; x < W; x += 52) {
+    for (let y = 0; y < H; y += 52) {
+      ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.022)'; ctx.fill();
+    }
+  }
+}
+
+function divider(ctx, y) {
+  ctx.beginPath(); ctx.moveTo(MX, y); ctx.lineTo(W - MX, y);
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1; ctx.stroke();
+}
+
+// ─── CARD 1: THE PROTOCOL ─────────────────────────────────────────────────────
+
+function drawCard1(ctx) {
+  drawBase(ctx, CX, 600, 'rgba(255,107,43,0.22)', 1000);
+  ctx.fillStyle = radGrad(ctx, 200, 2400, 700, 'rgba(255,61,87,0.1)', 'transparent');
+  ctx.fillRect(0, 0, W, H);
+  noise(ctx);
+
+  // ── HERO ───────────────────────────────────────────────────────────────────
+  badge(ctx, MX, 140);
+  sectionLabel(ctx, 'THE SCIENCE IS IN', MX, 282);
+
+  ctx.font = '900 252px Inter'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
+  ctx.fillText('More', MX - 6, 554);
+
+  ctx.font = '900 252px Inter';
+  ctx.fillStyle = linGrad(ctx, MX, 0, MX + 740, 0, '#FF6B2B', '#FF3D57');
+  ctx.fillText('life.', MX - 6, 808);
+
+  ctx.font = '400 44px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.54)';
+  ctx.fillText('VO2 max is the #1 predictor of lifespan.', MX, 900);
+  ctx.fillText('This protocol raises it — fast.', MX, 960);
+
+  // Peter Attia quote (early, before protocol)
+  const q1Y = 1040;
+  rrect(ctx, MX, q1Y, W - MX * 2, 198, 20);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1.5; ctx.stroke();
+  // Left accent bar
+  ctx.fillStyle = linGrad(ctx, MX, q1Y, MX, q1Y + 198, '#FF6B2B', '#FF3D57');
+  ctx.fillRect(MX, q1Y + 24, 5, 150);
+  ctx.font = '400 32px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.textAlign = 'left';
+  ctx.fillText('"VO2 max is the single greatest predictor', MX + 34, q1Y + 70);
+  ctx.fillText('of lifespan — more than smoking,', MX + 34, q1Y + 112);
+  ctx.fillText('more than diabetes, more than heart disease."', MX + 34, q1Y + 154);
+  ctx.font = '600 26px Inter'; ctx.fillStyle = 'rgba(255,107,43,0.8)';
+  ctx.fillText('— Dr. Peter Attia, MD', MX + 34, q1Y + 190);
+
+  // ── PROTOCOL ───────────────────────────────────────────────────────────────
+  divider(ctx, 1290);
+  sectionLabel(ctx, 'THE NORWEGIAN 4×4 PROTOCOL', MX, 1368);
+
+  const tlX = MX, tlY = 1398, tlH = 288, tlW = W - MX * 2, gap = 8;
+  const blocks = [
+    { l: 'WARM-UP',   d: '5 min', c1: '#F7B733', c2: '#FC4A1A', f: 5 },
+    { l: 'WORK',      d: '4 min', c1: '#FF6B2B', c2: '#FF2D55', f: 4 },
+    { l: 'REST',      d: '3 min', c1: '#0A84FF', c2: '#5AC8FA', f: 3 },
+    { l: 'WORK',      d: '4 min', c1: '#FF6B2B', c2: '#FF2D55', f: 4 },
+    { l: 'REST',      d: '3 min', c1: '#0A84FF', c2: '#5AC8FA', f: 3 },
+    { l: 'WORK',      d: '4 min', c1: '#FF6B2B', c2: '#FF2D55', f: 4 },
+    { l: 'REST',      d: '3 min', c1: '#0A84FF', c2: '#5AC8FA', f: 3 },
+    { l: 'WORK',      d: '4 min', c1: '#FF6B2B', c2: '#FF2D55', f: 4 },
+    { l: 'REST',      d: '3 min', c1: '#0A84FF', c2: '#5AC8FA', f: 3 },
+    { l: 'COOL-DOWN', d: '5 min', c1: '#F7B733', c2: '#FC4A1A', f: 5 },
+  ];
+  const totalF = blocks.reduce((s, b) => s + b.f, 0);
+  const avail = tlW - gap * (blocks.length - 1);
+
+  let bx = tlX;
+  const bws = [];
+  blocks.forEach((b, i) => {
+    const bw = i === blocks.length - 1 ? (W - MX - bx) : Math.round(avail * b.f / totalF);
+    bws.push(bw);
+    const grd = ctx.createLinearGradient(bx, tlY, bx, tlY + tlH);
+    grd.addColorStop(0, b.c1); grd.addColorStop(1, b.c2);
+    rrect(ctx, bx, tlY, bw, tlH, 14); ctx.fillStyle = grd; ctx.fill();
+    // Sheen
+    const sh = ctx.createLinearGradient(bx, tlY, bx, tlY + tlH * 0.44);
+    sh.addColorStop(0, 'rgba(255,255,255,0.2)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+    rrect(ctx, bx, tlY, bw, tlH * 0.44, 14); ctx.fillStyle = sh; ctx.fill();
+    // Text
+    ctx.save(); ctx.textAlign = 'center';
+    const cx2 = bx + bw / 2, cy2 = tlY + tlH / 2;
+    if (bw < 100) {
+      ctx.translate(cx2, cy2); ctx.rotate(-Math.PI / 2);
+      ctx.font = '700 18px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillText(b.l, 0, -10);
+      ctx.font = '500 15px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText(b.d, 0, 14);
+    } else {
+      ctx.font = '700 21px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fillText(b.l, cx2, cy2 - 14);
+      ctx.font = '600 24px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.fillText(b.d, cx2, cy2 + 22);
+    }
+    ctx.restore();
+    bx += bw + gap;
+  });
+
+  // 4 rounds annotation
+  const wuEnd = tlX + bws[0] + gap;
+  const cdStart = W - MX - bws[9];
+  ctx.font = '600 24px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.textAlign = 'center';
+  ctx.fillText('← 4 rounds of Work + Rest →', (wuEnd + cdStart) / 2, tlY + tlH + 50);
+
+  // Stats
+  const stY = tlY + tlH + 110;
+  const sw = (W - MX * 2) / 3;
+  [
+    { n: '33',     s: 'total minutes' },
+    { n: '4',      s: 'intervals' },
+    { n: '85–95%', s: 'max heart rate' },
+  ].forEach((st, i) => {
+    const sx = MX + i * sw;
+    ctx.textAlign = 'left';
+    ctx.font = '900 96px Inter';
+    ctx.fillStyle = linGrad(ctx, sx, 0, sx + 300, 0, '#FF6B2B', '#FF3D57');
+    ctx.fillText(st.n, sx, stY + 90);
+    ctx.font = '500 28px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.42)';
+    ctx.fillText(st.s, sx, stY + 130);
+  });
+
+  // HR note
+  const hrY = stY + 174;
+  pill(ctx, MX, hrY, W - MX * 2, 88, 18, 'rgba(255,107,43,0.08)', 'rgba(255,107,43,0.2)');
+  ctx.font = '500 28px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.68)'; ctx.textAlign = 'left';
+  ctx.fillText('❤  Push so hard you cannot hold a conversation.', MX + 28, hrY + 55);
+
+  // ── BOTTOM ─────────────────────────────────────────────────────────────────
+  divider(ctx, hrY + 136);
+
+  // 33 min pill
+  const p1Y = hrY + 186;
+  pill(ctx, MX, p1Y, W - MX * 2, 80, 40, 'rgba(255,107,43,0.1)', 'rgba(255,107,43,0.28)');
+  ctx.font = '700 34px Inter'; ctx.fillStyle = '#FF8040'; ctx.textAlign = 'center';
+  ctx.fillText('33 min  ·  Once or twice a week', CX, p1Y + 51);
+
+  // Free pill
+  const p2Y = p1Y + 106;
+  pill(ctx, MX, p2Y, W - MX * 2, 80, 40, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)');
+  ctx.font = '600 32px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.textAlign = 'center';
+  ctx.fillText('Free  ·  No ads  ·  No sign-up', CX, p2Y + 51);
+}
+
+// ─── CARD 2: THE APP ──────────────────────────────────────────────────────────
+
+function drawCard2(ctx) {
+  drawBase(ctx, CX, 500, 'rgba(80,130,255,0.16)', 900);
+  ctx.fillStyle = radGrad(ctx, CX, H * 0.6, 800, 'rgba(255,107,43,0.12)', 'transparent');
+  ctx.fillRect(0, 0, W, H);
+  noise(ctx);
+
+  // ── HEADLINE ───────────────────────────────────────────────────────────────
+  badge(ctx, MX, 140);
+  sectionLabel(ctx, 'YOUR COACH IN YOUR POCKET', MX, 282);
+
+  ctx.font = '900 196px Inter'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
+  ctx.fillText('Guided.', MX - 6, 506);
+
+  ctx.font = '900 130px Inter';
+  ctx.fillStyle = linGrad(ctx, MX, 0, MX + 860, 0, '#FF6B2B', '#FF3D57');
+  ctx.fillText('Every second.', MX - 4, 648);
+
+  ctx.font = '400 40px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.52)';
+  ctx.fillText('Voice coaching tells you exactly when to push', MX, 726);
+  ctx.fillText('and when to recover. Eyes up. Head down.', MX, 778);
+
+  // ── PHONE MOCKUP ───────────────────────────────────────────────────────────
+  const phW = 980, phH = 1780;
+  const phX = (W - phW) / 2;    // 155
+  const phY = 840;
+  const phR = 72;
+
+  // Shadow
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 120; ctx.shadowOffsetY = 30;
+  rrect(ctx, phX, phY, phW, phH, phR);
+  ctx.fillStyle = '#1c1c20'; ctx.fill();
+  ctx.restore();
+
+  // Phone body
+  rrect(ctx, phX, phY, phW, phH, phR);
+  ctx.fillStyle = '#1c1c20'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 3; ctx.stroke();
+
+  // Side button (right)
+  pill(ctx, phX + phW, phY + 320, 6, 110, 3, 'rgba(255,255,255,0.15)', null);
+  pill(ctx, phX + phW, phY + 480, 6, 70,  3, 'rgba(255,255,255,0.15)', null);
+  // Volume (left)
+  pill(ctx, phX - 6, phY + 280, 6, 70, 3, 'rgba(255,255,255,0.15)', null);
+  pill(ctx, phX - 6, phY + 370, 6, 70, 3, 'rgba(255,255,255,0.15)', null);
+
+  // Screen
+  const sX = phX + 16, sY = phY + 16, sW = phW - 32, sH = phH - 32;
+  rrect(ctx, sX, sY, sW, sH, phR - 12);
+  ctx.fillStyle = '#080810'; ctx.fill();
+
+  // Top sheen on phone
+  ctx.save();
+  rrect(ctx, phX, phY, phW, phH, phR); ctx.clip();
+  const sheen = ctx.createLinearGradient(phX, phY, phX, phY + 20);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.08)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen; ctx.fillRect(phX, phY, phW, 20);
+  ctx.restore();
+
+  // Dynamic Island
+  const diW = 160, diH = 42;
+  const diX = CX - diW / 2, diY = phY + 46;
+  rrect(ctx, diX, diY, diW, diH, 21);
+  ctx.fillStyle = '#000'; ctx.fill();
+  // DI content: pulsing dot + text
+  ctx.beginPath(); ctx.arc(diX + 22, diY + 21, 9, 0, Math.PI * 2);
+  ctx.fillStyle = '#FF6B2B'; ctx.fill();
+  // DI glow
+  ctx.beginPath(); ctx.arc(diX + 22, diY + 21, 14, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,107,43,0.2)'; ctx.fill();
+  ctx.font = '600 18px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.textAlign = 'left';
+  ctx.fillText('WORK · 3:42', diX + 40, diY + 27);
+
+  // Screen content: "Interval 2 of 4" counter
+  const ringCY = sY + sH * 0.44;
+  ctx.font = '600 30px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.textAlign = 'center';
+  ctx.fillText('Interval 2 of 4', CX, phY + 160);
+
+  // Progress ring
+  const ringR = 298, ringLW = 24;
+  const progress = 0.75;
+
+  // Outer glow ring
+  ctx.save();
+  ctx.shadowColor = '#FF6B2B'; ctx.shadowBlur = 40;
+  ctx.beginPath();
+  ctx.arc(CX, ringCY, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+  ctx.strokeStyle = 'rgba(255,107,43,0.25)'; ctx.lineWidth = ringLW + 20; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.restore();
+
+  // Track
+  ctx.beginPath(); ctx.arc(CX, ringCY, ringR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = ringLW; ctx.stroke();
+
+  // Progress arc
+  ctx.beginPath();
+  ctx.arc(CX, ringCY, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+  ctx.strokeStyle = linGrad(ctx, CX - ringR, ringCY, CX + ringR, ringCY, '#FF6B2B', '#FF3D57');
+  ctx.lineWidth = ringLW; ctx.lineCap = 'round'; ctx.stroke(); ctx.lineCap = 'butt';
+
+  // Center text
+  ctx.textAlign = 'center';
+  ctx.font = '700 36px Inter'; ctx.fillStyle = '#FF6B2B';
+  ctx.fillText('WORK', CX, ringCY - 80);
+
+  ctx.font = '900 140px Inter'; ctx.fillStyle = '#ffffff';
+  ctx.fillText('3:42', CX, ringCY + 46);
+
+  ctx.font = '500 32px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.42)';
+  ctx.fillText('of 4:00', CX, ringCY + 96);
+
+  // Interval dots
+  const dotsY = ringCY + 174;
+  [CX - 90, CX - 30, CX + 30, CX + 90].forEach((dx, i) => {
+    ctx.beginPath(); ctx.arc(dx, dotsY, 12, 0, Math.PI * 2);
+    ctx.fillStyle = i < 2 ? '#FF6B2B' : 'rgba(255,255,255,0.14)'; ctx.fill();
+    if (i === 1) { // current — add glow
+      ctx.beginPath(); ctx.arc(dx, dotsY, 18, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,107,43,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+    }
+  });
+
+  // Controls
+  const ctrlY = dotsY + 70;
+  // Pause
+  pill(ctx, CX - 240, ctrlY, 148, 88, 44, 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0.1)');
+  ctx.font = '700 40px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.textAlign = 'center';
+  ctx.fillText('⏸', CX - 166, ctrlY + 58);
+  // Skip
+  pill(ctx, CX + 92, ctrlY, 148, 88, 44, 'rgba(255,255,255,0.07)', 'rgba(255,255,255,0.1)');
+  ctx.fillText('⏭', CX + 166, ctrlY + 58);
+
+  // Voice indicator bottom
+  const voiceY = sY + sH - 110;
+  ctx.font = '500 26px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.textAlign = 'center';
+  ctx.fillText('🎙️  "Push harder — 90 seconds left"', CX, voiceY);
+
+  // ── FEATURE CHIPS ──────────────────────────────────────────────────────────
+  const chipsY = phY + phH + 48;
+  const chips = ['🎙️ Voice Coaching', '⭕ Progress Ring', '📍 Dynamic Island', '🔥 Streaks', '🧬 Science Cards'];
+  let fx = MX, fy = chipsY;
+  chips.forEach((c, i) => {
+    ctx.font = '600 26px Inter';
+    const tw = ctx.measureText(c).width;
+    const pw = tw + 40, ph2 = 60;
+    if (fx + pw > W - MX && fx > MX) { fx = MX; fy += 76; }
+    pill(ctx, fx, fy, pw, ph2, 30, 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0.11)');
+    ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.textAlign = 'left';
+    ctx.fillText(c, fx + 20, fy + 42);
+    fx += pw + 14;
+  });
+}
+
+// ─── CARD 3: FREE FOREVER ─────────────────────────────────────────────────────
+
+function drawCard3(ctx) {
+  drawBase(ctx, CX, 500, 'rgba(50,210,100,0.1)', 900);
+  ctx.fillStyle = radGrad(ctx, 200, 400, 700, 'rgba(255,107,43,0.14)', 'transparent');
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = radGrad(ctx, W - 200, H - 300, 600, 'rgba(80,140,255,0.1)', 'transparent');
+  ctx.fillRect(0, 0, W, H);
+  noise(ctx);
+
+  // ── HERO ───────────────────────────────────────────────────────────────────
+  badge(ctx, MX, 140);
+  sectionLabel(ctx, 'ZERO FRICTION. ZERO COST.', MX, 282);
+
+  ctx.font = '900 272px Inter'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
+  ctx.fillText('Free.', MX - 8, 574);
+
+  ctx.font = '900 72px Inter';
+  ctx.fillStyle = linGrad(ctx, MX, 0, MX + 900, 0, '#FF6B2B', '#FF3D57');
+  ctx.fillText('No ads. No sign-up. No catch.', MX, 668);
+
+  ctx.font = '400 40px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.fillText('Built so that everyone on earth can access', MX, 750);
+  ctx.fillText('the most powerful fitness protocol there is.', MX, 800);
+
+  // ── TRUST LIST ─────────────────────────────────────────────────────────────
+  divider(ctx, 866);
+  sectionLabel(ctx, 'WHAT YOU GET', MX, 940);
+
+  const trusts = [
+    { icon: '✓', text: 'Completely free — always' },
+    { icon: '✓', text: 'No ads. Ever.' },
+    { icon: '✓', text: 'No in-app purchases' },
+    { icon: '✓', text: 'No account required' },
+    { icon: '✓', text: 'Your data stays on your device' },
+  ];
+  trusts.forEach(({ icon, text }, i) => {
+    const ty = 980 + i * 82;
+    pill(ctx, MX, ty, W - MX * 2, 66, 14, 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.08)');
+    ctx.font = '700 28px Inter'; ctx.fillStyle = '#FF8040'; ctx.textAlign = 'left';
+    ctx.fillText(icon, MX + 22, ty + 44);
+    ctx.font = '500 28px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillText(text, MX + 62, ty + 44);
+  });
+
+  // ── STREAK CALENDAR ────────────────────────────────────────────────────────
+  divider(ctx, 1416);
+  sectionLabel(ctx, 'TRACK YOUR PROGRESS', MX, 1490);
+
+  const dotSz = 56, dotGap = 14;
+  const calX = MX, calY = 1524;
+  const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const calW = 7 * dotSz + 6 * dotGap;
+
+  // Day labels
+  days.forEach((d, i) => {
+    ctx.font = '600 22px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.textAlign = 'center';
+    ctx.fillText(d, calX + i * (dotSz + dotGap) + dotSz / 2, calY + 24);
+  });
+
+  const history = [
+    [1,0,1,0,1,0,0],
+    [1,0,1,0,1,0,0],
+    [0,0,1,0,1,0,0],
+    [1,0,1,0,1,1,0],
+    [1,0,1,0,1,0,0],
+    [1,0,0,0,1,0,0],
+    [1,0,1,0,1,0,0],
+    [1,0,1,0,0,0,0],
+  ];
+  history.forEach((week, wi) => {
+    week.forEach((done, di) => {
+      const dx = calX + di * (dotSz + dotGap);
+      const dy = calY + 42 + wi * (dotSz + dotGap);
+      rrect(ctx, dx, dy, dotSz, dotSz, 12);
+      if (done) {
+        const g = ctx.createLinearGradient(dx, dy, dx + dotSz, dy + dotSz);
+        g.addColorStop(0, '#FF6B2B'); g.addColorStop(1, '#FF3D57');
+        ctx.fillStyle = g;
+      } else { ctx.fillStyle = 'rgba(255,255,255,0.05)'; }
+      ctx.fill();
+      ctx.strokeStyle = done ? 'rgba(255,107,43,0.22)' : 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1; ctx.stroke();
+    });
+  });
+
+  // Badges to the right of the calendar
+  const bdX = calX + calW + 28;
+  const bdW = W - MX - bdX;
+
+  pill(ctx, bdX, calY + 42, bdW, 116, 22, 'rgba(255,107,43,0.1)', 'rgba(255,107,43,0.26)');
+  ctx.font = '900 64px Inter';
+  ctx.fillStyle = linGrad(ctx, bdX, 0, bdX + bdW, 0, '#FF6B2B', '#FF3D57');
+  ctx.textAlign = 'left';
+  ctx.fillText('🔥 23', bdX + 22, calY + 108);
+  ctx.font = '500 24px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.46)';
+  ctx.fillText('week streak', bdX + 22, calY + 140);
+
+  pill(ctx, bdX, calY + 178, bdW, 116, 22, 'rgba(52,199,89,0.1)', 'rgba(52,199,89,0.26)');
+  ctx.font = '900 64px Inter'; ctx.fillStyle = '#34C759';
+  ctx.fillText('🏆 25', bdX + 22, calY + 244);
+  ctx.font = '500 24px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.46)';
+  ctx.fillText('sessions', bdX + 22, calY + 276);
+
+  // ── SCIENCE CARD ───────────────────────────────────────────────────────────
+  const calBottom = calY + 42 + 8 * (dotSz + dotGap);
+  divider(ctx, calBottom + 28);
+
+  sectionLabel(ctx, 'AFTER EVERY SESSION', MX, calBottom + 100);
+
+  const scY = calBottom + 126;
+  const scH = 238;
+  rrect(ctx, MX, scY, W - MX * 2, scH, 24);
+  ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // Top color bar
+  rrect(ctx, MX, scY, W - MX * 2, 6, 4);
+  ctx.fillStyle = linGrad(ctx, MX, 0, W - MX, 0, '#9B59B6', '#3498DB');
+  ctx.fill();
+
+  ctx.font = '700 24px Inter'; ctx.fillStyle = '#A870D0'; ctx.textAlign = 'left';
+  ctx.fillText('⚡  MITOCHONDRIAL BIOGENESIS', MX + 32, scY + 60);
+  ctx.font = '700 38px Inter'; ctx.fillStyle = '#ffffff';
+  ctx.fillText('Your cells are growing stronger.', MX + 32, scY + 114);
+  ctx.font = '400 28px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.52)';
+  ctx.fillText('HIIT triggers new mitochondria — more cellular power,', MX + 32, scY + 162);
+  ctx.fillText('better endurance, and slower aging.', MX + 32, scY + 198);
+
+  // ── BOTTOM CTA ─────────────────────────────────────────────────────────────
+  const ctaY = scY + scH + 48;
+  pill(ctx, MX, ctaY, W - MX * 2, 84, 42, 'rgba(255,107,43,0.1)', 'rgba(255,107,43,0.28)');
+  ctx.font = '700 36px Inter'; ctx.fillStyle = '#FF8040'; ctx.textAlign = 'center';
+  ctx.fillText('33 minutes. Once or twice a week.', CX, ctaY + 54);
+
+  pill(ctx, MX, ctaY + 106, W - MX * 2, 84, 42, 'rgba(255,255,255,0.05)', 'rgba(255,255,255,0.1)');
+  ctx.font = '600 34px Inter'; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.textAlign = 'center';
+  ctx.fillText('Free on the App Store', CX, ctaY + 156);
+}
+
+// ─── DOWNLOAD & RENDER ────────────────────────────────────────────────────────
+
+function dl(id, name) {
+  document.getElementById(id).toBlob(blob => {
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  }, 'image/png');
+}
+
+document.fonts.ready.then(() => {
+  setTimeout(() => {
+    drawCard1(document.getElementById('c1').getContext('2d'));
+    drawCard2(document.getElementById('c2').getContext('2d'));
+    drawCard3(document.getElementById('c3').getContext('2d'));
+  }, 400);
+});
+</script>
+</body>
+</html>
