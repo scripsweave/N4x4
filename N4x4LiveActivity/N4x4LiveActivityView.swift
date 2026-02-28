@@ -137,11 +137,19 @@ struct ExpandedTrailingView: View {
     let context: ActivityViewContext<N4x4LiveActivityAttributes>
 
     var body: some View {
-        IntervalDotsView(
-            current: context.state.currentInterval,
-            total: context.state.totalIntervals,
-            color: context.state.phase.color
-        )
+        Group {
+            if context.state.phase == .cooldown {
+                Text("Cooldown")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
+                IntervalDotsView(
+                    current: context.state.currentInterval,
+                    total: context.state.totalIntervals,
+                    color: context.state.phase.color
+                )
+            }
+        }
         .padding(.trailing, 8)
     }
 }
@@ -239,11 +247,17 @@ struct LockScreenView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                IntervalDotsView(
-                    current: context.state.currentInterval,
-                    total: context.state.totalIntervals,
-                    color: context.state.phase.color
-                )
+                if context.state.phase == .cooldown {
+                    Text("Cooldown")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else {
+                    IntervalDotsView(
+                        current: context.state.currentInterval,
+                        total: context.state.totalIntervals,
+                        color: context.state.phase.color
+                    )
+                }
             }
         }
         .padding(.horizontal, 16)

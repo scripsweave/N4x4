@@ -52,17 +52,33 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
+struct WorkoutSessionBreakdown: Codable, Equatable {
+    let totalDuration: TimeInterval
+    let highIntensityDuration: TimeInterval
+    let recoveryDuration: TimeInterval
+    let cooldownDuration: TimeInterval
+    let cooldownSkipped: Bool
+}
+
 struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     let id: UUID
     let completedAt: Date
     let workoutType: WorkoutType
     let notes: String
+    let sessionBreakdown: WorkoutSessionBreakdown?
 
-    init(id: UUID = UUID(), completedAt: Date = Date(), workoutType: WorkoutType, notes: String) {
+    init(
+        id: UUID = UUID(),
+        completedAt: Date = Date(),
+        workoutType: WorkoutType,
+        notes: String,
+        sessionBreakdown: WorkoutSessionBreakdown? = nil
+    ) {
         self.id = id
         self.completedAt = completedAt
         self.workoutType = workoutType
         self.notes = notes
+        self.sessionBreakdown = sessionBreakdown
     }
 
     var weekOfYear: Int {
@@ -286,6 +302,10 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
     @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.voice.rawValue
+    @AppStorage("halfwayVoicePromptsEnabled") var halfwayVoicePromptsEnabled: Bool = true
+    @AppStorage("tenSecondVoicePromptsEnabled") var tenSecondVoicePromptsEnabled: Bool = true
+    @AppStorage("confirmSkipCooldown") var confirmSkipCooldown: Bool = false
+    @AppStorage("confirmSkipOtherIntervals") var confirmSkipOtherIntervals: Bool = false
 
     var audioMode: AudioMode {
         get { AudioMode(rawValue: audioModeRaw) ?? .alarm }
@@ -745,6 +765,8 @@ class TimerViewModel: ObservableObject {
     var intervalEndTime: Date?
     var workoutStartDate: Date?
     var workoutCompletionDate: Date?
+    @Published var cooldownCompletionNotice: Bool = false
+    private var skippedCooldownThisSession: Bool = false
 
     // Live Activity
     private var liveActivity: Activity<N4x4LiveActivityAttributes>?
@@ -767,6 +789,37 @@ class TimerViewModel: ObservableObject {
         let lower = Int((Double(maximumHeartRate) * 0.60).rounded())
         let upper = Int((Double(maximumHeartRate) * 0.70).rounded())
         return lower...upper
+    }
+
+    var currentIntervalType: IntervalType? {
+        guard intervals.indices.contains(currentIntervalIndex) else { return nil }
+        return intervals[currentIntervalIndex].type
+    }
+
+    func shouldConfirmSkipCurrentInterval() -> Bool {
+        guard let type = currentIntervalType else { return false }
+        switch type {
+        case .cooldown:
+            return confirmSkipCooldown
+        default:
+            return confirmSkipOtherIntervals
+        }
+    }
+
+    var currentSessionBreakdown: WorkoutSessionBreakdown {
+        let highIntensity = intervals.filter { $0.type == .highIntensity }.reduce(0) { $0 + $1.duration }
+        let recovery = intervals.filter { $0.type == .rest }.reduce(0) { $0 + $1.duration }
+        let configuredCooldown = intervals.filter { $0.type == .cooldown }.reduce(0) { $0 + $1.duration }
+        let cooldown = skippedCooldownThisSession ? 0 : configuredCooldown
+        let total = highIntensity + recovery + cooldown + intervals.filter { $0.type == .warmup }.reduce(0) { $0 + $1.duration }
+
+        return WorkoutSessionBreakdown(
+            totalDuration: total,
+            highIntensityDuration: highIntensity,
+            recoveryDuration: recovery,
+            cooldownDuration: cooldown,
+            cooldownSkipped: skippedCooldownThisSession && configuredCooldown > 0
+        )
     }
 
     init() {
@@ -993,8 +1046,21 @@ class TimerViewModel: ObservableObject {
 
         selectedWorkoutType = preferredModality?.workoutType ?? .norwegian4x4
         workoutNotesDraft = ""
-        showPostWorkoutSummary = true
-        
+
+        let finishedOnCooldown = intervals.indices.contains(currentIntervalIndex) && intervals[currentIntervalIndex].type == .cooldown
+        let showCooldownMoment = finishedOnCooldown && !skippedCooldownThisSession
+        if showCooldownMoment {
+            cooldownCompletionNotice = true
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                self?.showPostWorkoutSummary = true
+                self?.cooldownCompletionNotice = false
+            }
+        } else {
+            showPostWorkoutSummary = true
+            cooldownCompletionNotice = false
+        }
+
         // Update streak
         updateStreakOnWorkoutComplete()
 
@@ -1051,6 +1117,9 @@ class TimerViewModel: ObservableObject {
             playAlarmIfNeeded()
         }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+        if intervals[currentIntervalIndex].type == .cooldown {
+            skippedCooldownThisSession = true
+        }
         let wasRunning = isRunning
         moveToNextInterval()
 
@@ -1072,6 +1141,8 @@ class TimerViewModel: ObservableObject {
         intervalEndTime = nil
         workoutStartDate = nil
         workoutCompletionDate = nil
+        cooldownCompletionNotice = false
+        skippedCooldownThisSession = false
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
     }
 
@@ -1242,7 +1313,8 @@ class TimerViewModel: ObservableObject {
         let entry = WorkoutLogEntry(
             completedAt: completionDate,
             workoutType: selectedWorkoutType,
-            notes: trimmedNotes
+            notes: trimmedNotes,
+            sessionBreakdown: currentSessionBreakdown
         )
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
@@ -1486,6 +1558,10 @@ class TimerViewModel: ObservableObject {
         cooldownEnabled = true
         cooldownDuration = 5 * 60
         alarmEnabled = true
+        halfwayVoicePromptsEnabled = true
+        tenSecondVoicePromptsEnabled = true
+        confirmSkipCooldown = false
+        confirmSkipOtherIntervals = false
         preventSleep = true
         hapticsEnabled = true
         liveActivitiesEnabled = true
@@ -1695,7 +1771,7 @@ class TimerViewModel: ObservableObject {
 
     /// Halfway prompt: HIT gets time remaining + Viking phrase; Recovery gets time remaining only.
     private func speakHalfway() {
-        guard audioMode == .voice, !halfwayPromptFired else { return }
+        guard audioMode == .voice, halfwayVoicePromptsEnabled, !halfwayPromptFired else { return }
         guard intervals.indices.contains(currentIntervalIndex) else { return }
         let interval = intervals[currentIntervalIndex]
         guard interval.duration >= 60 else { return }
@@ -1722,7 +1798,7 @@ class TimerViewModel: ObservableObject {
 
     /// 10-second warning before any interval ends.
     private func speakTenSeconds() {
-        guard audioMode == .voice, !tenSecondPromptFired else { return }
+        guard audioMode == .voice, tenSecondVoicePromptsEnabled, !tenSecondPromptFired else { return }
         guard intervals.indices.contains(currentIntervalIndex) else { return }
         guard intervals[currentIntervalIndex].duration > 10 else { return }
         tenSecondPromptFired = true

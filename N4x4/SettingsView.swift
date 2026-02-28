@@ -88,6 +88,17 @@ struct SettingsView: View {
                     }
                     .font(.footnote)
                     .foregroundColor(.secondary)
+
+                    if viewModel.audioMode == .voice {
+                        Toggle("Halfway voice prompts", isOn: $viewModel.halfwayVoicePromptsEnabled)
+                        Toggle("10-second warning prompts", isOn: $viewModel.tenSecondVoicePromptsEnabled)
+                    }
+                }
+
+                // Workout Controls
+                Section(header: Text("Workout Controls").font(.headline)) {
+                    Toggle("Confirm cooldown skip", isOn: $viewModel.confirmSkipCooldown)
+                    Toggle("Confirm other interval skips", isOn: $viewModel.confirmSkipOtherIntervals)
                 }
 
                 // Display

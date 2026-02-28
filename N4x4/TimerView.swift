@@ -10,6 +10,8 @@ struct TimerView: View {
     @State private var showSettings = false
     @State private var showHistory = false
     @State private var showResetAlert = false
+    @State private var showSkipConfirmation = false
+    @State private var skipConfirmationForCooldown = false
     @Environment(\.scenePhase) private var scenePhase
 
     var ringColor: Color {
@@ -120,7 +122,12 @@ struct TimerView: View {
                         }
 
                         Button(action: {
-                            viewModel.skip()
+                            if viewModel.shouldConfirmSkipCurrentInterval() {
+                                skipConfirmationForCooldown = viewModel.currentIntervalType == .cooldown
+                                showSkipConfirmation = true
+                            } else {
+                                viewModel.skip()
+                            }
                         }) {
                             Image(systemName: "forward.end.alt")
                                 .font(.system(size: 50, weight: .regular, design: .default))
@@ -129,6 +136,16 @@ struct TimerView: View {
                     }
 
                     vo2Section
+
+                    if viewModel.cooldownCompletionNotice {
+                        Text("Cooldown complete ✅")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.teal)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.teal.opacity(0.12), in: Capsule())
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    }
                 }
                 .padding()
             }
@@ -185,6 +202,12 @@ struct TimerView: View {
                     },
                     secondaryButton: .cancel()
                 )
+            }
+            .alert(skipConfirmationForCooldown ? "End workout now?" : "Skip interval now?", isPresented: $showSkipConfirmation) {
+                Button(skipConfirmationForCooldown ? "End Now" : "Skip Now", role: .destructive) {
+                    viewModel.skip()
+                }
+                Button(skipConfirmationForCooldown ? "Continue Cooldown" : "Continue", role: .cancel) {}
             }
             .onChange(of: viewModel.isRunning) { _, _ in
                 updateIdleTimer()
@@ -288,6 +311,20 @@ private struct PostWorkoutSummaryView: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
 
+                Section(header: Text("Session Breakdown")) {
+                    LabeledContent("Total") { Text(formatDuration(viewModel.currentSessionBreakdown.totalDuration)) }
+                    LabeledContent("High Intensity") { Text(formatDuration(viewModel.currentSessionBreakdown.highIntensityDuration)) }
+                    LabeledContent("Recovery") { Text(formatDuration(viewModel.currentSessionBreakdown.recoveryDuration)) }
+                    LabeledContent("Cooldown") {
+                        if viewModel.currentSessionBreakdown.cooldownSkipped {
+                            Text("Skipped")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(formatDuration(viewModel.currentSessionBreakdown.cooldownDuration))
+                        }
+                    }
+                }
+
                 Section(header: Text("Log this session")) {
                     Picker("Type", selection: $viewModel.selectedWorkoutType) {
                         ForEach(WorkoutType.allCases) { type in
@@ -327,6 +364,12 @@ private struct PostWorkoutSummaryView: View {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         return formatter.string(from: viewModel.workoutStartDate ?? Date())
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        if minutes <= 0 { return "0 min" }
+        return "\(minutes) min"
     }
 }
 
@@ -551,6 +594,17 @@ private struct StreakHistoryView: View {
                     Text(workout.completedAt, style: .date).font(.body.weight(.medium))
                 }
             }
+            if let breakdown = workout.sessionBreakdown {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Protocol").font(.caption).foregroundColor(.secondary)
+                    Text("Total: \(formatMinutes(breakdown.totalDuration)) • HI: \(formatMinutes(breakdown.highIntensityDuration)) • Recovery: \(formatMinutes(breakdown.recoveryDuration))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Text("Cooldown: \(breakdown.cooldownSkipped ? "Skipped" : formatMinutes(breakdown.cooldownDuration))")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
             if !workout.notes.isEmpty {
                 VStack(alignment: .leading) {
                     Text("Notes").font(.caption).foregroundColor(.secondary)
@@ -563,6 +617,11 @@ private struct StreakHistoryView: View {
         .cornerRadius(16)
     }
     
+    private func formatMinutes(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        return "\(max(0, minutes)) min"
+    }
+
     private var currentMonthDays: Int {
         Calendar.current.range(of: .day, in: .month, for: Date())?.count ?? 30
     }
