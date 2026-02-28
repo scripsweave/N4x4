@@ -311,8 +311,9 @@ private struct PostWorkoutSummaryView: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
                 }
 
-                Section(header: Text("Session Breakdown")) {
+                Section(header: Text("Session Breakdown (Actual)")) {
                     LabeledContent("Total") { Text(formatDuration(viewModel.currentSessionBreakdown.totalDuration)) }
+                    LabeledContent("Warmup") { Text(formatDuration(viewModel.currentSessionBreakdown.warmupDuration)) }
                     LabeledContent("High Intensity") { Text(formatDuration(viewModel.currentSessionBreakdown.highIntensityDuration)) }
                     LabeledContent("Recovery") { Text(formatDuration(viewModel.currentSessionBreakdown.recoveryDuration)) }
                     LabeledContent("Cooldown") {
@@ -597,7 +598,7 @@ private struct StreakHistoryView: View {
             if let breakdown = workout.sessionBreakdown {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Protocol").font(.caption).foregroundColor(.secondary)
-                    Text("Total: \(formatMinutes(breakdown.totalDuration)) • HI: \(formatMinutes(breakdown.highIntensityDuration)) • Recovery: \(formatMinutes(breakdown.recoveryDuration))")
+                    Text("Total: \(formatMinutes(breakdown.totalDuration)) • Warmup: \(formatMinutes(breakdown.warmupDuration)) • HI: \(formatMinutes(breakdown.highIntensityDuration)) • Recovery: \(formatMinutes(breakdown.recoveryDuration))")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Text("Cooldown: \(breakdown.cooldownSkipped ? "Skipped" : formatMinutes(breakdown.cooldownDuration))")

@@ -54,10 +54,46 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
 
 struct WorkoutSessionBreakdown: Codable, Equatable {
     let totalDuration: TimeInterval
+    let warmupDuration: TimeInterval
     let highIntensityDuration: TimeInterval
     let recoveryDuration: TimeInterval
     let cooldownDuration: TimeInterval
     let cooldownSkipped: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case totalDuration
+        case warmupDuration
+        case highIntensityDuration
+        case recoveryDuration
+        case cooldownDuration
+        case cooldownSkipped
+    }
+
+    init(
+        totalDuration: TimeInterval,
+        warmupDuration: TimeInterval,
+        highIntensityDuration: TimeInterval,
+        recoveryDuration: TimeInterval,
+        cooldownDuration: TimeInterval,
+        cooldownSkipped: Bool
+    ) {
+        self.totalDuration = totalDuration
+        self.warmupDuration = warmupDuration
+        self.highIntensityDuration = highIntensityDuration
+        self.recoveryDuration = recoveryDuration
+        self.cooldownDuration = cooldownDuration
+        self.cooldownSkipped = cooldownSkipped
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        totalDuration = try container.decode(TimeInterval.self, forKey: .totalDuration)
+        warmupDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .warmupDuration) ?? 0
+        highIntensityDuration = try container.decode(TimeInterval.self, forKey: .highIntensityDuration)
+        recoveryDuration = try container.decode(TimeInterval.self, forKey: .recoveryDuration)
+        cooldownDuration = try container.decode(TimeInterval.self, forKey: .cooldownDuration)
+        cooldownSkipped = try container.decode(Bool.self, forKey: .cooldownSkipped)
+    }
 }
 
 struct WorkoutLogEntry: Identifiable, Codable, Equatable {
@@ -759,6 +795,12 @@ class TimerViewModel: ObservableObject {
     // Completion message display control
     @Published var showCompletionMessage: Bool = false
 
+    // Actual elapsed time captured for the current session (supports skips).
+    @Published var elapsedWarmupTime: TimeInterval = 0
+    @Published var elapsedHighIntensityTime: TimeInterval = 0
+    @Published var elapsedRecoveryTime: TimeInterval = 0
+    @Published var elapsedCooldownTime: TimeInterval = 0
+
     var intervals: [Interval] = []
     var timer: AnyCancellable?
     var player: AVAudioPlayer?
@@ -807,19 +849,37 @@ class TimerViewModel: ObservableObject {
     }
 
     var currentSessionBreakdown: WorkoutSessionBreakdown {
-        let highIntensity = intervals.filter { $0.type == .highIntensity }.reduce(0) { $0 + $1.duration }
-        let recovery = intervals.filter { $0.type == .rest }.reduce(0) { $0 + $1.duration }
-        let configuredCooldown = intervals.filter { $0.type == .cooldown }.reduce(0) { $0 + $1.duration }
-        let cooldown = skippedCooldownThisSession ? 0 : configuredCooldown
-        let total = highIntensity + recovery + cooldown + intervals.filter { $0.type == .warmup }.reduce(0) { $0 + $1.duration }
-
+        let total = elapsedWarmupTime + elapsedHighIntensityTime + elapsedRecoveryTime + elapsedCooldownTime
         return WorkoutSessionBreakdown(
             totalDuration: total,
-            highIntensityDuration: highIntensity,
-            recoveryDuration: recovery,
-            cooldownDuration: cooldown,
-            cooldownSkipped: skippedCooldownThisSession && configuredCooldown > 0
+            warmupDuration: elapsedWarmupTime,
+            highIntensityDuration: elapsedHighIntensityTime,
+            recoveryDuration: elapsedRecoveryTime,
+            cooldownDuration: elapsedCooldownTime,
+            cooldownSkipped: skippedCooldownThisSession
         )
+    }
+
+    private func addElapsed(_ seconds: TimeInterval, for type: IntervalType) {
+        let clamped = max(0, seconds)
+        guard clamped > 0 else { return }
+        switch type {
+        case .warmup:
+            elapsedWarmupTime += clamped
+        case .highIntensity:
+            elapsedHighIntensityTime += clamped
+        case .rest:
+            elapsedRecoveryTime += clamped
+        case .cooldown:
+            elapsedCooldownTime += clamped
+        }
+    }
+
+    private func resetElapsedTracking() {
+        elapsedWarmupTime = 0
+        elapsedHighIntensityTime = 0
+        elapsedRecoveryTime = 0
+        elapsedCooldownTime = 0
     }
 
     init() {
@@ -892,6 +952,7 @@ class TimerViewModel: ObservableObject {
         intervals.removeAll()
         highIntensityCount = 0
         restCount = 0
+        resetElapsedTracking()
 
         if warmupDuration > 0 {
             let warmup = Interval(name: "Warm Up", duration: warmupDuration, type: .warmup)
@@ -988,7 +1049,10 @@ class TimerViewModel: ObservableObject {
         guard let endTime = intervalEndTime else { return }
 
         if now < endTime {
-            timeRemaining = max(0, endTime.timeIntervalSince(now))
+            let previousRemaining = timeRemaining
+            let newRemaining = max(0, endTime.timeIntervalSince(now))
+            addElapsed(previousRemaining - newRemaining, for: intervals[currentIntervalIndex].type)
+            timeRemaining = newRemaining
 
             // Halfway voice prompt
             let halfwayPoint = intervals[currentIntervalIndex].duration / 2
@@ -1008,6 +1072,9 @@ class TimerViewModel: ObservableObject {
         var intervalEndCursor = endTime
         var advanced = false
 
+        // Consume remainder of the interval we were in before advancing.
+        addElapsed(timeRemaining, for: intervals[cursor].type)
+
         while now >= intervalEndCursor {
             advanced = true
             if cursor + 1 >= intervals.count {
@@ -1016,7 +1083,17 @@ class TimerViewModel: ObservableObject {
             }
 
             cursor += 1
-            intervalEndCursor = intervalEndCursor.addingTimeInterval(intervals[cursor].duration)
+            let intervalDuration = intervals[cursor].duration
+            intervalEndCursor = intervalEndCursor.addingTimeInterval(intervalDuration)
+
+            if now >= intervalEndCursor {
+                // This whole interval elapsed while app/timer was not reconciling.
+                addElapsed(intervalDuration, for: intervals[cursor].type)
+            } else {
+                // We are partway through this interval.
+                let remaining = max(0, intervalEndCursor.timeIntervalSince(now))
+                addElapsed(intervalDuration - remaining, for: intervals[cursor].type)
+            }
         }
 
         currentIntervalIndex = cursor
@@ -1094,6 +1171,10 @@ class TimerViewModel: ObservableObject {
 
     func pause() {
         if isRunning {
+            // Reconcile once at tap time so elapsed accounting remains accurate between ticks.
+            reconcileTimerState(now: Date(), playAlarm: false)
+            guard isRunning else { return }
+
             SpeechManager.shared.stopSpeaking()
             timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
             stopTimer()
@@ -1109,6 +1190,12 @@ class TimerViewModel: ObservableObject {
 
     func skip() {
         guard intervals.indices.contains(currentIntervalIndex) else { return }
+
+        if isRunning {
+            // Reconcile once at tap time so elapsed accounting remains accurate between ticks.
+            reconcileTimerState(now: Date(), playAlarm: false)
+            guard isRunning, intervals.indices.contains(currentIntervalIndex) else { return }
+        }
 
         // Cancel any in-flight speech for the interval we're leaving so
         // prompts don't bleed into the next interval after a skip.
@@ -1138,6 +1225,7 @@ class TimerViewModel: ObservableObject {
         isRunning = false
         showCompletionMessage = false
         showPostWorkoutSummary = false
+        resetElapsedTracking()
         intervalEndTime = nil
         workoutStartDate = nil
         workoutCompletionDate = nil
