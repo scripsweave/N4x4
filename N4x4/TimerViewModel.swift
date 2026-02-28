@@ -580,7 +580,10 @@ class TimerViewModel: ObservableObject {
 
     func dismissMilestoneCelebration() {
         showMilestoneCelebration = false
-        showWeeklyStreaks = true
+        // Present streaks on the next runloop turn to avoid sheet/fullScreenCover race.
+        DispatchQueue.main.async {
+            self.showWeeklyStreaks = true
+        }
     }
 
     // HealthKit
@@ -1138,9 +1141,6 @@ class TimerViewModel: ObservableObject {
             cooldownCompletionNotice = false
         }
 
-        // Update streak
-        updateStreakOnWorkoutComplete()
-
         if workoutRemindersEnabled {
             scheduleWorkoutReminder()
         }
@@ -1406,6 +1406,10 @@ class TimerViewModel: ObservableObject {
         )
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
+
+        // Update streak only after the completed workout has been added to the log.
+        updateStreakOnWorkoutComplete()
+
         cancelMissedWorkoutFollowUpIfCompletedToday()
         scheduleRecoveryNudge(afterCount: workoutLogEntries.count)
         checkForMilestone()
