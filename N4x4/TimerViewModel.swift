@@ -87,12 +87,12 @@ struct WorkoutSessionBreakdown: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        totalDuration = try container.decode(TimeInterval.self, forKey: .totalDuration)
+        totalDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .totalDuration) ?? 0
         warmupDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .warmupDuration) ?? 0
-        highIntensityDuration = try container.decode(TimeInterval.self, forKey: .highIntensityDuration)
-        recoveryDuration = try container.decode(TimeInterval.self, forKey: .recoveryDuration)
-        cooldownDuration = try container.decode(TimeInterval.self, forKey: .cooldownDuration)
-        cooldownSkipped = try container.decode(Bool.self, forKey: .cooldownSkipped)
+        highIntensityDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .highIntensityDuration) ?? 0
+        recoveryDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .recoveryDuration) ?? 0
+        cooldownDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .cooldownDuration) ?? 0
+        cooldownSkipped = try container.decodeIfPresent(Bool.self, forKey: .cooldownSkipped) ?? false
     }
 }
 
