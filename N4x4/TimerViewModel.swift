@@ -340,7 +340,7 @@ class TimerViewModel: ObservableObject {
     @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.voice.rawValue
     @AppStorage("halfwayVoicePromptsEnabled") var halfwayVoicePromptsEnabled: Bool = true
     @AppStorage("tenSecondVoicePromptsEnabled") var tenSecondVoicePromptsEnabled: Bool = true
-    @AppStorage("confirmSkipCooldown") var confirmSkipCooldown: Bool = false
+    @AppStorage("confirmSkipCooldown") var confirmSkipCooldown: Bool = true
     @AppStorage("confirmSkipOtherIntervals") var confirmSkipOtherIntervals: Bool = false
 
     var audioMode: AudioMode {
@@ -1654,7 +1654,7 @@ class TimerViewModel: ObservableObject {
         alarmEnabled = true
         halfwayVoicePromptsEnabled = true
         tenSecondVoicePromptsEnabled = true
-        confirmSkipCooldown = false
+        confirmSkipCooldown = true
         confirmSkipOtherIntervals = false
         preventSleep = true
         hapticsEnabled = true
