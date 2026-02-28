@@ -317,12 +317,14 @@ private struct PostWorkoutSummaryView: View {
                     LabeledContent("Warmup") { Text(formatDuration(viewModel.currentSessionBreakdown.warmupDuration)) }
                     LabeledContent("High Intensity") { Text(formatDuration(viewModel.currentSessionBreakdown.highIntensityDuration)) }
                     LabeledContent("Recovery") { Text(formatDuration(viewModel.currentSessionBreakdown.recoveryDuration)) }
-                    LabeledContent("Cooldown") {
-                        if viewModel.currentSessionBreakdown.cooldownSkipped {
-                            Text("Skipped")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text(formatDuration(viewModel.currentSessionBreakdown.cooldownDuration))
+                    if viewModel.cooldownEnabled {
+                        LabeledContent("Cooldown") {
+                            if viewModel.currentSessionBreakdown.cooldownSkipped {
+                                Text("Skipped")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(formatDuration(viewModel.currentSessionBreakdown.cooldownDuration))
+                            }
                         }
                     }
                 }
