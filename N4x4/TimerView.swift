@@ -764,24 +764,9 @@ private struct ConfettiView: View {
     }
 
     @State private var animate = false
-    let pieces: [Piece]
+    @State private var pieces: [Piece] = []
+    let width: CGFloat
     let height: CGFloat
-
-    init(width: CGFloat, height: CGFloat) {
-        self.height = height
-        let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .white]
-        pieces = (0..<60).map { _ in
-            Piece(
-                color:      colors.randomElement()!,
-                startX:     CGFloat.random(in: 0...width),
-                endX:       CGFloat.random(in: 0...width),
-                size:       CGSize(width: CGFloat.random(in: 6...14), height: CGFloat.random(in: 8...18)),
-                duration:   Double.random(in: 2.5...4.5),
-                delay:      Double.random(in: 0...1.8),
-                endRotation: Double.random(in: 180...1080)
-            )
-        }
-    }
 
     var body: some View {
         ZStack {
@@ -795,6 +780,24 @@ private struct ConfettiView: View {
                     .animation(.easeIn(duration: p.duration).delay(p.delay), value: animate)
             }
         }
-        .onAppear { animate = true }
+        .onAppear {
+            guard pieces.isEmpty else { return }
+            let colors: [Color] = [.red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .white]
+            pieces = (0..<60).map { _ in
+                Piece(
+                    color:       colors.randomElement()!,
+                    startX:      CGFloat.random(in: 0...width),
+                    endX:        CGFloat.random(in: 0...width),
+                    size:        CGSize(width: CGFloat.random(in: 6...14), height: CGFloat.random(in: 8...18)),
+                    duration:    Double.random(in: 2.5...4.5),
+                    delay:       Double.random(in: 0...1.8),
+                    endRotation: Double.random(in: 180...1080)
+                )
+            }
+            // Defer animate so pieces render at y: -20 before the fall begins.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                animate = true
+            }
+        }
     }
 }
