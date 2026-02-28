@@ -1896,7 +1896,18 @@ class TimerViewModel: ObservableObject {
         guard intervals.indices.contains(currentIntervalIndex) else { return }
         guard intervals[currentIntervalIndex].duration > 10 else { return }
         tenSecondPromptFired = true
-        SpeechManager.shared.speak("10 seconds of interval remaining.")
+        let message: String
+        switch intervals[currentIntervalIndex].type {
+        case .warmup:
+            message = "10 seconds until your first interval."
+        case .highIntensity:
+            message = "10 seconds of high intensity remaining."
+        case .rest:
+            message = "10 seconds of recovery remaining."
+        case .cooldown:
+            message = "10 seconds until workout complete."
+        }
+        SpeechManager.shared.speak(message)
     }
 
     /// Fires a Viking celebration phrase when the workout finishes.
