@@ -1081,6 +1081,8 @@ class TimerViewModel: ObservableObject {
         while now >= intervalEndCursor {
             advanced = true
             if cursor + 1 >= intervals.count {
+                currentIntervalIndex = cursor
+                updateCounts()
                 finishWorkout()
                 return
             }
