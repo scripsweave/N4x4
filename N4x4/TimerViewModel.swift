@@ -580,8 +580,11 @@ class TimerViewModel: ObservableObject {
 
     func dismissMilestoneCelebration() {
         showMilestoneCelebration = false
-        // Present streaks on the next runloop turn to avoid sheet/fullScreenCover race.
-        DispatchQueue.main.async {
+        // Wait for the fullScreenCover dismiss animation (~0.35s) to fully complete
+        // before presenting the sheet. Firing too early causes the sheet to appear
+        // and immediately be torn down as the cover finishes its exit, which triggers
+        // onDisappear and sets showWeeklyStreaks = false after ~1 second.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             self.showWeeklyStreaks = true
         }
     }
