@@ -133,6 +133,7 @@ struct TimerView: View {
                                 .font(.system(size: 50, weight: .regular, design: .default))
                                 .foregroundColor(.primary)
                         }
+                        .disabled(!viewModel.isRunning)
                     }
 
                     vo2Section
