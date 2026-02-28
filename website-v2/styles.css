@@ -436,7 +436,8 @@ body {
 
 .video-wrapper {
     max-width: 800px;
-    margin-bottom: 20px;
+    width: 100%;
+    margin: 0 auto 20px;
 }
 .responsive-video {
     position: relative;
