@@ -1227,7 +1227,6 @@ class TimerViewModel: ObservableObject {
         isRunning = false
         showCompletionMessage = false
         showPostWorkoutSummary = false
-        resetElapsedTracking()
         intervalEndTime = nil
         workoutStartDate = nil
         workoutCompletionDate = nil
