@@ -44,6 +44,7 @@ enum WorkoutPhase: String, Codable, Hashable {
     case warmup
     case highIntensity
     case rest
+    case cooldown
 
     /// Phase colour — hardcoded so it works in both the app and the widget extension
     /// without requiring Assets.xcassets to be added to the extension bundle.
@@ -52,6 +53,7 @@ enum WorkoutPhase: String, Codable, Hashable {
         case .warmup:        return Color(red: 0.227, green: 0.525, blue: 1.0)
         case .highIntensity: return Color(red: 1.0,   green: 0.227, blue: 0.361)
         case .rest:          return Color(red: 0.188, green: 0.820, blue: 0.345)
+        case .cooldown:      return Color(red: 0.0,   green: 0.76,  blue: 0.80)
         }
     }
 
@@ -61,6 +63,7 @@ enum WorkoutPhase: String, Codable, Hashable {
         case .warmup:        return "Warm Up"
         case .highIntensity: return "HIT"
         case .rest:          return "Rest"
+        case .cooldown:      return "Cool"
         }
     }
 
@@ -70,6 +73,7 @@ enum WorkoutPhase: String, Codable, Hashable {
         case .warmup:        return "figure.walk"
         case .highIntensity: return "bolt.fill"
         case .rest:          return "heart.fill"
+        case .cooldown:      return "wind"
         }
     }
 }

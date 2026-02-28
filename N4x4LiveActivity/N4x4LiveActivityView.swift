@@ -175,10 +175,17 @@ struct ExpandedBottomView: View {
     let context: ActivityViewContext<N4x4LiveActivityAttributes>
 
     var body: some View {
-        Text("Target: \(context.state.hrLow)–\(context.state.hrHigh) bpm")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .padding(.bottom, 4)
+        if context.state.hrLow > 0 && context.state.hrHigh > 0 {
+            Text("Target: \(context.state.hrLow)–\(context.state.hrHigh) bpm")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 4)
+        } else {
+            Text("Easy effort")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 4)
+        }
     }
 }
 
@@ -222,9 +229,15 @@ struct LockScreenView: View {
                         .foregroundStyle(.white)
                 }
 
-                Text("\(context.state.hrLow)–\(context.state.hrHigh) bpm")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if context.state.hrLow > 0 && context.state.hrHigh > 0 {
+                    Text("\(context.state.hrLow)–\(context.state.hrHigh) bpm")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Easy effort")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 IntervalDotsView(
                     current: context.state.currentInterval,

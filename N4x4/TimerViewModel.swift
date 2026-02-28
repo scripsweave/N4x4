@@ -267,6 +267,23 @@ class TimerViewModel: ObservableObject {
             reset()
         }
     }
+    @AppStorage("cooldownEnabled") var cooldownEnabled: Bool = true {
+        didSet {
+            guard oldValue != cooldownEnabled else { return }
+            reset()
+        }
+    }
+    @AppStorage("cooldownDuration") var cooldownDuration: TimeInterval = 5 * 60 {
+        didSet {
+            let sanitized = max(60, min(600, cooldownDuration))
+            if sanitized != cooldownDuration {
+                cooldownDuration = sanitized
+                return
+            }
+            guard oldValue != cooldownDuration else { return }
+            reset()
+        }
+    }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
     @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.voice.rawValue
 
@@ -774,6 +791,7 @@ class TimerViewModel: ObservableObject {
             workoutReminderWeekday = Self.defaultWorkoutReminderWeekday()
         }
         userAge = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
+        cooldownDuration = max(60, min(600, cooldownDuration))
 
         // One-time migration from the old alarmEnabled bool to AudioMode.
         // Users who had alarm on (or are brand new) get Voice Prompts as the new default.
@@ -809,7 +827,11 @@ class TimerViewModel: ObservableObject {
         refreshHealthKitAuthorizationState()
 
         if healthKitEnabled {
-            requestHealthKitAuthorizationIfNeeded()
+            if healthKitPermissionState == .granted {
+                fetchVO2MaxSamples()
+            } else {
+                requestHealthKitAuthorizationIfNeeded()
+            }
         }
     }
 
@@ -831,6 +853,11 @@ class TimerViewModel: ObservableObject {
                 let rest = Interval(name: "Recovery", duration: restDuration, type: .rest)
                 intervals.append(rest)
             }
+        }
+
+        if cooldownEnabled {
+            let cooldown = Interval(name: "Cool Down", duration: cooldownDuration, type: .cooldown)
+            intervals.append(cooldown)
         }
 
         currentIntervalIndex = 0
@@ -1456,6 +1483,8 @@ class TimerViewModel: ObservableObject {
         warmupDuration = 5 * 60
         highIntensityDuration = 4 * 60
         restDuration = 3 * 60
+        cooldownEnabled = true
+        cooldownDuration = 5 * 60
         alarmEnabled = true
         preventSleep = true
         hapticsEnabled = true
@@ -1505,6 +1534,7 @@ class TimerViewModel: ObservableObject {
             case .warmup:        return .warmup
             case .highIntensity: return .highIntensity
             case .rest:          return .rest
+            case .cooldown:      return .cooldown
             }
         }()
         let completedHIT = intervals[0...currentIntervalIndex]
@@ -1518,6 +1548,7 @@ class TimerViewModel: ObservableObject {
             switch phase {
             case .highIntensity: return (Int(Double(maxHR) * 0.85), Int(Double(maxHR) * 0.95))
             case .warmup, .rest: return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
+            case .cooldown:      return (0, 0)
             }
         }()
         return N4x4LiveActivityAttributes.ContentState(
@@ -1641,7 +1672,9 @@ class TimerViewModel: ObservableObject {
             let lower = recoveryTargetRange.lowerBound
             let upper = recoveryTargetRange.upperBound
             SpeechManager.shared.speak("Recovery starting now for \(mins) \(minWord). Bring your heart rate down to \(lower) to \(upper) beats per minute.")
-        default:
+        case .cooldown:
+            SpeechManager.shared.speak("Cooldown starting now for \(mins) \(minWord). Keep moving at an easy pace and recover.")
+        case .warmup:
             break
         }
     }
@@ -1680,8 +1713,10 @@ class TimerViewModel: ObservableObject {
             halfwayPromptFired = true
             let timeStr = formatTimeRemaining(timeRemaining)
             SpeechManager.shared.speak("Halfway through warmup. \(timeStr) remaining.")
-        default:
-            break
+        case .cooldown:
+            halfwayPromptFired = true
+            let timeStr = formatTimeRemaining(timeRemaining)
+            SpeechManager.shared.speak("Halfway through cooldown. \(timeStr) remaining.")
         }
     }
 
@@ -1929,6 +1964,14 @@ class TimerViewModel: ObservableObject {
         }
 
         refreshHealthKitAuthorizationState()
+
+        if healthKitEnabled {
+            if healthKitPermissionState == .granted {
+                fetchVO2MaxSamples()
+            } else {
+                requestHealthKitAuthorizationIfNeeded()
+            }
+        }
     }
 
     func openAppSettings() {

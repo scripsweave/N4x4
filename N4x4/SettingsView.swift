@@ -55,6 +55,16 @@ struct SettingsView: View {
                         Text("Recovery Duration: \(Int(viewModel.restDuration / 60)) min")
                             .font(.body)
                     }
+
+                    Toggle("Enable Cooldown", isOn: $viewModel.cooldownEnabled)
+                        .font(.body)
+
+                    if viewModel.cooldownEnabled {
+                        Stepper(value: $viewModel.cooldownDuration, in: 60...600, step: 60) {
+                            Text("Cooldown Duration: \(Int(viewModel.cooldownDuration / 60)) min")
+                                .font(.body)
+                        }
+                    }
                 }
 
                 // Audio Alerts

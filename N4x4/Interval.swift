@@ -6,6 +6,7 @@ enum IntervalType: Equatable {
     case warmup
     case highIntensity
     case rest
+    case cooldown
 }
 
 struct Interval {

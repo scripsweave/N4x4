@@ -24,6 +24,8 @@ struct TimerView: View {
             return .red
         case .rest:
             return .green
+        case .cooldown:
+            return .teal
         }
     }
 
@@ -40,7 +42,7 @@ struct TimerView: View {
         case .rest:
             let range = viewModel.recoveryTargetRange
             return "💚 Recovery Zone: \(range.lowerBound)-\(range.upperBound) BPM"
-        case .warmup:
+        case .warmup, .cooldown:
             return nil
         }
     }
@@ -60,6 +62,8 @@ struct TimerView: View {
             return "\(interval.name) (\(viewModel.highIntensityCount)/\(totalIntervals))"
         case .rest:
             return "\(interval.name) (\(viewModel.restCount)/\(totalIntervals))"
+        case .cooldown:
+            return interval.name
         }
     }
 
