@@ -922,6 +922,15 @@ class TimerViewModel: ObservableObject {
         setupIntervals()
         loadWorkoutLogEntries()
 
+        // End any Live Activities that were left running from a previous session
+        // (e.g. after a force-quit). Without this they persist on the Dynamic Island
+        // and can even survive a device reboot within the 8-hour ActivityKit window.
+        Task {
+            for activity in Activity<N4x4LiveActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+
         // Sync the stored streak value immediately on launch (S1).
         // Previously currentStreak was only ever increased, so a missed-week streak
         // would never be reflected until the user started a new run of workouts.
@@ -1763,14 +1772,14 @@ class TimerViewModel: ObservableObject {
 
     func endLiveActivity() {
         guard let activity = liveActivity else { return }
+        liveActivity = nil
         let finalState = liveActivityContentState(isRunning: false)
         Task {
             await activity.end(
-                .init(state: finalState, staleDate: nil),
-                dismissalPolicy: .after(Date.now.addingTimeInterval(5))
+                .init(state: finalState, staleDate: Date.now.addingTimeInterval(10)),
+                dismissalPolicy: .immediate
             )
         }
-        liveActivity = nil
     }
 
     private func triggerIntervalHaptic() {
