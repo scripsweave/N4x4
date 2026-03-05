@@ -351,6 +351,8 @@ class TimerViewModel: ObservableObject {
     @AppStorage("preventSleep") var preventSleep: Bool = true
     @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true
     @AppStorage("liveActivitiesEnabled") var liveActivitiesEnabled: Bool = true
+    @AppStorage("useCustomMaxHR") var useCustomMaxHR: Bool = false
+    @AppStorage("customMaxHR") var customMaxHR: Int = 0
     @AppStorage("userAge") var userAge: Int = 40 {
         didSet {
             let sanitized = max(Self.minimumSupportedAge, min(Self.maximumSupportedAge, userAge))
@@ -824,7 +826,13 @@ class TimerViewModel: ObservableObject {
     private var tenSecondPromptFired = false
 
     var maximumHeartRate: Int {
-        max(1, 220 - userAge)
+        if useCustomMaxHR && customMaxHR > 0 {
+            return customMaxHR
+        }
+        if userAge >= 40 {
+            return max(1, Int((208.0 - 0.7 * Double(userAge)).rounded()))
+        }
+        return max(1, 220 - userAge)
     }
 
     var highIntensityTargetRange: ClosedRange<Int> {
@@ -1724,7 +1732,7 @@ class TimerViewModel: ObservableObject {
         let endTime = isRunning
             ? (intervalEndTime ?? Date().addingTimeInterval(timeRemaining))
             : Date().addingTimeInterval(timeRemaining)
-        let maxHR = 220 - userAge
+        let maxHR = maximumHeartRate
         let (hrLow, hrHigh): (Int, Int) = {
             switch phase {
             case .highIntensity: return (Int(Double(maxHR) * 0.85), Int(Double(maxHR) * 0.95))
@@ -2043,18 +2051,17 @@ class TimerViewModel: ObservableObject {
         let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
-            DispatchQueue.main.async {
-                self.healthAuthorizationGranted = success
-                self.refreshHealthKitAuthorizationState()
-                self.healthKitEnabled = success
-            }
-
             if let error = error {
                 print("HealthKit authorization error: \(error.localizedDescription)")
             }
 
-            if success {
-                self.fetchVO2MaxSamples()
+            DispatchQueue.main.async {
+                self.healthAuthorizationGranted = success
+                self.refreshHealthKitAuthorizationState()
+                self.healthKitEnabled = success
+                if success {
+                    self.fetchVO2MaxSamples()
+                }
             }
         }
     }
