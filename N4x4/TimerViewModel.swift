@@ -2034,16 +2034,18 @@ class TimerViewModel: ObservableObject {
 
     // MARK: - HealthKit
 
-    func requestHealthKitAuthorizationIfNeeded() {
+    func requestHealthKitAuthorizationIfNeeded(completion: (() -> Void)? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else {
             healthKitEnabled = false
             healthAuthorizationGranted = false
             healthKitPermissionState = .unavailable
+            completion?()
             return
         }
 
         guard let vo2Type = HKObjectType.quantityType(forIdentifier: .vo2Max) else {
             healthKitPermissionState = .unavailable
+            completion?()
             return
         }
 
@@ -2062,6 +2064,7 @@ class TimerViewModel: ObservableObject {
                 if success {
                     self.fetchVO2MaxSamples()
                 }
+                completion?()
             }
         }
     }

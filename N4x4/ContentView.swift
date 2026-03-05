@@ -76,7 +76,6 @@ private struct OnboardingView: View {
     @ObservedObject var timerViewModel: TimerViewModel
     @StateObject private var flow = OnboardingFlowViewModel()
     @State private var isRequestingNotificationPermission = false
-    @State private var customHRText: String = ""
     @Environment(\.dismiss) private var dismiss
 
     let onComplete: () -> Void
@@ -233,29 +232,21 @@ private struct OnboardingView: View {
             .colorMultiply(.white)
             .onChange(of: timerViewModel.useCustomMaxHR) { _, isCustom in
                 if isCustom && timerViewModel.customMaxHR == 0 {
-                    customHRText = "\(timerViewModel.maximumHeartRate)"
+                    timerViewModel.customMaxHR = timerViewModel.maximumHeartRate
                 }
             }
 
             VStack(spacing: 12) {
                 if timerViewModel.useCustomMaxHR {
-                    HStack {
-                        TextField("BPM", text: $customHRText)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.center)
-                            .font(.system(size: 48, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .frame(width: 120)
-                            .onChange(of: customHRText) { _, text in
-                                if let value = Int(text) {
-                                    timerViewModel.customMaxHR = min(220, max(100, value))
-                                }
-                            }
-                        Text("BPM")
-                            .font(.title2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.7))
+                    Picker("Max HR", selection: $timerViewModel.customMaxHR) {
+                        ForEach(100...220, id: \.self) { bpm in
+                            Text("\(bpm)").tag(bpm)
+                        }
                     }
+                    .pickerStyle(.wheel)
                     .frame(height: 120)
+                    .clipped()
+                    .colorScheme(.dark)
                 } else {
                     Picker("Age", selection: $timerViewModel.userAge) {
                         ForEach(TimerViewModel.minimumSupportedAge...TimerViewModel.maximumSupportedAge, id: \.self) { age in
@@ -265,6 +256,7 @@ private struct OnboardingView: View {
                     .pickerStyle(.wheel)
                     .frame(height: 120)
                     .clipped()
+                    .colorScheme(.dark)
                     Text(timerViewModel.userAge >= 40
                          ? "Using Tanaka formula (208 − 0.7 × age)"
                          : "Using 220 − age")
@@ -278,9 +270,9 @@ private struct OnboardingView: View {
             }
             .padding(.top, 8)
             .onAppear {
-                customHRText = timerViewModel.customMaxHR > 0
-                    ? "\(timerViewModel.customMaxHR)"
-                    : "\(timerViewModel.maximumHeartRate)"
+                if timerViewModel.useCustomMaxHR && timerViewModel.customMaxHR == 0 {
+                    timerViewModel.customMaxHR = timerViewModel.maximumHeartRate
+                }
             }
 
             VStack(spacing: 12) {
@@ -893,8 +885,9 @@ private struct OnboardingView: View {
             return
         }
 
-        timerViewModel.requestHealthKitAuthorizationIfNeeded()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        // Advance only after the system dialog has been shown and answered,
+        // so fetchVO2MaxSamples() has valid auth before it runs.
+        timerViewModel.requestHealthKitAuthorizationIfNeeded {
             flow.next()
         }
     }

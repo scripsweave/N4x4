@@ -285,6 +285,9 @@ struct SettingsView: View {
             .onAppear {
                 viewModel.refreshNotificationPermissionState()
                 viewModel.refreshHealthKitAuthorizationState()
+                if viewModel.healthKitEnabled {
+                    viewModel.fetchVO2MaxSamples()
+                }
             }
             .sheet(isPresented: $showTips) {
                 TipsView()

@@ -4,8 +4,6 @@ struct HeartRateGuidanceCard: View {
     @ObservedObject var viewModel: TimerViewModel
     var showInstructions: Bool = true
 
-    @State private var customHRText: String = ""
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Heart Rate Guide", systemImage: "heart.text.square")
@@ -18,26 +16,14 @@ struct HeartRateGuidanceCard: View {
             .pickerStyle(.segmented)
             .onChange(of: viewModel.useCustomMaxHR) { _, isCustom in
                 if isCustom && viewModel.customMaxHR == 0 {
-                    customHRText = "\(viewModel.maximumHeartRate)"
+                    viewModel.customMaxHR = viewModel.maximumHeartRate
                 }
             }
 
             if viewModel.useCustomMaxHR {
-                HStack {
-                    Text("My max heart rate:")
+                Stepper(value: $viewModel.customMaxHR, in: 100...220) {
+                    Text("My max heart rate: \(viewModel.customMaxHR) BPM")
                         .font(.subheadline)
-                    TextField("BPM", text: $customHRText)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 60)
-                        .onChange(of: customHRText) { _, text in
-                            if let value = Int(text) {
-                                viewModel.customMaxHR = min(220, max(100, value))
-                            }
-                        }
-                    Text("BPM")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
                 }
             } else {
                 Stepper(value: $viewModel.userAge,
@@ -70,9 +56,9 @@ struct HeartRateGuidanceCard: View {
         .background(Color(UIColor.secondarySystemBackground))
         .cornerRadius(14)
         .onAppear {
-            customHRText = viewModel.customMaxHR > 0
-                ? "\(viewModel.customMaxHR)"
-                : "\(viewModel.maximumHeartRate)"
+            if viewModel.useCustomMaxHR && viewModel.customMaxHR == 0 {
+                viewModel.customMaxHR = viewModel.maximumHeartRate
+            }
         }
     }
 }
