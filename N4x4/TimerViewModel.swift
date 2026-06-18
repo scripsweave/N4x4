@@ -577,6 +577,7 @@ class TimerViewModel: ObservableObject {
     /// for haptics; the shared logic keeps the two channels consistent.
     private let zoneVoiceEngine = ZoneFeedbackEngine()
     var isWatchAppInstalled: Bool { phoneSessionManager.isWatchAppInstalled }
+    private var watchBroadcastCancellable: AnyCancellable?
 
     private static let milestones = [1, 5, 10, 25, 50, 100]
 
@@ -977,6 +978,21 @@ class TimerViewModel: ObservableObject {
         phoneSessionManager.timerViewModel = self
         phoneSessionManager.activate()
 
+        // Broadcast to the Watch reactively whenever the state it renders
+        // changes. Observing these published properties covers every timer
+        // transition (intervalEndTime always changes alongside isRunning or the
+        // interval index). Debounced so one action sends a single update, and
+        // it removes the need to hand-place broadcast calls at every mutation.
+        let watchTriggers: [AnyPublisher<Void, Never>] = [
+            $isRunning.map { _ in () }.eraseToAnyPublisher(),
+            $currentIntervalIndex.map { _ in () }.eraseToAnyPublisher(),
+            $highIntensityCount.map { _ in () }.eraseToAnyPublisher(),
+            $showPostWorkoutSummary.map { _ in () }.eraseToAnyPublisher(),
+        ]
+        watchBroadcastCancellable = Publishers.MergeMany(watchTriggers)
+            .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
+            .sink { [weak self] in self?.broadcastStateToWatch() }
+
         // End any Live Activities that were left running from a previous session
         // (e.g. after a force-quit). Without this they persist on the Dynamic Island
         // and can even survive a device reboot within the 8-hour ActivityKit window.
@@ -1092,8 +1108,6 @@ class TimerViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.tick()
             }
-
-        broadcastStateToWatch()
     }
 
     func stopTimer() {
@@ -1181,7 +1195,6 @@ class TimerViewModel: ObservableObject {
             }
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             scheduleNextIntervalNotification()
-            broadcastStateToWatch()
         }
     }
 
@@ -1222,8 +1235,6 @@ class TimerViewModel: ObservableObject {
             saveCompletedWorkoutToHealthKit()
             fetchVO2MaxSamples()
         }
-
-        broadcastStateToWatch()
     }
 
     func moveToNextInterval() {
@@ -1240,7 +1251,6 @@ class TimerViewModel: ObservableObject {
                 scheduleNextIntervalNotification()
                 updateLiveActivity(isRunning: true)
             }
-            broadcastStateToWatch()
         } else {
             finishWorkout()
         }
@@ -1263,7 +1273,6 @@ class TimerViewModel: ObservableObject {
             startTimer()
             updateLiveActivity(isRunning: true)
         }
-        broadcastStateToWatch()
     }
 
     func skip() {
@@ -1291,7 +1300,6 @@ class TimerViewModel: ObservableObject {
         if wasRunning, !showPostWorkoutSummary {
             startTimer()
         }
-        broadcastStateToWatch()
     }
 
     func reset() {
@@ -1312,7 +1320,6 @@ class TimerViewModel: ObservableObject {
         currentHeartRate = nil
         zoneVoiceEngine.reset()
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
-        broadcastStateToWatch()
     }
 
     func scheduleNextIntervalNotification() {

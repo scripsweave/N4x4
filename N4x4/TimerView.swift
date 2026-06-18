@@ -80,23 +80,14 @@ struct TimerView: View {
     /// (the number is always shown; only the colour-coding is suppressed).
     private func phoneHRColor(_ bpm: Double) -> Color {
         guard viewModel.zoneVisualAlertsEnabled else { return .primary }
-        switch viewModel.currentZoneStatus(for: bpm) {
-        case .below:    return .yellow
-        case .above:    return .red
-        case .inZone:   return .green
-        case .noTarget: return .primary
-        }
+        return viewModel.currentZoneStatus(for: bpm).tint ?? .primary
     }
 
     /// Short coaching hint shown under the HR readout when out of zone.
     private func zoneHint(for bpm: Double) -> String? {
         guard viewModel.zoneVisualAlertsEnabled, viewModel.isRunning else { return nil }
-        switch (viewModel.currentWorkoutPhase, viewModel.currentZoneStatus(for: bpm)) {
-        case (.highIntensity, .below): return "Push harder"
-        case (.highIntensity, .above): return "Ease off"
-        case (.rest, .above):          return "Bring it down"
-        default:                       return nil
-        }
+        return ZoneFeedbackCopy.hint(phase: viewModel.currentWorkoutPhase,
+                                     status: viewModel.currentZoneStatus(for: bpm))
     }
 
     var body: some View {

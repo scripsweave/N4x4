@@ -12,6 +12,7 @@ import WatchKit
 struct WatchTimerState: Equatable {
     var isRunning: Bool
     var intervalEndTime: Date
+    var reportedTimeRemaining: Double
     var intervalName: String
     var intervalDuration: Double
     var phase: WorkoutPhase
@@ -23,9 +24,13 @@ struct WatchTimerState: Equatable {
     var currentIntervalIndex: Int
     var zoneHapticEnabled: Bool
 
-    /// Computed live from the absolute end-time. No per-second messages needed.
+    /// While running, derive the countdown live from the absolute end-time so no
+    /// per-second messages are needed. While paused, the end-time is a stale
+    /// future date, so use the phone's last reported value — otherwise the Watch
+    /// would keep counting down past a pause.
     var timeRemaining: TimeInterval {
-        max(0, intervalEndTime.timeIntervalSinceNow)
+        guard isRunning else { return max(0, reportedTimeRemaining) }
+        return max(0, intervalEndTime.timeIntervalSinceNow)
     }
 
     var progressValue: CGFloat {
@@ -41,6 +46,7 @@ struct WatchTimerState: Equatable {
     static let idle = WatchTimerState(
         isRunning: false,
         intervalEndTime: Date(),
+        reportedTimeRemaining: 0,
         intervalName: "Ready",
         intervalDuration: 0,
         phase: .warmup,
@@ -163,6 +169,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             isRunning:            p[WatchMessageKey.isRunning]            as? Bool   ?? false,
             intervalEndTime:      Date(timeIntervalSince1970:
                                     p[WatchMessageKey.intervalEndTime]    as? Double ?? 0),
+            reportedTimeRemaining: p[WatchMessageKey.timeRemaining]       as? Double ?? 0,
             intervalName:         p[WatchMessageKey.intervalName]         as? String ?? "",
             intervalDuration:     p[WatchMessageKey.intervalDuration]     as? Double ?? 0,
             phase:                WorkoutPhase(rawValue:

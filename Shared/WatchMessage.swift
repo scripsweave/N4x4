@@ -20,6 +20,7 @@ enum WatchMessageKey {
     static let isRunning            = "isRunning"             // Bool
     static let currentIntervalIndex = "currentIntervalIndex" // Int
     static let intervalEndTime      = "intervalEndTime"      // Double (timeIntervalSince1970)
+    static let timeRemaining        = "timeRemaining"       // Double (seconds) — authoritative; used when paused
     static let intervalName         = "intervalName"        // String
     static let intervalDuration     = "intervalDuration"    // Double (seconds)
     static let phase                = "phase"               // WorkoutPhase rawValue String

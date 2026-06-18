@@ -51,6 +51,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.isRunning:              vm.isRunning,
             WatchMessageKey.currentIntervalIndex:   vm.currentIntervalIndex,
             WatchMessageKey.intervalEndTime:        endTime,
+            WatchMessageKey.timeRemaining:          vm.timeRemaining,
             WatchMessageKey.intervalName:           interval?.name ?? "",
             WatchMessageKey.intervalDuration:       interval?.duration ?? 0.0,
             WatchMessageKey.phase:                  vm.currentWorkoutPhase.rawValue,

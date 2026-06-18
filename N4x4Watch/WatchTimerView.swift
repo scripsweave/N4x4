@@ -143,23 +143,13 @@ struct WatchTimerView: View {
 
     /// Heart-rate colour: green = in target, yellow = below, red = above.
     private var hrColor: Color {
-        switch sessionManager.zoneStatus(bpm: workoutManager.heartRate) {
-        case .below:    return .yellow
-        case .above:    return .red
-        case .inZone:   return .green
-        case .noTarget: return .white
-        }
+        sessionManager.zoneStatus(bpm: workoutManager.heartRate).tint ?? .white
     }
 
     /// Short coaching hint shown under the ring when out of zone.
     private var zoneHint: String? {
-        guard workoutManager.heartRate > 0 else { return nil }
-        switch (state.phase, sessionManager.zoneStatus(bpm: workoutManager.heartRate)) {
-        case (.highIntensity, .below): return "Push harder"
-        case (.highIntensity, .above): return "Ease off"
-        case (.rest,          .above): return "Bring it down"
-        default:                       return nil
-        }
+        ZoneFeedbackCopy.hint(phase: state.phase,
+                              status: sessionManager.zoneStatus(bpm: workoutManager.heartRate))
     }
 
     private func timeString(_ t: TimeInterval) -> String {

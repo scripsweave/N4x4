@@ -38,6 +38,7 @@ Work and recovery intervals get alerts; warm-up and cool-down stay silent.
 |---|---|
 | `Shared/WatchMessage.swift` | **N4x4** + **N4x4Watch** |
 | `Shared/ZoneFeedback.swift` | **N4x4** + **N4x4Watch** |
+| `Shared/ZoneFeedbackStyle.swift` | **N4x4** + **N4x4Watch** |
 | `N4x4/PhoneSessionManager.swift` | **N4x4** only |
 | `N4x4Watch/N4x4WatchApp.swift` | **N4x4Watch** only (replace any Xcode-generated `@main` file) |
 | `N4x4Watch/WatchSessionManager.swift` | **N4x4Watch** only |
