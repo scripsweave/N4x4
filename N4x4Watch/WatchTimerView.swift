@@ -1,0 +1,168 @@
+// WatchTimerView.swift
+// Main Watch UI: phase label, progress ring, countdown, heart rate, and
+// start/pause/skip controls. Heart rate is shown prominently and colour-coded
+// to the live target zone; out-of-zone haptics are driven from here as each
+// reading arrives.
+
+import SwiftUI
+import WatchKit
+
+struct WatchTimerView: View {
+
+    @EnvironmentObject var sessionManager: WatchSessionManager
+    @EnvironmentObject var workoutManager: WorkoutManager
+
+    // Local 1-second tick drives the countdown re-render.
+    @State private var tick = Date()
+    @State private var lastIntervalIndex = 0
+    @Environment(\.scenePhase) private var scenePhase
+
+    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private var state: WatchTimerState { sessionManager.timerState }
+
+    var body: some View {
+        VStack(spacing: 6) {
+
+            // ── Phase label ─────────────────────────────────
+            Text(intervalLabel)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(state.phase.color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            // ── Progress ring + countdown + HR ──────────────
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.25), lineWidth: 6)
+
+                Circle()
+                    .trim(from: 0, to: state.progressValue)
+                    .stroke(style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .foregroundColor(state.phase.color)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 1), value: state.timeRemaining)
+
+                VStack(spacing: 2) {
+                    Text(timeString(state.timeRemaining))
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+
+                    if workoutManager.heartRate > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 10))
+                            Text("\(Int(workoutManager.heartRate))")
+                                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundColor(hrColor)
+                    }
+                }
+            }
+            .frame(width: 130, height: 130)
+
+            // ── Out-of-zone hint ────────────────────────────
+            if let hint = zoneHint {
+                Text(hint)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(hrColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+
+            // ── Controls ────────────────────────────────────
+            HStack(spacing: 16) {
+                Button {
+                    sessionManager.sendStartPause()
+                } label: {
+                    Image(systemName: state.isRunning ? "pause.fill" : "play.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 52, height: 44)
+                        .background(Color.gray.opacity(0.3),
+                                    in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    sessionManager.sendSkip()
+                } label: {
+                    Image(systemName: "forward.end.alt.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 52, height: 44)
+                        .background(Color.gray.opacity(0.3),
+                                    in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .onReceive(ticker) { tick = $0 }   // re-renders the countdown
+
+        // Drive the zone-feedback engine off each fresh HR reading.
+        .onChange(of: workoutManager.heartRate) { _, bpm in
+            sessionManager.evaluateZoneHaptic(bpm: bpm)
+        }
+
+        // Start/stop the HKWorkoutSession alongside the timer.
+        .onChange(of: state.isRunning) { _, isRunning in
+            if isRunning, !workoutManager.isSessionActive {
+                workoutManager.startWorkout()
+            } else if !isRunning, workoutManager.isSessionActive, state.workoutComplete {
+                workoutManager.stopWorkout()
+            }
+        }
+
+        // Crown-click haptic on interval change.
+        .onChange(of: state.currentIntervalIndex) { _, newIndex in
+            guard newIndex != lastIntervalIndex else { return }
+            lastIntervalIndex = newIndex
+            WKInterfaceDevice.current().play(.notification)
+        }
+
+        // Success haptic on completion.
+        .onChange(of: state.workoutComplete) { _, complete in
+            if complete { WKInterfaceDevice.current().play(.success) }
+        }
+
+        // Re-sync when the Watch app returns to the foreground.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { sessionManager.requestStateFromPhone() }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private var intervalLabel: String {
+        switch state.phase {
+        case .highIntensity: return "Work \(state.highIntensityCount)/\(state.totalIntervals)"
+        case .rest:          return "Recovery"
+        case .warmup:        return "Warm Up"
+        case .cooldown:      return "Cool Down"
+        }
+    }
+
+    /// Heart-rate colour: green = in target, yellow = below, red = above.
+    private var hrColor: Color {
+        switch sessionManager.zoneStatus(bpm: workoutManager.heartRate) {
+        case .below:    return .yellow
+        case .above:    return .red
+        case .inZone:   return .green
+        case .noTarget: return .white
+        }
+    }
+
+    /// Short coaching hint shown under the ring when out of zone.
+    private var zoneHint: String? {
+        guard workoutManager.heartRate > 0 else { return nil }
+        switch (state.phase, sessionManager.zoneStatus(bpm: workoutManager.heartRate)) {
+        case (.highIntensity, .below): return "Push harder"
+        case (.highIntensity, .above): return "Ease off"
+        case (.rest,          .above): return "Bring it down"
+        default:                       return nil
+        }
+    }
+
+    private func timeString(_ t: TimeInterval) -> String {
+        String(format: "%02d:%02d", Int(t) / 60 % 60, Int(t) % 60)
+    }
+}

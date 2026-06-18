@@ -2,12 +2,17 @@
 // Shared between the main app target and the N4x4LiveActivity widget extension.
 // Both targets must include this file (set via Xcode target membership).
 
+#if canImport(ActivityKit)
 import ActivityKit
+#endif
 import Foundation
 import SwiftUI
 
 // MARK: - ActivityAttributes
+// ActivityKit does not exist on watchOS. The Watch target shares this file only
+// for the WorkoutPhase enum below, so the attributes type is compiled out there.
 
+#if canImport(ActivityKit)
 struct N4x4LiveActivityAttributes: ActivityAttributes {
 
     // Dynamic state — updated on every interval change and pause/resume.
@@ -36,6 +41,7 @@ struct N4x4LiveActivityAttributes: ActivityAttributes {
     // Static — set once when the activity starts, never changes mid-workout.
     var workoutStartTime: Date
 }
+#endif
 
 // MARK: - WorkoutPhase
 

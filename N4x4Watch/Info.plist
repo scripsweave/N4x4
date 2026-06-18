@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>N4x4 reads your heart rate during workouts to show your training zones in real time and nudge you when you drift out of zone.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>N4x4 saves your interval training session to Apple Health.</string>
+	<key>WKApplication</key>
+	<true/>
+	<key>WKWatchOnly</key>
+	<false/>
+</dict>
+</plist>

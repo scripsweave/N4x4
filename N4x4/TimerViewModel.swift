@@ -351,6 +351,17 @@ class TimerViewModel: ObservableObject {
     @AppStorage("preventSleep") var preventSleep: Bool = true
     @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true
     @AppStorage("liveActivitiesEnabled") var liveActivitiesEnabled: Bool = true
+
+    // Heart-rate zone alerts (require a paired Apple Watch streaming HR).
+    // Visual = colour-code the HR readout; Haptic = wrist taps on the Watch;
+    // Voice = spoken cue on the phone. Any combination. Rate-limited to one
+    // nudge per minute, with a settling window after each interval starts.
+    @AppStorage("zoneVisualAlertsEnabled") var zoneVisualAlertsEnabled: Bool = true
+    @AppStorage("zoneHapticAlertsEnabled") var zoneHapticAlertsEnabled: Bool = true {
+        didSet { broadcastStateToWatch() }
+    }
+    @AppStorage("zoneVoiceAlertsEnabled") var zoneVoiceAlertsEnabled: Bool = false
+
     @AppStorage("useCustomMaxHR") var useCustomMaxHR: Bool = false
     @AppStorage("customMaxHR") var customMaxHR: Int = 0
     @AppStorage("userAge") var userAge: Int = 40 {
@@ -556,6 +567,16 @@ class TimerViewModel: ObservableObject {
     @Published var showWeeklyStreaks: Bool = false
     @Published var showMilestoneCelebration: Bool = false
     @Published var pendingMilestoneCount: Int = 0
+
+    // MARK: - Apple Watch
+    let phoneSessionManager = PhoneSessionManager()
+    /// Live heart rate streamed from a paired Apple Watch during a workout.
+    /// nil when no Watch is streaming (the iPhone has no HR sensor of its own).
+    @Published var currentHeartRate: Double? = nil
+    /// Phone-side engine for spoken zone nudges. The Watch runs its own engine
+    /// for haptics; the shared logic keeps the two channels consistent.
+    private let zoneVoiceEngine = ZoneFeedbackEngine()
+    var isWatchAppInstalled: Bool { phoneSessionManager.isWatchAppInstalled }
 
     private static let milestones = [1, 5, 10, 25, 50, 100]
 
@@ -852,6 +873,27 @@ class TimerViewModel: ObservableObject {
         return intervals[currentIntervalIndex].type
     }
 
+    /// Current phase mapped to the shared WorkoutPhase type used in Watch
+    /// messages and the zone-feedback engine.
+    var currentWorkoutPhase: WorkoutPhase {
+        switch currentIntervalType {
+        case .highIntensity: return .highIntensity
+        case .rest:          return .rest
+        case .cooldown:      return .cooldown
+        default:             return .warmup
+        }
+    }
+
+    /// Target HR range for the current phase, or nil for warmup/cooldown
+    /// (phases that carry no zone target and therefore never trigger an alert).
+    var currentPhaseHRRange: ClosedRange<Int>? {
+        switch currentIntervalType {
+        case .highIntensity: return highIntensityTargetRange
+        case .rest:          return recoveryTargetRange
+        default:             return nil
+        }
+    }
+
     func shouldConfirmSkipCurrentInterval() -> Bool {
         guard let type = currentIntervalType else { return false }
         switch type {
@@ -929,6 +971,11 @@ class TimerViewModel: ObservableObject {
 
         setupIntervals()
         loadWorkoutLogEntries()
+
+        // Apple Watch connectivity: the phone is the source of truth and
+        // broadcasts timer state; the Watch sends commands and streamed HR back.
+        phoneSessionManager.timerViewModel = self
+        phoneSessionManager.activate()
 
         // End any Live Activities that were left running from a previous session
         // (e.g. after a force-quit). Without this they persist on the Dynamic Island
@@ -1045,6 +1092,8 @@ class TimerViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.tick()
             }
+
+        broadcastStateToWatch()
     }
 
     func stopTimer() {
@@ -1132,6 +1181,7 @@ class TimerViewModel: ObservableObject {
             }
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             scheduleNextIntervalNotification()
+            broadcastStateToWatch()
         }
     }
 
@@ -1139,6 +1189,8 @@ class TimerViewModel: ObservableObject {
         triggerCompletionHaptic()
         endLiveActivity()
         stopTimer()
+        currentHeartRate = nil
+        zoneVoiceEngine.reset()
         workoutCompletionDate = Date()
         speakWorkoutComplete()
         intervalEndTime = nil
@@ -1170,6 +1222,8 @@ class TimerViewModel: ObservableObject {
             saveCompletedWorkoutToHealthKit()
             fetchVO2MaxSamples()
         }
+
+        broadcastStateToWatch()
     }
 
     func moveToNextInterval() {
@@ -1186,6 +1240,7 @@ class TimerViewModel: ObservableObject {
                 scheduleNextIntervalNotification()
                 updateLiveActivity(isRunning: true)
             }
+            broadcastStateToWatch()
         } else {
             finishWorkout()
         }
@@ -1208,6 +1263,7 @@ class TimerViewModel: ObservableObject {
             startTimer()
             updateLiveActivity(isRunning: true)
         }
+        broadcastStateToWatch()
     }
 
     func skip() {
@@ -1235,6 +1291,7 @@ class TimerViewModel: ObservableObject {
         if wasRunning, !showPostWorkoutSummary {
             startTimer()
         }
+        broadcastStateToWatch()
     }
 
     func reset() {
@@ -1252,7 +1309,10 @@ class TimerViewModel: ObservableObject {
         workoutCompletionDate = nil
         cooldownCompletionNotice = false
         skippedCooldownThisSession = false
+        currentHeartRate = nil
+        zoneVoiceEngine.reset()
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+        broadcastStateToWatch()
     }
 
     func scheduleNextIntervalNotification() {
@@ -1700,6 +1760,67 @@ class TimerViewModel: ObservableObject {
         vo2DataPoints = []
         cancelWorkoutReminder()
         cancelMissedWorkoutFollowUpReminder()
+
+        zoneVisualAlertsEnabled = true
+        zoneHapticAlertsEnabled = true
+        zoneVoiceAlertsEnabled = false
+        currentHeartRate = nil
+        zoneVoiceEngine.reset()
+    }
+
+    // MARK: - Apple Watch & Heart-Rate Zone Feedback
+
+    /// Push the current timer state to a paired Watch. No-op when no Watch app
+    /// is installed/reachable, so it's safe to call from every action site.
+    func broadcastStateToWatch() {
+        phoneSessionManager.sendStateUpdate(to: self)
+    }
+
+    /// Handle an HR reading streamed from the Watch: store it for display and
+    /// run the phone-side (voice) zone-feedback engine.
+    func ingestStreamedHeartRate(_ bpm: Double) {
+        currentHeartRate = bpm
+        evaluateZoneVoiceFeedback(bpm: bpm)
+    }
+
+    /// Current zone classification for the live reading — drives HR colour-coding.
+    func currentZoneStatus(for bpm: Double) -> HRZoneStatus {
+        let range = currentPhaseHRRange
+        return zoneVoiceEngine.status(phase: currentWorkoutPhase, bpm: bpm,
+                                      low: range?.lowerBound ?? 0,
+                                      high: range?.upperBound ?? 0)
+    }
+
+    private func evaluateZoneVoiceFeedback(bpm: Double) {
+        guard isRunning, zoneVoiceAlertsEnabled, bpm > 0 else { return }
+        guard let range = currentPhaseHRRange,
+              intervals.indices.contains(currentIntervalIndex) else { return }
+
+        let elapsed = intervals[currentIntervalIndex].duration - timeRemaining
+        let alert = zoneVoiceEngine.evaluate(
+            intervalKey: currentIntervalIndex,
+            phase: currentWorkoutPhase,
+            bpm: bpm,
+            low: range.lowerBound,
+            high: range.upperBound,
+            secondsSinceIntervalStart: max(0, elapsed),
+            now: Date()
+        )
+        guard let alert else { return }
+        speakZoneAlert(alert, phase: currentWorkoutPhase)
+    }
+
+    private func speakZoneAlert(_ alert: ZoneAlertKind, phase: WorkoutPhase) {
+        let phrase: String
+        switch (alert, phase) {
+        case (.pushHarder, _):
+            phrase = "Pick up the pace. You're below your target zone."
+        case (.easeOff, .rest):
+            phrase = "Bring your heart rate down to recover."
+        case (.easeOff, _):
+            phrase = "Ease off slightly. You're above your target zone."
+        }
+        SpeechManager.shared.speak(phrase)
     }
 
     // MARK: - Live Activity

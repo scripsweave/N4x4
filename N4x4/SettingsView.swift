@@ -1,6 +1,7 @@
 // SettingsView
 
 import SwiftUI
+import WatchConnectivity
 
 struct SettingsView: View {
     @ObservedObject var viewModel: TimerViewModel
@@ -112,6 +113,34 @@ struct SettingsView: View {
                     Text("Shows interval countdown on the Lock Screen and Dynamic Island during a workout.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
+                }
+
+                // Apple Watch
+                Section(header: Text("Apple Watch").font(.headline)) {
+                    if WCSession.isSupported() {
+                        Label(
+                            viewModel.isWatchAppInstalled ? "Watch app installed" : "Watch app not installed",
+                            systemImage: viewModel.isWatchAppInstalled ? "applewatch" : "applewatch.slash"
+                        )
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                    }
+                    Text("Wear your Apple Watch and start the workout from either device to stream live heart rate. The iPhone has no heart-rate sensor of its own.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+
+                // Heart-Rate Zone Alerts
+                Section(
+                    header: Text("Heart-Rate Zone Alerts").font(.headline),
+                    footer: Text("When your heart rate drifts outside the target zone for the current interval, N4x4 nudges you back. Alerts wait for your heart rate to settle after each interval and never fire more than once a minute. Requires a paired Apple Watch streaming heart rate.")
+                ) {
+                    Toggle("Haptic (Apple Watch)", isOn: $viewModel.zoneHapticAlertsEnabled)
+                        .font(.body)
+                    Toggle("Voice (iPhone)", isOn: $viewModel.zoneVoiceAlertsEnabled)
+                        .font(.body)
+                    Toggle("Visual (colour the heart rate)", isOn: $viewModel.zoneVisualAlertsEnabled)
+                        .font(.body)
                 }
 
                 // Interval Notifications

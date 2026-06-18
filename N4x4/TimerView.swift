@@ -76,6 +76,29 @@ struct TimerView: View {
         return CGFloat(min(1, max(0, raw)))
     }
 
+    /// Colour for the live HR readout. Neutral when visual zone alerts are off
+    /// (the number is always shown; only the colour-coding is suppressed).
+    private func phoneHRColor(_ bpm: Double) -> Color {
+        guard viewModel.zoneVisualAlertsEnabled else { return .primary }
+        switch viewModel.currentZoneStatus(for: bpm) {
+        case .below:    return .yellow
+        case .above:    return .red
+        case .inZone:   return .green
+        case .noTarget: return .primary
+        }
+    }
+
+    /// Short coaching hint shown under the HR readout when out of zone.
+    private func zoneHint(for bpm: Double) -> String? {
+        guard viewModel.zoneVisualAlertsEnabled, viewModel.isRunning else { return nil }
+        switch (viewModel.currentWorkoutPhase, viewModel.currentZoneStatus(for: bpm)) {
+        case (.highIntensity, .below): return "Push harder"
+        case (.highIntensity, .above): return "Ease off"
+        case (.rest, .above):          return "Bring it down"
+        default:                       return nil
+        }
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -104,6 +127,34 @@ struct TimerView: View {
                             .foregroundColor(.primary)
                     }
                     .frame(width: 250, height: 250)
+
+                    // Live heart rate streamed from a paired Apple Watch.
+                    // Shown prominently and colour-coded to the active zone.
+                    if let hr = viewModel.currentHeartRate {
+                        HStack(spacing: 8) {
+                            Image(systemName: "applewatch")
+                                .font(.system(size: 16))
+                                .foregroundColor(.secondary)
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(phoneHRColor(hr))
+                            Text("\(Int(hr)) BPM")
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundColor(phoneHRColor(hr))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color(UIColor.secondarySystemBackground),
+                                    in: RoundedRectangle(cornerRadius: 14))
+                        .transition(.opacity)
+
+                        if let hint = zoneHint(for: hr) {
+                            Text(hint)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(phoneHRColor(hr))
+                                .transition(.opacity)
+                        }
+                    }
 
                     if let hrZone = heartRateZoneText {
                         Text(hrZone)
