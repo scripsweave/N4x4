@@ -50,6 +50,21 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
     case other = "Other"
 
     var id: String { rawValue }
+
+    /// Modality used to choose the performance metric (speed vs cadence vs level).
+    /// Every type maps to one so the performance section is always available;
+    /// abstract types fall back to `.other` (speed).
+    var trainingModality: TrainingModality {
+        switch self {
+        case .treadmill:               return .treadmill
+        case .run, .hillSprints:       return .outdoorRun
+        case .cycle:                   return .bike
+        case .rowing:                  return .rowing
+        case .stairs:                  return .stairClimber
+        case .norwegian4x4, .jumpRope, .circuit, .sports, .other:
+                                       return .other
+        }
+    }
 }
 
 struct WorkoutSessionBreakdown: Codable, Equatable {
