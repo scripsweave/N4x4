@@ -20,7 +20,15 @@
 - **Problem:** Onboarding flips `workoutRemindersEnabled = true` even if the user doesn't pick any days. `scheduleWorkoutReminder()` then falls back to "today" but never records it, so every scheduling pass uses the current weekday. The UI still shows no days selected and the reminder day drifts unpredictably.
 - **Fix idea:** Require at least one selection before enabling reminders, or persist the fallback day into `selectedWeekdaysList` so the schedule is stable and visible.
 
-## 5. Workout log timestamps drift when the summary sheet stays open
-- **File:** `N4x4/TimerViewModel.swift:984-993`
-- **Problem:** `saveWorkoutLogEntryAndResetSession()` sets `completedAt: Date()` when the user taps "Done". If they leave the summary sheet open for hours (or overnight), the workout is recorded on the wrong day, which breaks streak calculations and prevents follow-up cancellation.
-- **Fix idea:** Capture the completion timestamp in `finishWorkout()` (or store `workoutCompletionDate`) and reuse that value when saving.
+## 5. Workout log timestamps drift when the summary sheet stays open — RESOLVED
+- **File:** `N4x4/TimerViewModel.swift`
+- **Status:** Fixed. `finishWorkout()` stamps `workoutCompletionDate = Date()` at
+  completion, and `saveWorkoutLogEntryAndResetSession()` uses
+  `workoutCompletionDate ?? Date()` rather than a fresh `Date()` at Done-tap, so
+  leaving the summary open no longer shifts the recorded day.
+
+---
+
+> **Status note (2026-06-19):** #1-4 remain open and are concentrated in the
+> notification scheduling code — worth fixing together in a dedicated pass. #5 is
+> resolved (above).

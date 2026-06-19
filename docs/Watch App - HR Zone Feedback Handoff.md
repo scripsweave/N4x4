@@ -1,7 +1,16 @@
 # Apple Watch + Real-Time HR Zone Feedback — Handoff
 
-All Swift is written. This supplements `Watch App - Manual Xcode Steps.md` with
-what's specific to this implementation. Read both before opening Xcode.
+All Swift is written (but not yet compiled — see `SESSION-HANDOFF.md`). This
+supplements `Watch App - Manual Xcode Steps.md` with what's specific to this
+implementation. Read both before opening Xcode.
+
+> **Update (2026-06-19):** after the initial implementation, a follow-up commit
+> (a) moved the zone hint strings + status colour into `Shared/ZoneFeedbackStyle.swift`
+> (added to the table below), (b) made the phone→Watch state broadcast reactive
+> (a debounced Combine subscription replaces hand-placed `broadcastStateToWatch()`
+> calls), and (c) fixed a bug where the Watch kept counting down after a pause
+> (the phone now sends its authoritative `timeRemaining`; the Watch uses the
+> live end-time only while running). None of these change the Xcode setup steps.
 
 ## What was built
 

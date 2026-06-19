@@ -197,3 +197,49 @@ To verify:
 | Only incrementing stored streak | Always recalculate from scratch; call `refreshStreak()` on launch and foreground |
 | Disabling user toggles on `.unknown` permission | Only disable on `.denied` / `.unavailable` |
 | Using `@ViewBuilder` on non-View functions | `@ViewBuilder` is only for `some View`-returning functions |
+| Re-adding manual `broadcastStateToWatch()` calls | The broadcast is reactive (see Apple Watch below) — don't hand-place it |
+
+---
+
+## Apple Watch (WatchConnectivity)
+
+> Status: code written, not yet built. Needs one-time Xcode target setup — see
+> `docs/Watch App - HR Zone Feedback Handoff.md` and `docs/SESSION-HANDOFF.md`.
+
+- **Phone is the source of truth.** It runs the timer and broadcasts state; the
+  Watch renders and sends back commands + streamed heart rate. `Shared/` files
+  (`WatchMessage.swift`, `ZoneFeedback.swift`, `ZoneFeedbackStyle.swift`) compile
+  into **both** targets.
+- **`intervalEndTime` is the sync anchor.** The Watch derives `timeRemaining`
+  locally from the absolute end-time, so no per-second messages are needed — but
+  **only while running**. When paused, the phone's authoritative `timeRemaining`
+  is used (the Watch would otherwise count past the pause).
+- **The state broadcast is reactive.** A debounced Combine subscription in
+  `TimerViewModel.init()` observes `isRunning`, `currentIntervalIndex`,
+  `highIntensityCount`, `showPostWorkoutSummary` and calls `broadcastStateToWatch()`.
+  Do **not** sprinkle manual broadcast calls at mutation sites — that was the old,
+  fragile pattern and was deliberately removed.
+- **`WorkoutPhase` is the cross-target type.** Never put `IntervalType` in a
+  WatchConnectivity message — it has no `rawValue`. `WorkoutPhase` is `Codable`.
+- **Watch deployment target is watchOS 10.0** (the UI uses two-parameter
+  `onChange`). HR only works on a physical Series 4+ Watch, never the Simulator.
+
+## Heart-rate zone feedback
+
+- The decision logic lives once in `Shared/ZoneFeedback.swift` (pure Foundation,
+  testable): grace window, sustained-deviation debounce, one-alert-per-minute.
+  Both devices run their own engine instance (Watch → haptics, phone → voice) so
+  the rules never drift.
+- Presentation (hint strings + status colour) lives in `Shared/ZoneFeedbackStyle.swift`
+  (`ZoneFeedbackCopy.hint`, `HRZoneStatus.tint`). Keep logic and presentation split.
+
+## Performance logging
+
+- `WorkoutLogEntry` gained optional `modality` and `intervalPerformances`. They
+  are **optional on purpose**: synthesized `Codable` decodes missing keys as nil,
+  so older logs load untouched. Follow this pattern for any new entry field.
+- Values are stored **canonically** (speed in km/h) and converted for display via
+  `usesImperialUnits` + `PerformanceUnits`. Never persist display-unit values.
+- The metric per modality comes from one place: `TrainingModality.performanceMetric`.
+  Modality is derived from the user-facing Type picker via
+  `WorkoutType.trainingModality` (one picker, not two). Add new metrics there.
