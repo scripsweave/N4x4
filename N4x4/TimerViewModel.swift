@@ -687,10 +687,14 @@ class TimerViewModel: ObservableObject {
     @AppStorage("shownMilestonesData") private var shownMilestonesData: String = "[]"
     @Published var workoutLogEntries: [WorkoutLogEntry] = []
     @Published var selectedWorkoutType: WorkoutType = .norwegian4x4
-    /// Modality for the just-finished session, used to key performance logging.
-    /// Editable in the post-workout summary (Phase 2); defaults from preferredModality.
-    @Published var selectedModality: TrainingModality? = nil
     @Published var workoutNotesDraft: String = ""
+
+    // Performance logging draft (post-workout summary, Phase 2). Values are in
+    // the user's DISPLAY units; converted to canonical only at save time.
+    /// "Set all" value that stamps every work interval.
+    @Published var performanceSetAll: Double? = nil
+    /// One slot per work interval (1..numberOfIntervals). nil = left blank.
+    @Published var performanceDraft: [Double?] = []
     @Published var showPostWorkoutSummary: Bool = false
     @Published var showWeeklyStreaks: Bool = false
     @Published var showMilestoneCelebration: Bool = false
@@ -1340,7 +1344,6 @@ class TimerViewModel: ObservableObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
 
         selectedWorkoutType = preferredModality?.workoutType ?? .norwegian4x4
-        selectedModality = preferredModality
         workoutNotesDraft = ""
 
         let finishedOnCooldown = intervals.indices.contains(currentIntervalIndex) && intervals[currentIntervalIndex].type == .cooldown
@@ -1615,13 +1618,14 @@ class TimerViewModel: ObservableObject {
     func saveWorkoutLogEntryAndResetSession() {
         let trimmedNotes = workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let completionDate = workoutCompletionDate ?? Date()
+        let modality = selectedWorkoutType.trainingModality
         let entry = WorkoutLogEntry(
             completedAt: completionDate,
             workoutType: selectedWorkoutType,
             notes: trimmedNotes,
             sessionBreakdown: currentSessionBreakdown,
-            modality: selectedModality,
-            intervalPerformances: nil  // Phase 2 populates this from the summary UI.
+            modality: modality,
+            intervalPerformances: builtPerformances(for: modality)
         )
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
@@ -1651,6 +1655,76 @@ class TimerViewModel: ObservableObject {
         workoutLogEntries.first {
             $0.modality == modality && !($0.intervalPerformances ?? []).isEmpty
         }?.intervalPerformances
+    }
+
+    // MARK: - Performance draft (post-workout summary)
+
+    /// Metric descriptor for the currently selected workout type.
+    var currentPerformanceMetric: ModalityMetric {
+        selectedWorkoutType.trainingModality.performanceMetric
+    }
+
+    /// Unit label to show next to performance values, honouring the unit preference.
+    var currentPerformanceUnit: String {
+        let metric = currentPerformanceMetric
+        if metric.localeConverted, usesImperialUnits, let imperial = metric.imperialUnit {
+            return imperial
+        }
+        return metric.unit
+    }
+
+    /// Convert a canonical (stored) value to the user's display units.
+    func displayValue(_ canonical: Double, for modality: TrainingModality) -> Double {
+        guard modality.performanceMetric.localeConverted, usesImperialUnits else { return canonical }
+        return PerformanceUnits.kmhToMph(canonical)
+    }
+
+    /// Convert a value entered in display units back to canonical for storage.
+    func canonicalValue(_ display: Double, for modality: TrainingModality) -> Double {
+        guard modality.performanceMetric.localeConverted, usesImperialUnits else { return display }
+        return PerformanceUnits.mphToKmh(display)
+    }
+
+    /// Build the per-interval draft when the summary appears: size it to the work
+    /// intervals and pre-fill from the last session of the same modality (so a
+    /// repeat session is one tap to save). Call again if the type changes.
+    func preparePerformanceDraft() {
+        let count = max(0, numberOfIntervals)
+        let modality = selectedWorkoutType.trainingModality
+
+        guard let last = lastLoggedPerformance(for: modality) else {
+            performanceSetAll = nil
+            performanceDraft = Array(repeating: nil, count: count)
+            return
+        }
+
+        // Map last session's canonical values (by interval number) into display units.
+        var byInterval: [Int: Double] = [:]
+        for p in last {
+            if let v = p.primary { byInterval[p.intervalNumber] = displayValue(v, for: modality) }
+        }
+        performanceDraft = (1...max(1, count)).prefix(count).map { byInterval[$0] }
+
+        let filled = performanceDraft.compactMap { $0 }
+        performanceSetAll = filled.isEmpty ? nil : (filled.reduce(0, +) / Double(filled.count))
+    }
+
+    /// Stamp every work interval with the current "set all" value (the default
+    /// behaviour: same value across intervals, individually editable afterward).
+    func stampAllIntervals() {
+        guard !performanceDraft.isEmpty else { return }
+        performanceDraft = Array(repeating: performanceSetAll, count: performanceDraft.count)
+    }
+
+    /// Convert the draft (display units) into stored performances (canonical),
+    /// dropping blanks. Returns nil when nothing was logged.
+    private func builtPerformances(for modality: TrainingModality) -> [IntervalPerformance]? {
+        let built: [IntervalPerformance] = performanceDraft.enumerated().compactMap { index, value in
+            guard let value else { return nil }
+            return IntervalPerformance(intervalNumber: index + 1,
+                                       primary: canonicalValue(value, for: modality))
+        }
+        return built.isEmpty ? nil : built
     }
 
     private func loadWorkoutLogEntries() {

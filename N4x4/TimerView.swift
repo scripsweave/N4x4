@@ -382,6 +382,44 @@ private struct PostWorkoutSummaryView: View {
                     TextField("Notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
                         .lineLimit(2...4)
                 }
+
+                Section {
+                    HStack {
+                        Text("Set all intervals")
+                        Spacer()
+                        TextField("—", text: setAllBinding)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 70)
+                        Text(viewModel.currentPerformanceUnit)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if !viewModel.performanceDraft.isEmpty {
+                        DisclosureGroup("Per interval") {
+                            ForEach(viewModel.performanceDraft.indices, id: \.self) { index in
+                                HStack {
+                                    Text("Interval \(index + 1)")
+                                    Spacer()
+                                    TextField("—", text: intervalBinding(index))
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(maxWidth: 70)
+                                    Text(viewModel.currentPerformanceUnit)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Performance — \(viewModel.currentPerformanceMetric.label)")
+                } footer: {
+                    Text("Optional. \"Set all\" fills every interval; expand to fine-tune individually. Leave blank to skip.")
+                }
+            }
+            .onAppear { viewModel.preparePerformanceDraft() }
+            .onChange(of: viewModel.selectedWorkoutType) { _, _ in
+                viewModel.preparePerformanceDraft()
             }
             .navigationTitle("Session on \(sessionDateText)")
             .navigationBarTitleDisplayMode(.inline)
@@ -417,6 +455,50 @@ private struct PostWorkoutSummaryView: View {
         let minutes = Int((seconds / 60).rounded())
         if minutes <= 0 { return "0 min" }
         return "\(minutes) min"
+    }
+
+    // MARK: - Performance entry
+
+    /// Decimal places to show, derived from the metric's step (0.5 → 1dp; 1 → 0dp).
+    private var performanceDecimals: Int {
+        viewModel.currentPerformanceMetric.step < 1 ? 1 : 0
+    }
+
+    private func formatPerformance(_ value: Double) -> String {
+        String(format: "%.\(performanceDecimals)f", value)
+    }
+
+    private func parsePerformance(_ text: String) -> Double? {
+        let cleaned = text.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: ",", with: ".")
+        guard !cleaned.isEmpty, let value = Double(cleaned), value >= 0 else { return nil }
+        return value
+    }
+
+    /// "Set all" field. Editing it stamps every interval (the default behaviour).
+    /// The setter is the only place stamping happens, so programmatic pre-fill in
+    /// `preparePerformanceDraft()` doesn't clobber per-interval values.
+    private var setAllBinding: Binding<String> {
+        Binding(
+            get: { viewModel.performanceSetAll.map(formatPerformance) ?? "" },
+            set: { newText in
+                viewModel.performanceSetAll = parsePerformance(newText)
+                viewModel.stampAllIntervals()
+            }
+        )
+    }
+
+    private func intervalBinding(_ index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                guard viewModel.performanceDraft.indices.contains(index) else { return "" }
+                return viewModel.performanceDraft[index].map(formatPerformance) ?? ""
+            },
+            set: { newText in
+                guard viewModel.performanceDraft.indices.contains(index) else { return }
+                viewModel.performanceDraft[index] = parsePerformance(newText)
+            }
+        )
     }
 }
 

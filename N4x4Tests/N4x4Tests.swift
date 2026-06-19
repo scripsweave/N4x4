@@ -22,7 +22,8 @@ final class N4x4Tests: XCTestCase {
             "workoutReminderWeekday",
             "healthKitEnabled",
             "hasCompletedOnboarding",
-            "workoutLogEntriesData"
+            "workoutLogEntriesData",
+            "unitPreference"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -392,6 +393,58 @@ final class N4x4Tests: XCTestCase {
         ]
         XCTAssertEqual(vm.lastLoggedPerformance(for: .treadmill)?.first?.primary, 13)
         XCTAssertNil(vm.lastLoggedPerformance(for: .bike))
+    }
+
+    // MARK: - Performance capture (Phase 2)
+
+    func testStampAllIntervalsFillsEveryInterval() {
+        let vm = TimerViewModel()
+        vm.numberOfIntervals = 4
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()
+        XCTAssertEqual(vm.performanceDraft.count, 4)
+
+        vm.performanceSetAll = 12.0
+        vm.stampAllIntervals()
+        XCTAssertEqual(vm.performanceDraft, [12.0, 12.0, 12.0, 12.0])
+    }
+
+    func testSavePersistsPerformanceInCanonicalUnitsMetric() {
+        let vm = TimerViewModel()
+        vm.unitPreference = .metric              // display == canonical (km/h)
+        vm.numberOfIntervals = 2
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()
+        vm.performanceDraft = [12.0, 13.0]
+        vm.saveWorkoutLogEntryAndResetSession()
+
+        let entry = vm.workoutLogEntries.first
+        XCTAssertEqual(entry?.modality, .treadmill)
+        XCTAssertEqual(entry?.intervalPerformances?.map { $0.primary }, [12.0, 13.0])
+        XCTAssertEqual(entry?.intervalPerformances?.map { $0.intervalNumber }, [1, 2])
+    }
+
+    func testImperialSpeedStoredAsCanonicalKmh() {
+        let vm = TimerViewModel()
+        vm.unitPreference = .imperial            // entered mph -> stored km/h
+        vm.numberOfIntervals = 1
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()
+        vm.performanceDraft = [6.21371]          // mph ≈ 10 km/h
+        vm.saveWorkoutLogEntryAndResetSession()
+
+        let stored = vm.workoutLogEntries.first?.intervalPerformances?.first?.primary
+        XCTAssertEqual(stored ?? 0, 10.0, accuracy: 0.001)
+    }
+
+    func testBlankDraftStoresNoPerformances() {
+        let vm = TimerViewModel()
+        vm.numberOfIntervals = 3
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()             // all nil (no prior data)
+        vm.saveWorkoutLogEntryAndResetSession()
+
+        XCTAssertNil(vm.workoutLogEntries.first?.intervalPerformances)
     }
 
 }
