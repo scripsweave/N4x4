@@ -102,19 +102,34 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     let workoutType: WorkoutType
     let notes: String
     let sessionBreakdown: WorkoutSessionBreakdown?
+    // Performance logging. Optional so older logs (encoded before this existed)
+    // decode with these as nil — synthesized Codable maps missing keys to nil.
+    let modality: TrainingModality?
+    let intervalPerformances: [IntervalPerformance]?
 
     init(
         id: UUID = UUID(),
         completedAt: Date = Date(),
         workoutType: WorkoutType,
         notes: String,
-        sessionBreakdown: WorkoutSessionBreakdown? = nil
+        sessionBreakdown: WorkoutSessionBreakdown? = nil,
+        modality: TrainingModality? = nil,
+        intervalPerformances: [IntervalPerformance]? = nil
     ) {
         self.id = id
         self.completedAt = completedAt
         self.workoutType = workoutType
         self.notes = notes
         self.sessionBreakdown = sessionBreakdown
+        self.modality = modality
+        self.intervalPerformances = intervalPerformances
+    }
+
+    /// Average of the logged primary values for this entry, ignoring blanks.
+    var averagePrimaryPerformance: Double? {
+        let values = (intervalPerformances ?? []).compactMap { $0.primary }
+        guard !values.isEmpty else { return nil }
+        return values.reduce(0, +) / Double(values.count)
     }
 
     var weekOfYear: Int {
@@ -149,7 +164,7 @@ struct VO2DataPoint: Identifiable {
 
 // MARK: - Training modality
 
-enum TrainingModality: String, CaseIterable {
+enum TrainingModality: String, CaseIterable, Codable {
     case treadmill    = "Treadmill"
     case outdoorRun   = "Outdoor Run"
     case rowing       = "Rowing Machine"
@@ -240,6 +255,83 @@ enum TrainingModality: String, CaseIterable {
         case .other:        return .other
         }
     }
+
+    /// The performance metric logged per work interval for this modality.
+    /// v1 surfaces only the primary; the descriptor is the single place to add
+    /// per-modality metrics (and, later, a secondary) without touching the UI.
+    var performanceMetric: ModalityMetric {
+        switch self {
+        case .treadmill, .outdoorRun, .other:
+            // Distance-based: stored canonically in km/h, displayed per unit pref.
+            return ModalityMetric(label: "Speed", unit: "km/h", step: 0.5, range: 1...25,
+                                  imperialUnit: "mph", imperialStep: 0.5, imperialRange: 0.5...16)
+        case .bike:
+            return ModalityMetric(label: "Cadence", unit: "RPM", step: 1, range: 30...130,
+                                  imperialUnit: nil, imperialStep: nil, imperialRange: nil)
+        case .rowing:
+            return ModalityMetric(label: "Stroke rate", unit: "SPM", step: 1, range: 14...40,
+                                  imperialUnit: nil, imperialStep: nil, imperialRange: nil)
+        case .stairClimber:
+            return ModalityMetric(label: "Level", unit: "level", step: 1, range: 1...20,
+                                  imperialUnit: nil, imperialStep: nil, imperialRange: nil)
+        }
+    }
+}
+
+// MARK: - Performance logging
+
+/// A logged performance value for a single work interval. `primary` is stored in
+/// the modality's canonical unit (km/h for speed); `secondary` is reserved for a
+/// future second metric (e.g. incline) and is not surfaced in v1.
+struct IntervalPerformance: Codable, Equatable, Identifiable {
+    var id: UUID
+    var intervalNumber: Int   // 1-based work-interval index
+    var primary: Double?
+    var secondary: Double?
+
+    init(id: UUID = UUID(), intervalNumber: Int, primary: Double? = nil, secondary: Double? = nil) {
+        self.id = id
+        self.intervalNumber = intervalNumber
+        self.primary = primary
+        self.secondary = secondary
+    }
+}
+
+/// Describes the metric a modality logs: label, native (metric) unit + stepper
+/// bounds, and optional imperial equivalents. `localeConverted` metrics (speed)
+/// are stored canonically and converted for display; others (RPM, level) are not.
+struct ModalityMetric: Equatable {
+    let label: String
+    let unit: String
+    let step: Double
+    let range: ClosedRange<Double>
+    let imperialUnit: String?
+    let imperialStep: Double?
+    let imperialRange: ClosedRange<Double>?
+
+    var localeConverted: Bool { imperialUnit != nil }
+}
+
+/// User preference for displayed units. `system` follows the device locale.
+enum UnitPreference: String, CaseIterable, Identifiable, Codable {
+    case system, metric, imperial
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .system:   return "System"
+        case .metric:   return "Metric"
+        case .imperial: return "Imperial"
+        }
+    }
+}
+
+/// Pure unit conversion for canonical (metric) speed storage. Kept free of any
+/// view-model state so it is trivially unit-testable.
+enum PerformanceUnits {
+    /// 1 mph in km/h.
+    static let kmhPerMph = 1.609344
+    static func kmhToMph(_ kmh: Double) -> Double { kmh / kmhPerMph }
+    static func mphToKmh(_ mph: Double) -> Double { mph * kmhPerMph }
 }
 
 // MARK: - VO₂ max goal
@@ -361,6 +453,24 @@ class TimerViewModel: ObservableObject {
         didSet { broadcastStateToWatch() }
     }
     @AppStorage("zoneVoiceAlertsEnabled") var zoneVoiceAlertsEnabled: Bool = false
+
+    // Units for displayed/entered performance values. `system` follows the
+    // device locale; metric/imperial force a choice.
+    @AppStorage("unitPreference") private var unitPreferenceRaw: String = UnitPreference.system.rawValue
+    var unitPreference: UnitPreference {
+        get { UnitPreference(rawValue: unitPreferenceRaw) ?? .system }
+        set { unitPreferenceRaw = newValue.rawValue }
+    }
+    /// Whether distance-based metrics (speed/pace) display in imperial units.
+    var usesImperialUnits: Bool {
+        switch unitPreference {
+        case .metric:   return false
+        case .imperial: return true
+        case .system:
+            if #available(iOS 16.0, *) { return Locale.current.measurementSystem != .metric }
+            return !Locale.current.usesMetricSystem
+        }
+    }
 
     @AppStorage("useCustomMaxHR") var useCustomMaxHR: Bool = false
     @AppStorage("customMaxHR") var customMaxHR: Int = 0
@@ -562,6 +672,9 @@ class TimerViewModel: ObservableObject {
     @AppStorage("shownMilestonesData") private var shownMilestonesData: String = "[]"
     @Published var workoutLogEntries: [WorkoutLogEntry] = []
     @Published var selectedWorkoutType: WorkoutType = .norwegian4x4
+    /// Modality for the just-finished session, used to key performance logging.
+    /// Editable in the post-workout summary (Phase 2); defaults from preferredModality.
+    @Published var selectedModality: TrainingModality? = nil
     @Published var workoutNotesDraft: String = ""
     @Published var showPostWorkoutSummary: Bool = false
     @Published var showWeeklyStreaks: Bool = false
@@ -1212,6 +1325,7 @@ class TimerViewModel: ObservableObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
 
         selectedWorkoutType = preferredModality?.workoutType ?? .norwegian4x4
+        selectedModality = preferredModality
         workoutNotesDraft = ""
 
         let finishedOnCooldown = intervals.indices.contains(currentIntervalIndex) && intervals[currentIntervalIndex].type == .cooldown
@@ -1490,7 +1604,9 @@ class TimerViewModel: ObservableObject {
             completedAt: completionDate,
             workoutType: selectedWorkoutType,
             notes: trimmedNotes,
-            sessionBreakdown: currentSessionBreakdown
+            sessionBreakdown: currentSessionBreakdown,
+            modality: selectedModality,
+            intervalPerformances: nil  // Phase 2 populates this from the summary UI.
         )
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
@@ -1511,6 +1627,15 @@ class TimerViewModel: ObservableObject {
     func closePostWorkoutSummaryWithoutSaving() {
         showPostWorkoutSummary = false
         reset()
+    }
+
+    /// The most recent logged performance set for a given modality, used to
+    /// pre-fill the post-workout summary so a typical session is one tap to save.
+    /// `workoutLogEntries` is kept newest-first, so the first match wins.
+    func lastLoggedPerformance(for modality: TrainingModality) -> [IntervalPerformance]? {
+        workoutLogEntries.first {
+            $0.modality == modality && !($0.intervalPerformances ?? []).isEmpty
+        }?.intervalPerformances
     }
 
     private func loadWorkoutLogEntries() {
@@ -1771,6 +1896,7 @@ class TimerViewModel: ObservableObject {
         zoneVisualAlertsEnabled = true
         zoneHapticAlertsEnabled = true
         zoneVoiceAlertsEnabled = false
+        unitPreference = .system
         currentHeartRate = nil
         zoneVoiceEngine.reset()
     }

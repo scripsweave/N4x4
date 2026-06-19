@@ -306,4 +306,92 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.workoutReminderWeekday, weeklyDay)
     }
 
+    // MARK: - Performance logging (Phase 1)
+
+    func testSpeedConversionRoundTrips() {
+        // 10 km/h ≈ 6.2137 mph; round-trip must return the original value.
+        let kmh = 10.0
+        let mph = PerformanceUnits.kmhToMph(kmh)
+        XCTAssertEqual(mph, 6.21371, accuracy: 0.0001)
+        XCTAssertEqual(PerformanceUnits.mphToKmh(mph), kmh, accuracy: 0.000001)
+    }
+
+    func testModalityMetricLocaleConversionFlag() {
+        // Distance-based modalities convert with locale; cadence/level do not.
+        XCTAssertTrue(TrainingModality.treadmill.performanceMetric.localeConverted)
+        XCTAssertTrue(TrainingModality.outdoorRun.performanceMetric.localeConverted)
+        XCTAssertFalse(TrainingModality.bike.performanceMetric.localeConverted)
+        XCTAssertFalse(TrainingModality.stairClimber.performanceMetric.localeConverted)
+        XCTAssertEqual(TrainingModality.treadmill.performanceMetric.imperialUnit, "mph")
+    }
+
+    func testWorkoutLogEntryCodableRoundTripWithPerformance() {
+        let entry = WorkoutLogEntry(
+            completedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            workoutType: .treadmill,
+            notes: "tempo",
+            modality: .treadmill,
+            intervalPerformances: [
+                IntervalPerformance(intervalNumber: 1, primary: 12.0),
+                IntervalPerformance(intervalNumber: 2, primary: 12.5),
+            ]
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let data = try! encoder.encode(entry)
+        let decoded = try! decoder.decode(WorkoutLogEntry.self, from: data)
+
+        XCTAssertEqual(decoded.modality, .treadmill)
+        XCTAssertEqual(decoded.intervalPerformances?.count, 2)
+        XCTAssertEqual(decoded.intervalPerformances?[1].primary, 12.5)
+        XCTAssertEqual(decoded, entry)
+    }
+
+    func testLegacyEntryWithoutPerformanceDecodesToNil() {
+        // An entry encoded before performance logging existed has no modality /
+        // intervalPerformances keys. Synthesized Codable must decode them as nil.
+        let legacyJSON = """
+        [{"id":"\(UUID().uuidString)","completedAt":"2026-01-01T08:00:00Z",
+          "workoutType":"Norwegian 4x4","notes":""}]
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let entries = try! decoder.decode([WorkoutLogEntry].self,
+                                          from: legacyJSON.data(using: .utf8)!)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertNil(entries[0].modality)
+        XCTAssertNil(entries[0].intervalPerformances)
+    }
+
+    func testAveragePrimaryIgnoresBlanks() {
+        let entry = WorkoutLogEntry(
+            workoutType: .treadmill,
+            notes: "",
+            modality: .treadmill,
+            intervalPerformances: [
+                IntervalPerformance(intervalNumber: 1, primary: 10),
+                IntervalPerformance(intervalNumber: 2, primary: nil),
+                IntervalPerformance(intervalNumber: 3, primary: 14),
+            ]
+        )
+        XCTAssertEqual(entry.averagePrimaryPerformance, 12.0)
+    }
+
+    func testLastLoggedPerformanceReturnsMostRecentForModality() {
+        let vm = TimerViewModel()
+        vm.workoutLogEntries = [
+            WorkoutLogEntry(completedAt: Date(timeIntervalSince1970: 200),
+                            workoutType: .treadmill, notes: "", modality: .treadmill,
+                            intervalPerformances: [IntervalPerformance(intervalNumber: 1, primary: 13)]),
+            WorkoutLogEntry(completedAt: Date(timeIntervalSince1970: 100),
+                            workoutType: .treadmill, notes: "", modality: .treadmill,
+                            intervalPerformances: [IntervalPerformance(intervalNumber: 1, primary: 11)]),
+        ]
+        XCTAssertEqual(vm.lastLoggedPerformance(for: .treadmill)?.first?.primary, 13)
+        XCTAssertNil(vm.lastLoggedPerformance(for: .bike))
+    }
+
 }
