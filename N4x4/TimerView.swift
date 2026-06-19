@@ -605,16 +605,19 @@ private struct StreakHistoryView: View {
     @ObservedObject var viewModel: TimerViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var selectedWorkout: WorkoutLogEntry?
-    
+    @State private var selectedPerfModality: TrainingModality?
+    @State private var selectedChartDate: Date?
+
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
     private let daySymbols = ["S", "M", "T", "W", "T", "F", "S"]
-    
+
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
                     streakHeader
                     calendarSection
+                    performanceSection
                     if let workout = selectedWorkout {
                         workoutDetailCard(workout)
                     }
@@ -734,6 +737,26 @@ private struct StreakHistoryView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if let perfs = workout.intervalPerformances, !perfs.isEmpty,
+               let modality = workout.modality {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(modality.performanceMetric.label) per interval")
+                        .font(.caption).foregroundColor(.secondary)
+                    ForEach(perfs) { perf in
+                        HStack {
+                            Text("Interval \(perf.intervalNumber)")
+                            Spacer()
+                            if let value = perf.primary {
+                                Text("\(formatPerf(viewModel.displayValue(value, for: modality), for: modality)) \(unitLabel(for: modality))")
+                                    .fontWeight(.medium)
+                            } else {
+                                Text("—").foregroundStyle(.secondary)
+                            }
+                        }
+                        .font(.footnote)
+                    }
+                }
+            }
             if !workout.notes.isEmpty {
                 VStack(alignment: .leading) {
                     Text("Notes").font(.caption).foregroundColor(.secondary)
@@ -749,6 +772,113 @@ private struct StreakHistoryView: View {
     private func formatMinutes(_ seconds: TimeInterval) -> String {
         let minutes = Int(seconds) / 60
         return "\(max(0, minutes)) min"
+    }
+
+    // MARK: - Performance trend
+
+    /// Distinct modalities that have at least one logged performance, newest first.
+    private var loggedModalities: [TrainingModality] {
+        var seen: [TrainingModality] = []
+        for entry in viewModel.workoutLogEntries {
+            if let modality = entry.modality,
+               !(entry.intervalPerformances ?? []).isEmpty,
+               !seen.contains(modality) {
+                seen.append(modality)
+            }
+        }
+        return seen
+    }
+
+    private var activePerfModality: TrainingModality? {
+        selectedPerfModality ?? loggedModalities.first
+    }
+
+    /// Session-average performance points (in display units) for a modality, oldest first.
+    private func performancePoints(for modality: TrainingModality) -> [(date: Date, value: Double)] {
+        viewModel.workoutLogEntries
+            .filter { $0.modality == modality }
+            .compactMap { entry in
+                guard let avg = entry.averagePrimaryPerformance else { return nil }
+                return (entry.completedAt, viewModel.displayValue(avg, for: modality))
+            }
+            .sorted { $0.date < $1.date }
+    }
+
+    private func unitLabel(for modality: TrainingModality) -> String {
+        let metric = modality.performanceMetric
+        if metric.localeConverted, viewModel.usesImperialUnits, let imperial = metric.imperialUnit {
+            return imperial
+        }
+        return metric.unit
+    }
+
+    private func formatPerf(_ value: Double, for modality: TrainingModality) -> String {
+        let decimals = modality.performanceMetric.step < 1 ? 1 : 0
+        return String(format: "%.\(decimals)f", value)
+    }
+
+    @ViewBuilder
+    private var performanceSection: some View {
+        if let modality = activePerfModality {
+            let points = performancePoints(for: modality)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Performance Trend").font(.headline)
+                    Spacer()
+                    if loggedModalities.count > 1 {
+                        Picker("", selection: Binding(
+                            get: { activePerfModality ?? modality },
+                            set: { selectedPerfModality = $0 }
+                        )) {
+                            ForEach(loggedModalities, id: \.self) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                }
+
+#if canImport(Charts)
+                if points.count >= 2 {
+                    Chart {
+                        ForEach(points, id: \.date) { point in
+                            LineMark(x: .value("Date", point.date),
+                                     y: .value(modality.performanceMetric.label, point.value))
+                            PointMark(x: .value("Date", point.date),
+                                      y: .value(modality.performanceMetric.label, point.value))
+                        }
+                    }
+                    .chartXSelection(value: $selectedChartDate)
+                    .frame(height: 160)
+
+                    Text("\(modality.rawValue) • \(modality.performanceMetric.label) (\(unitLabel(for: modality)))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Log at least two \(modality.rawValue) sessions to see your trend.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+#else
+                Text("Trend chart requires iOS Charts support.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+#endif
+            }
+            .padding()
+            .background(Color(UIColor.secondarySystemBackground))
+            .cornerRadius(16)
+            .onChange(of: selectedChartDate) { _, date in
+                guard let date else { return }
+                let candidates = viewModel.workoutLogEntries.filter {
+                    $0.modality == modality && !($0.intervalPerformances ?? []).isEmpty
+                }
+                if let nearest = candidates.min(by: {
+                    abs($0.completedAt.timeIntervalSince(date)) < abs($1.completedAt.timeIntervalSince(date))
+                }) {
+                    selectedWorkout = nearest
+                }
+            }
+        }
     }
 
     private var currentMonthDays: Int {

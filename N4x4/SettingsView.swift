@@ -130,6 +130,18 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                // Units
+                Section(
+                    header: Text("Units").font(.headline),
+                    footer: Text("Used for logged speeds and paces. System follows your device region.")
+                ) {
+                    Picker("Measurement", selection: $viewModel.unitPreference) {
+                        ForEach(UnitPreference.allCases) { pref in
+                            Text(pref.label).tag(pref)
+                        }
+                    }
+                }
+
                 // Heart-Rate Zone Alerts
                 Section(
                     header: Text("Heart-Rate Zone Alerts").font(.headline),
