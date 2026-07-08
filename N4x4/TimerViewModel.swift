@@ -742,6 +742,15 @@ class TimerViewModel: ObservableObject {
         return .connected
     }
 
+    /// True when the user has a paired Apple Watch but the N4x4 Watch app isn't
+    /// installed on it — i.e. the Watch "doesn't show up" in the app and the user
+    /// may want to set it up. Drives the Home "connect your Watch" banner.
+    /// (Deliberately ignores mere unreachability, which is normal when the Watch
+    /// app simply isn't open.)
+    var watchAppMissingOnPairedWatch: Bool {
+        watchPaired && !watchAppInstalled
+    }
+
     /// Seconds since the current workout began (0 if not started). Recomputed on
     /// every timer tick, so views that read it re-evaluate each second.
     var workoutElapsedSeconds: TimeInterval {

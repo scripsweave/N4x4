@@ -200,7 +200,7 @@ struct RedesignRootView: View {
                 if isSessionActive {
                     WorkoutScreen(viewModel: viewModel, showWatchHelp: $showWatchHelp)
                 } else {
-                    HomeScreen(viewModel: viewModel)
+                    HomeScreen(viewModel: viewModel, showWatchHelp: $showWatchHelp)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -248,13 +248,24 @@ struct RedesignRootView: View {
 
 struct HomeScreen: View {
     @ObservedObject var viewModel: TimerViewModel
+    @Binding var showWatchHelp: Bool
     @State private var showPlan = false
+    /// Dismisses the "connect your Watch" banner for this app session; it
+    /// reappears next launch if the Watch app is still not installed.
+    @State private var watchBannerDismissed = false
 
     var body: some View {
         VStack(spacing: 0) {
             header
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+
+            if viewModel.watchAppMissingOnPairedWatch, !watchBannerDismissed {
+                watchConnectBanner
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
             Spacer(minLength: 8)
 
@@ -314,6 +325,48 @@ struct HomeScreen: View {
 
             Spacer()
         }
+    }
+
+    /// Shown when a paired Watch exists but N4x4 isn't installed on it. Tapping
+    /// opens the existing troubleshooting/setup flow; the × dismisses for now.
+    private var watchConnectBanner: some View {
+        HStack(spacing: 12) {
+            Button {
+                showWatchHelp = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "applewatch.slash")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Palette.electricBlue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Connect your Apple Watch")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Palette.textPrimary)
+                        Text("N4x4 isn't set up on your Watch — tap to connect")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { watchBannerDismissed = true }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Palette.textTertiary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.surface))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.electricBlue.opacity(0.35), lineWidth: 1))
     }
 
     private var expandChevron: some View {
