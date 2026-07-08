@@ -274,12 +274,7 @@ struct HomeScreen: View {
 
             Spacer(minLength: 8)
 
-            StartRingButton(
-                title: "START",
-                subtitle: "\(Int(viewModel.highIntensityDuration / 60)) MINUTES",
-                action: { viewModel.startTimer() }
-            )
-            .frame(width: 260, height: 260)
+            StartRingButton(title: "START", side: 360) { viewModel.startTimer() }
 
             // The session's interval plan, always visible (same bar as the
             // workout screen, minus the live progress marker).
@@ -294,9 +289,12 @@ struct HomeScreen: View {
 
             Spacer(minLength: 8)
 
-            VO2HistoryCard(viewModel: viewModel)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
+            // Only show the VO₂ card when there's actually a trend to display.
+            if viewModel.healthKitEnabled, viewModel.vo2DataPoints.count >= 2 {
+                VO2HistoryCard(viewModel: viewModel)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+            }
         }
     }
 
@@ -372,54 +370,32 @@ struct HomeScreen: View {
     }
 }
 
-/// Large glowing ring with a centered label — the Home "Start" affordance.
+/// Rendered metal glowing ring (with floor reflection) as the Home "Start"
+/// affordance, with the label overlaid on the ring's dark centre. The ring sits
+/// above the image's geometric centre (the reflection occupies the lower part),
+/// so the label is nudged up by `centerOffsetRatio` to land on the ring.
 struct StartRingButton: View {
     let title: String
-    let subtitle: String
+    var side: CGFloat = 360
+    /// Fraction of `side` to shift the label up so it sits on the ring's centre
+    /// (the ring is above the image's midpoint because the reflection is below).
+    var centerOffsetRatio: CGFloat = 0.06
     let action: () -> Void
-
-    @State private var pulse = false
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                // Soft outer glow
-                Circle()
-                    .stroke(Palette.ringGradient, lineWidth: 10)
-                    .blur(radius: 18)
-                    .opacity(pulse ? 0.9 : 0.5)
-
-                // Inner disc
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Palette.surfaceRaised, Palette.background],
-                            center: .center, startRadius: 2, endRadius: 130
-                        )
-                    )
-                    .padding(14)
-
-                // Crisp gradient ring
-                Circle()
-                    .stroke(Palette.ringGradient, lineWidth: 6)
-
-                VStack(spacing: 6) {
+            Image("HomeRing")
+                .resizable()
+                .scaledToFit()
+                .frame(width: side, height: side)
+                .overlay {
                     Text(title)
-                        .font(.system(size: 46, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Palette.textPrimary)
-                    Text(subtitle)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Palette.textSecondary)
-                        .tracking(1)
+                        .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .offset(y: -side * centerOffsetRatio)
                 }
-            }
         }
         .buttonStyle(.plain)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
     }
 }
 
