@@ -369,39 +369,61 @@ struct StartRingButton: View {
 struct VO2HistoryCard: View {
     @ObservedObject var viewModel: TimerViewModel
 
-    // Discrete zoom windows in months; 120 ≈ "all".
-    private let windows = [3, 6, 12, 120]
-    @State private var windowIndex = 2   // default 12 months
+    /// Explicit time windows selected via buttons (rescale the chart's x-axis).
+    private enum Range: String, CaseIterable, Identifiable {
+        case month = "Month"
+        case year  = "Year"
+        case max   = "Max"
+        var id: String { rawValue }
+        var months: Int? {   // nil = all data
+            switch self {
+            case .month: return 1
+            case .year:  return 12
+            case .max:   return nil
+            }
+        }
+    }
+    @State private var range: Range = .year
 
     private var allPoints: [VO2DataPoint] {
         viewModel.vo2DataPoints.sorted { $0.date < $1.date }
     }
 
-    private var visiblePoints: [VO2DataPoint] {
-        let months = windows[windowIndex]
-        guard let last = allPoints.last?.date,
-              let cutoff = Calendar.current.date(byAdding: .month, value: -months, to: last) else {
-            return allPoints
-        }
-        let filtered = allPoints.filter { $0.date >= cutoff }
-        return filtered.count >= 2 ? filtered : allPoints
-    }
-
     private var latestValue: Double? { allPoints.last?.value }
 
+    /// Visible x-axis window for the selected range. Clamped so short histories
+    /// still render (a 2-week history under "Year" just shows those 2 weeks).
+    private var xDomain: ClosedRange<Date>? {
+        guard let first = allPoints.first?.date, let last = allPoints.last?.date, first < last else { return nil }
+        guard let months = range.months,
+              let start = Calendar.current.date(byAdding: .month, value: -months, to: last) else {
+            return first...last
+        }
+        let clamped = Swift.max(first, start)
+        return (clamped < last ? clamped : first)...last
+    }
+
+    /// Points inside the visible window, used to fit the y-axis to what's shown.
+    private var visiblePoints: [VO2DataPoint] {
+        guard let d = xDomain else { return allPoints }
+        let inside = allPoints.filter { d.contains($0.date) }
+        return inside.count >= 2 ? inside : allPoints
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             header
 
-            if viewModel.healthKitEnabled, visiblePoints.count >= 2 {
+            if viewModel.healthKitEnabled, allPoints.count >= 2 {
+                valueRow
                 chart
-                footer
             } else {
                 emptyState
             }
         }
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
 
@@ -420,21 +442,12 @@ struct VO2HistoryCard: View {
             Text("ml/kg/min")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Palette.textTertiary)
-            zoomButton(system: "plus", enabled: windowIndex > 0) {
-                if windowIndex > 0 { windowIndex -= 1 }
-            }
         }
     }
 
-    @ViewBuilder
-    private var chart: some View {
-#if canImport(Charts)
-        let pts = visiblePoints
-        let values = pts.map(\.value)
-        let lo = max(0, (values.min() ?? 30) - 5)
-        let hi = (values.max() ?? 60) + 5
-
-        VStack(alignment: .leading, spacing: 4) {
+    /// Latest value + the Month / Year / Max range selector.
+    private var valueRow: some View {
+        HStack(alignment: .center) {
             if let latest = latestValue {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(Int(latest.rounded()))")
@@ -445,64 +458,77 @@ struct VO2HistoryCard: View {
                         .foregroundStyle(Palette.textSecondary)
                 }
             }
-
-            Chart {
-                ForEach(pts) { p in
-                    AreaMark(x: .value("Date", p.date), y: .value("VO₂", p.value))
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(
-                            LinearGradient(colors: [Palette.electricBlue.opacity(0.35), .clear],
-                                           startPoint: .top, endPoint: .bottom)
-                        )
-                    LineMark(x: .value("Date", p.date), y: .value("VO₂", p.value))
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(Palette.electricBlue)
-                        .lineStyle(StrokeStyle(lineWidth: 2.5))
-                }
-                if let target = viewModel.vo2MaxTarget {
-                    RuleMark(y: .value("Goal", target))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .foregroundStyle(Palette.textTertiary)
-                }
-            }
-            .chartYScale(domain: lo...hi)
-            .chartYAxis {
-                AxisMarks(position: .leading) { _ in
-                    AxisValueLabel().foregroundStyle(Palette.textTertiary)
-                    AxisGridLine().foregroundStyle(Palette.hairline)
-                }
-            }
-            .chartXAxis {
-                AxisMarks { _ in
-                    AxisValueLabel(format: .dateTime.month(.abbreviated))
-                        .foregroundStyle(Palette.textTertiary)
-                }
-            }
-            .frame(height: 150)
-            .gesture(
-                MagnificationGesture()
-                    .onEnded { scale in
-                        if scale > 1.2, windowIndex > 0 { windowIndex -= 1 }
-                        else if scale < 0.8, windowIndex < windows.count - 1 { windowIndex += 1 }
-                    }
-            )
+            Spacer()
+            rangePicker
         }
+    }
+
+    private var rangePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(Range.allCases) { r in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { range = r }
+                } label: {
+                    Text(r.rawValue)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .foregroundStyle(range == r ? Color.black : Palette.textSecondary)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(range == r ? Palette.electricBlue : Palette.surfaceRaised, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var chart: some View {
+#if canImport(Charts)
+        let values = visiblePoints.map(\.value)
+        let lo = max(0, (values.min() ?? 30) - 5)
+        let hi = (values.max() ?? 60) + 5
+
+        Chart {
+            ForEach(allPoints) { p in
+                AreaMark(x: .value("Date", p.date), y: .value("VO₂", p.value))
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(colors: [Palette.electricBlue.opacity(0.35), .clear],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
+                LineMark(x: .value("Date", p.date), y: .value("VO₂", p.value))
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(Palette.electricBlue)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+            }
+            if let target = viewModel.vo2MaxTarget {
+                RuleMark(y: .value("Goal", target))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .foregroundStyle(Palette.textTertiary)
+            }
+        }
+        .chartYScale(domain: lo...hi)
+        .chartXScale(domain: xDomain ?? (allPoints.first?.date ?? Date())...(allPoints.last?.date ?? Date()))
+        .chartYAxis {
+            AxisMarks(position: .leading) { _ in
+                AxisValueLabel().foregroundStyle(Palette.textTertiary)
+                AxisGridLine().foregroundStyle(Palette.hairline)
+            }
+        }
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel(format: range == .month ? .dateTime.day() : .dateTime.month(.abbreviated))
+                    .foregroundStyle(Palette.textTertiary)
+            }
+        }
+        .frame(height: 150)
+        .animation(.easeInOut(duration: 0.25), value: range)
 #else
         Text("VO₂ max trend requires iOS Charts support.")
             .font(.footnote).foregroundStyle(Palette.textSecondary)
 #endif
-    }
-
-    private var footer: some View {
-        HStack {
-            Label("Pinch to zoom", systemImage: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Palette.textTertiary)
-            Spacer()
-            zoomButton(system: "minus", enabled: windowIndex < windows.count - 1) {
-                if windowIndex < windows.count - 1 { windowIndex += 1 }
-            }
-        }
     }
 
     private var emptyState: some View {
@@ -519,18 +545,6 @@ struct VO2HistoryCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
-    }
-
-    private func zoomButton(system: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: system)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(enabled ? Palette.textPrimary : Palette.textTertiary)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(Palette.surfaceRaised))
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
     }
 }
 
