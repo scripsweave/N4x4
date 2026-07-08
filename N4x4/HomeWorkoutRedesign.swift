@@ -249,7 +249,6 @@ struct RedesignRootView: View {
 struct HomeScreen: View {
     @ObservedObject var viewModel: TimerViewModel
     @Binding var showWatchHelp: Bool
-    @State private var showPlan = false
     /// Dismisses the "connect your Watch" banner for this app session; it
     /// reappears next launch if the Watch app is still not installed.
     @State private var watchBannerDismissed = false
@@ -282,20 +281,16 @@ struct HomeScreen: View {
             )
             .frame(width: 260, height: 260)
 
-            expandChevron
-                .padding(.top, 14)
-
-            if showPlan {
-                VStack(spacing: 8) {
-                    IntervalTimelineBar(viewModel: viewModel, showProgress: false)
-                    Text(planSummary)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.textTertiary)
-                }
-                .padding(.horizontal, 28)
-                .padding(.top, 14)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            // The session's interval plan, always visible (same bar as the
+            // workout screen, minus the live progress marker).
+            VStack(spacing: 8) {
+                IntervalTimelineBar(viewModel: viewModel, showProgress: false)
+                Text(planSummary)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Palette.textTertiary)
             }
+            .padding(.horizontal, 28)
+            .padding(.top, 20)
 
             Spacer(minLength: 8)
 
@@ -369,21 +364,7 @@ struct HomeScreen: View {
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.electricBlue.opacity(0.35), lineWidth: 1))
     }
 
-    private var expandChevron: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.25)) { showPlan.toggle() }
-        } label: {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(Palette.textSecondary)
-                .rotationEffect(.degrees(showPlan ? 90 : 0))
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(Palette.surface).overlay(Circle().stroke(Palette.hairline, lineWidth: 1)))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Short "N intervals · ~M min total" line shown under the expanded plan.
+    /// Short "N intervals · ~M min total" line shown under the plan.
     private var planSummary: String {
         let total = viewModel.intervals.reduce(0) { $0 + $1.duration }
         let mins = Int((total / 60).rounded())
@@ -886,11 +867,13 @@ struct HRZoneBar: View {
     ]
 
     /// Which zone the current phase is targeting (index into `zones`), if any.
+    /// Warm-up pulses the work zone (Z4) it's building toward, so there's always
+    /// a visible target during an active session.
     private var targetIndex: Int? {
         switch viewModel.currentIntervalType {
-        case .highIntensity: return 3   // Z4 (85–95%)
-        case .rest:          return 1   // Z2 (60–70%)
-        default:             return nil
+        case .warmup, .highIntensity: return 3   // Z4 (85–95%)
+        case .rest:                   return 1   // Z2 (60–70%)
+        case .cooldown, .none:        return nil
         }
     }
 
@@ -957,19 +940,22 @@ struct HRZoneBar: View {
             ZStack(alignment: .topLeading) {
                 HStack(spacing: 4) {
                     ForEach(Array(zones.enumerated()), id: \.offset) { idx, z in
+                        let isTarget = idx == targetIndex
                         Capsule()
                             .fill(z.color)
                             .frame(height: 10)
-                            .opacity(idx == targetIndex ? 1 : 0.85)
-                            .overlay {
-                                if idx == targetIndex {
+                            .opacity(isTarget ? 1 : 0.4)
+                            .background {
+                                // Pulsing glow behind the target zone.
+                                if isTarget {
                                     Capsule()
                                         .fill(z.color)
-                                        .blur(radius: 6)
-                                        .opacity(pulse ? 0.9 : 0.3)
+                                        .blur(radius: 10)
+                                        .opacity(pulse ? 1.0 : 0.2)
+                                        .scaleEffect(pulse ? 1.15 : 0.9)
                                 }
                             }
-                            .scaleEffect(y: idx == targetIndex && pulse ? 1.35 : 1.0, anchor: .center)
+                            .scaleEffect(y: isTarget && pulse ? 1.6 : 1.0, anchor: .center)
                     }
                 }
 
