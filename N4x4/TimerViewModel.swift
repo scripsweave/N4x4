@@ -482,8 +482,9 @@ class TimerViewModel: ObservableObject {
         case .metric:   return false
         case .imperial: return true
         case .system:
-            if #available(iOS 16.0, *) { return Locale.current.measurementSystem != .metric }
-            return !Locale.current.usesMetricSystem
+            // Deployment target is iOS 17.5+, so measurementSystem (iOS 16+) is
+            // always available — no need for the deprecated usesMetricSystem.
+            return Locale.current.measurementSystem != .metric
         }
     }
 
@@ -708,8 +709,74 @@ class TimerViewModel: ObservableObject {
     /// Phone-side engine for spoken zone nudges. The Watch runs its own engine
     /// for haptics; the shared logic keeps the two channels consistent.
     private let zoneVoiceEngine = ZoneFeedbackEngine()
-    var isWatchAppInstalled: Bool { phoneSessionManager.isWatchAppInstalled }
+
+    // Live WatchConnectivity state, mirrored from PhoneSessionManager's delegate
+    // callbacks (see updateWatchConnectionState) so SwiftUI can react to it.
+    /// An Apple Watch is paired to this iPhone (whether or not our app is on it).
+    @Published var watchPaired: Bool = false
+    /// Our N4x4 Watch app is installed on the paired Watch.
+    @Published var watchAppInstalled: Bool = false
+    /// The Watch app is currently reachable (foreground / active session).
+    @Published var watchReachable: Bool = false
+    var isWatchAppInstalled: Bool { watchAppInstalled }
+
+    /// One-time upsell shown to users who upgraded from a pre-Watch build: they
+    /// have a paired Watch but haven't set our Watch app up yet.
+    @AppStorage("hasSeenWatchUpgradePrompt") var hasSeenWatchUpgradePrompt: Bool = false
+    @Published var showWatchUpgradePrompt: Bool = false
+
     private var watchBroadcastCancellable: AnyCancellable?
+
+    /// High-level connection state for status display and troubleshooting.
+    enum WatchConnectionStatus {
+        case noWatchPaired    // no Apple Watch paired to this iPhone
+        case appNotInstalled  // Watch paired, but the N4x4 Watch app isn't installed
+        case notReachable     // installed but not currently reachable
+        case connected        // installed and reachable
+    }
+
+    var watchConnectionStatus: WatchConnectionStatus {
+        if !watchPaired { return .noWatchPaired }
+        if !watchAppInstalled { return .appNotInstalled }
+        if !watchReachable { return .notReachable }
+        return .connected
+    }
+
+    /// Seconds since the current workout began (0 if not started). Recomputed on
+    /// every timer tick, so views that read it re-evaluate each second.
+    var workoutElapsedSeconds: TimeInterval {
+        guard let start = workoutStartDate else { return 0 }
+        return max(0, Date().timeIntervalSince(start))
+    }
+
+    /// True when we should warn on the timer screen that HR isn't coming through:
+    /// a workout is running on a phone whose owner has a Watch, but no heart rate
+    /// has arrived after a short settling window. Covers both "Watch app not
+    /// open/installed" and "HealthKit permission not granted" — the troubleshooting
+    /// sheet then diagnoses which.
+    var shouldWarnMissingHeartRate: Bool {
+        isRunning && watchPaired && currentHeartRate == nil && workoutElapsedSeconds > 15
+    }
+
+    /// Called by PhoneSessionManager whenever WCSession state changes.
+    func updateWatchConnectionState(paired: Bool, installed: Bool, reachable: Bool) {
+        watchPaired = paired
+        watchAppInstalled = installed
+        watchReachable = reachable
+        evaluateWatchUpgradePrompt()
+    }
+
+    /// Surface the one-time upgrade prompt when a paired Watch is present but our
+    /// app isn't installed there yet.
+    private func evaluateWatchUpgradePrompt() {
+        guard !hasSeenWatchUpgradePrompt, !showWatchUpgradePrompt else { return }
+        // Only for existing users; brand-new users see Watch setup as part of the
+        // regular onboarding flow, so don't compete with it.
+        guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else { return }
+        if watchPaired && !watchAppInstalled {
+            showWatchUpgradePrompt = true
+        }
+    }
 
     private static let milestones = [1, 5, 10, 25, 50, 100]
 
@@ -1072,6 +1139,16 @@ class TimerViewModel: ObservableObject {
     }
 
     init() {
+        // Migrate the legacy single-weekday setting to the multi-day format.
+        // @AppStorage loads a persisted value WITHOUT firing didSet, so the
+        // migration in workoutReminderWeekday.didSet never runs at launch for
+        // existing users — their saved day would otherwise be dropped and
+        // reminders silently reset to "today". Seed it explicitly here so the
+        // subsequent sync below picks it up.
+        if workoutReminderWeekday > 0 && workoutReminderWeekdays.isEmpty {
+            workoutReminderWeekdays = String(workoutReminderWeekday)
+        }
+
         // Initialize selectedWeekdaysList from AppStorage
         if !workoutReminderWeekdays.isEmpty {
             selectedWeekdaysList = workoutReminderWeekdays
@@ -1705,15 +1782,23 @@ class TimerViewModel: ObservableObject {
         }
         performanceDraft = (1...max(1, count)).prefix(count).map { byInterval[$0] }
 
+        // Only seed "Set all" when every filled interval shares one value. An
+        // average across heterogeneous intervals matches no actual interval and,
+        // combined with stampAllIntervals, would let a stray edit flatten the
+        // pre-filled per-interval values to a meaningless number.
         let filled = performanceDraft.compactMap { $0 }
-        performanceSetAll = filled.isEmpty ? nil : (filled.reduce(0, +) / Double(filled.count))
+        let allEqual = filled.dropFirst().allSatisfy { $0 == filled.first }
+        performanceSetAll = (filled.isEmpty || !allEqual) ? nil : filled.first
     }
 
     /// Stamp every work interval with the current "set all" value (the default
     /// behaviour: same value across intervals, individually editable afterward).
     func stampAllIntervals() {
-        guard !performanceDraft.isEmpty else { return }
-        performanceDraft = Array(repeating: performanceSetAll, count: performanceDraft.count)
+        // Only stamp when "Set all" holds a real value. Clearing the field (or a
+        // partial/invalid keystroke, which parses to nil) must NOT wipe the
+        // per-interval draft the user may have hand-tuned.
+        guard !performanceDraft.isEmpty, let value = performanceSetAll else { return }
+        performanceDraft = Array(repeating: value, count: performanceDraft.count)
     }
 
     /// Convert the draft (display units) into stored performances (canonical),

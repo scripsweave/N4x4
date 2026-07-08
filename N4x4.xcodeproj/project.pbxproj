@@ -3,12 +3,14 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3D5014002FFC30D100AB87B8 /* N4x4Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3D5013F62FFC30CF00AB87B8 /* N4x4Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3D516A652CAB347F001279C0 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D516A642CAB347F001279C0 /* HelpView.swift */; };
 		3DD9A5BE2F4CB5C70022AC16 /* StreakCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */; };
+		3DFEED000000000000000A01 /* HomeWorkoutRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */; };
 		3DF13A452C9389C100DD18E7 /* N4x4App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A442C9389C100DD18E7 /* N4x4App.swift */; };
 		3DF13A472C9389C100DD18E7 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A462C9389C100DD18E7 /* ContentView.swift */; };
 		3DF13A492C9389C200DD18E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A482C9389C200DD18E7 /* Assets.xcassets */; };
@@ -22,17 +24,34 @@
 		3DF13A752C938A9E00DD18E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A742C938A9E00DD18E7 /* SettingsView.swift */; };
 		3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A762C938ABA00DD18E7 /* Extensions.swift */; };
 		3DF13A802C94D28B00DD18E7 /* alarm.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */; };
+		5EA1000000000000000000B1 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F1 /* WatchMessage.swift */; };
+		5EA1000000000000000000B2 /* ZoneFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F2 /* ZoneFeedback.swift */; };
+		5EA1000000000000000000B3 /* ZoneFeedbackStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */; };
+		5EA1000000000000000000B4 /* PhoneSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F4 /* PhoneSessionManager.swift */; };
+		5EA1000000000000000000B5 /* WatchSetupViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F5 /* WatchSetupViews.swift */; };
+		5EA1000000000000000000C1 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F1 /* WatchMessage.swift */; };
+		5EA1000000000000000000C2 /* ZoneFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F2 /* ZoneFeedback.swift */; };
+		5EA1000000000000000000C3 /* ZoneFeedbackStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */; };
+		5EA1000000000000000000C4 /* Interval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A6E2C938A4F00DD18E7 /* Interval.swift */; };
+		5EA1000000000000000000C5 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
-		BF3EDE7BA5FC43599829D290 /* TipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A37A004B0EA4A46A5664A04 /* TipsView.swift */; };
 		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
+		BF3EDE7BA5FC43599829D290 /* TipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A37A004B0EA4A46A5664A04 /* TipsView.swift */; };
 		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
 		CD72E7EF59294BC6B17C3451 /* N4x4LiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */; };
 		F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		3D5013FE2FFC30D100AB87B8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3DF13A392C9389C100DD18E7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3D5013F52FFC30CF00AB87B8;
+			remoteInfo = "N4x4Watch Watch App";
+		};
 		3DF13A522C9389C200DD18E7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3DF13A392C9389C100DD18E7 /* Project object */;
@@ -57,6 +76,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		3D5014012FFC30D100AB87B8 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				3D5014002FFC30D100AB87B8 /* N4x4Watch Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		55D2367A38B64576AC4EEB89 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -71,9 +101,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3D5013F62FFC30CF00AB87B8 /* N4x4Watch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "N4x4Watch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		3D516A642CAB347F001279C0 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		3D53FCC72CA0667200E4A09A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakCard.swift; sourceTree = "<group>"; };
+		3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWorkoutRedesign.swift; sourceTree = "<group>"; };
 		3DF13A412C9389C100DD18E7 /* N4x4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = N4x4.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DF13A442C9389C100DD18E7 /* N4x4App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4App.swift; sourceTree = "<group>"; };
 		3DF13A462C9389C100DD18E7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -90,17 +122,33 @@
 		3DF13A742C938A9E00DD18E7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		3DF13A762C938ABA00DD18E7 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = alarm.mp3; sourceTree = "<group>"; };
+		4A37A004B0EA4A46A5664A04 /* TipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipsView.swift; sourceTree = "<group>"; };
 		5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityBundle.swift; sourceTree = "<group>"; };
 		55D2367A38B64576AC4EEB00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5739937EF07648BE8983755B /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
+		5EA1000000000000000000F1 /* WatchMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessage.swift; sourceTree = "<group>"; };
+		5EA1000000000000000000F2 /* ZoneFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneFeedback.swift; sourceTree = "<group>"; };
+		5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneFeedbackStyle.swift; sourceTree = "<group>"; };
+		5EA1000000000000000000F4 /* PhoneSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSessionManager.swift; sourceTree = "<group>"; };
+		5EA1000000000000000000F5 /* WatchSetupViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSetupViews.swift; sourceTree = "<group>"; };
 		80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityView.swift; sourceTree = "<group>"; };
 		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityAttributes.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
-		4A37A004B0EA4A46A5664A04 /* TipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3D5013F72FFC30CF00AB87B8 /* N4x4Watch Watch App */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = "N4x4Watch Watch App"; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
+		3D5013F32FFC30CF00AB87B8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3DF13A3E2C9389C100DD18E7 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -136,9 +184,11 @@
 			isa = PBXGroup;
 			children = (
 				3DF13A432C9389C100DD18E7 /* N4x4 */,
+				5EA1000000000000000000A0 /* Shared */,
 				BABF05A41C95414D87FCD532 /* N4x4LiveActivity */,
 				3DF13A542C9389C200DD18E7 /* N4x4Tests */,
 				3DF13A5E2C9389C200DD18E7 /* N4x4UITests */,
+				3D5013F72FFC30CF00AB87B8 /* N4x4Watch Watch App */,
 				3DF13A422C9389C100DD18E7 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -150,6 +200,7 @@
 				3DF13A512C9389C200DD18E7 /* N4x4Tests.xctest */,
 				3DF13A5B2C9389C200DD18E7 /* N4x4UITests.xctest */,
 				877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */,
+				3D5013F62FFC30CF00AB87B8 /* N4x4Watch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -158,6 +209,7 @@
 			isa = PBXGroup;
 			children = (
 				3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */,
+				3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */,
 				3D53FCC72CA0667200E4A09A /* Info.plist */,
 				3DF13A7E2C94D25F00DD18E7 /* Sounds */,
 				3DF13A442C9389C100DD18E7 /* N4x4App.swift */,
@@ -174,6 +226,8 @@
 				4A37A004B0EA4A46A5664A04 /* TipsView.swift */,
 				5739937EF07648BE8983755B /* SpeechManager.swift */,
 				9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */,
+				5EA1000000000000000000F4 /* PhoneSessionManager.swift */,
+				5EA1000000000000000000F5 /* WatchSetupViews.swift */,
 			);
 			path = N4x4;
 			sourceTree = "<group>";
@@ -211,6 +265,16 @@
 			path = Sounds;
 			sourceTree = "<group>";
 		};
+		5EA1000000000000000000A0 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				5EA1000000000000000000F1 /* WatchMessage.swift */,
+				5EA1000000000000000000F2 /* ZoneFeedback.swift */,
+				5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 		BABF05A41C95414D87FCD532 /* N4x4LiveActivity */ = {
 			isa = PBXGroup;
 			children = (
@@ -241,6 +305,28 @@
 			productReference = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		3D5013F52FFC30CF00AB87B8 /* N4x4Watch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3D5014042FFC30D100AB87B8 /* Build configuration list for PBXNativeTarget "N4x4Watch Watch App" */;
+			buildPhases = (
+				3D5013F22FFC30CF00AB87B8 /* Sources */,
+				3D5013F32FFC30CF00AB87B8 /* Frameworks */,
+				3D5013F42FFC30CF00AB87B8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3D5013F72FFC30CF00AB87B8 /* N4x4Watch Watch App */,
+			);
+			name = "N4x4Watch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "N4x4Watch Watch App";
+			productReference = 3D5013F62FFC30CF00AB87B8 /* N4x4Watch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
 		3DF13A402C9389C100DD18E7 /* N4x4 */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3DF13A652C9389C200DD18E7 /* Build configuration list for PBXNativeTarget "N4x4" */;
@@ -249,11 +335,13 @@
 				3DF13A3E2C9389C100DD18E7 /* Frameworks */,
 				3DF13A3F2C9389C100DD18E7 /* Resources */,
 				55D2367A38B64576AC4EEB89 /* Embed Foundation Extensions */,
+				3D5014012FFC30D100AB87B8 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				E5678DB42A014910911F3436 /* PBXTargetDependency */,
+				3D5013FF2FFC30D100AB87B8 /* PBXTargetDependency */,
 			);
 			name = N4x4;
 			productName = N4x4;
@@ -303,11 +391,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1540;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 1540;
 				TargetAttributes = {
 					2615661FD081463A8F34A193 = {
 						CreatedOnToolsVersion = 15.4;
+					};
+					3D5013F52FFC30CF00AB87B8 = {
+						CreatedOnToolsVersion = 26.5;
 					};
 					3DF13A402C9389C100DD18E7 = {
 						CreatedOnToolsVersion = 15.4;
@@ -339,12 +430,20 @@
 				2615661FD081463A8F34A193 /* N4x4LiveActivity */,
 				3DF13A502C9389C200DD18E7 /* N4x4Tests */,
 				3DF13A5A2C9389C200DD18E7 /* N4x4UITests */,
+				3D5013F52FFC30CF00AB87B8 /* N4x4Watch Watch App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		2C098ABE4F2F4A4D87DE78FE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3D5013F42FFC30CF00AB87B8 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -378,6 +477,18 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3D5013F22FFC30CF00AB87B8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5EA1000000000000000000C1 /* WatchMessage.swift in Sources */,
+				5EA1000000000000000000C2 /* ZoneFeedback.swift in Sources */,
+				5EA1000000000000000000C3 /* ZoneFeedbackStyle.swift in Sources */,
+				5EA1000000000000000000C4 /* Interval.swift in Sources */,
+				5EA1000000000000000000C5 /* N4x4LiveActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3DF13A3D2C9389C100DD18E7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -386,6 +497,7 @@
 				3DF13A712C938A6900DD18E7 /* TimerViewModel.swift in Sources */,
 				3DF13A472C9389C100DD18E7 /* ContentView.swift in Sources */,
 				3DD9A5BE2F4CB5C70022AC16 /* StreakCard.swift in Sources */,
+				3DFEED000000000000000A01 /* HomeWorkoutRedesign.swift in Sources */,
 				3D516A652CAB347F001279C0 /* HelpView.swift in Sources */,
 				3DF13A752C938A9E00DD18E7 /* SettingsView.swift in Sources */,
 				3DF13A452C9389C100DD18E7 /* N4x4App.swift in Sources */,
@@ -395,6 +507,11 @@
 				BF3EDE7BA5FC43599829D290 /* TipsView.swift in Sources */,
 				CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */,
 				F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */,
+				5EA1000000000000000000B1 /* WatchMessage.swift in Sources */,
+				5EA1000000000000000000B2 /* ZoneFeedback.swift in Sources */,
+				5EA1000000000000000000B3 /* ZoneFeedbackStyle.swift in Sources */,
+				5EA1000000000000000000B4 /* PhoneSessionManager.swift in Sources */,
+				5EA1000000000000000000B5 /* WatchSetupViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -428,6 +545,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		3D5013FF2FFC30D100AB87B8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3D5013F52FFC30CF00AB87B8 /* N4x4Watch Watch App */;
+			targetProxy = 3D5013FE2FFC30D100AB87B8 /* PBXContainerItemProxy */;
+		};
 		3DF13A532C9389C200DD18E7 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 3DF13A402C9389C100DD18E7 /* N4x4 */;
@@ -446,6 +568,78 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		3D5014022FFC30D100AB87B8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "N4x4Watch Watch App/N4x4Watch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = N4x4Watch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your heart rate during a workout to guide you into your target zone.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 records your interval workout to Apple Health.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "Jan-van-Rensburg.N4x4";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		3D5014032FFC30D100AB87B8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "N4x4Watch Watch App/N4x4Watch Watch App.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = N4x4Watch;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your heart rate during a workout to guide you into your target zone.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 records your interval workout to Apple Health.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "Jan-van-Rensburg.N4x4";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
 		3DF13A632C9389C200DD18E7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -588,12 +782,12 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.44;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -629,12 +823,12 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.44;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -650,10 +844,10 @@
 		3DF13A692C9389C200DD18E7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MARKETING_VERSION = 1.0;
@@ -669,10 +863,10 @@
 		3DF13A6A2C9389C200DD18E7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				MARKETING_VERSION = 1.0;
@@ -688,9 +882,9 @@
 		3DF13A6C2C9389C200DD18E7 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4UITests";
@@ -705,9 +899,9 @@
 		3DF13A6D2C9389C200DD18E7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4UITests";
@@ -727,13 +921,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				INFOPLIST_FILE = N4x4LiveActivity/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.44;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -753,13 +947,13 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				INFOPLIST_FILE = N4x4LiveActivity/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.44;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -779,6 +973,15 @@
 			buildConfigurations = (
 				AFCBDA0F967E4829A5E54A88 /* Debug */,
 				AEC5234DA71B42B186719C82 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3D5014042FFC30D100AB87B8 /* Build configuration list for PBXNativeTarget "N4x4Watch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3D5014022FFC30D100AB87B8 /* Debug */,
+				3D5014032FFC30D100AB87B8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

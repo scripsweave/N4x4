@@ -176,7 +176,7 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(flow.currentStep, .welcome)
 
         flow.next()
-        XCTAssertEqual(flow.currentStep, .structure)
+        XCTAssertEqual(flow.currentStep, .basics)
 
         flow.back()
         XCTAssertEqual(flow.currentStep, .welcome)
@@ -199,11 +199,11 @@ final class N4x4Tests: XCTestCase {
     func testOnboardingFlowIncludesReminderDayStep() {
         let flow = OnboardingFlowViewModel()
 
-        flow.next() // structure
+        flow.next() // basics
+        flow.next() // modality
         flow.next() // age
-        flow.next() // audioMode
-        flow.next() // notifications
-        flow.next() // reminder day
+        flow.next() // vo2Goal
+        flow.next() // reminderDay
 
         XCTAssertEqual(flow.currentStep, .reminderDay)
     }

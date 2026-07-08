@@ -80,9 +80,35 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
                  activationDidCompleteWith activationState: WCSessionActivationState,
                  error: Error?) {
         guard activationState == .activated else { return }
+        refreshWatchState()
         DispatchQueue.main.async { [weak self] in
             guard let vm = self?.timerViewModel else { return }
             self?.sendStateUpdate(to: vm)
+        }
+    }
+
+    /// Fired when the Watch is paired/unpaired or the Watch app is installed/removed.
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        refreshWatchState()
+    }
+
+    /// Fired when live reachability changes (Watch app foregrounded/backgrounded).
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        refreshWatchState()
+    }
+
+    /// Read the current WCSession flags and push them to the view model so the UI
+    /// can show connection status and drive troubleshooting.
+    private func refreshWatchState() {
+        let activated = WCSession.isSupported()
+            && WCSession.default.activationState == .activated
+        let paired = activated && WCSession.default.isPaired
+        let installed = activated && WCSession.default.isWatchAppInstalled
+        let reachable = activated && WCSession.default.isReachable
+        DispatchQueue.main.async { [weak self] in
+            self?.timerViewModel?.updateWatchConnectionState(
+                paired: paired, installed: installed, reachable: reachable
+            )
         }
     }
 

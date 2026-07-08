@@ -12,6 +12,7 @@ struct TimerView: View {
     @State private var showResetAlert = false
     @State private var showSkipConfirmation = false
     @State private var skipConfirmationForCooldown = false
+    @State private var showWatchHelp = false
     @Environment(\.scenePhase) private var scenePhase
 
     var ringColor: Color {
@@ -128,7 +129,7 @@ struct TimerView: View {
                                 .foregroundColor(.secondary)
                             Image(systemName: "heart.fill")
                                 .font(.system(size: 18))
-                                .foregroundColor(phoneHRColor(hr))
+                                .foregroundColor(.red)
                             Text("\(Int(hr)) BPM")
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
                                 .foregroundColor(phoneHRColor(hr))
@@ -145,6 +146,29 @@ struct TimerView: View {
                                 .foregroundColor(phoneHRColor(hr))
                                 .transition(.opacity)
                         }
+                    }
+
+                    // Warn (tappable → troubleshooting) when a workout is running
+                    // on a phone with a paired Watch but no heart rate is arriving.
+                    if viewModel.shouldWarnMissingHeartRate {
+                        Button {
+                            showWatchHelp = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                Text(viewModel.watchAppInstalled
+                                     ? "No heart rate from your Watch — tap for help"
+                                     : "Set up N4x4 on your Apple Watch — tap for help")
+                                    .multilineTextAlignment(.leading)
+                            }
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
                     }
 
                     if let hrZone = heartRateZoneText {
@@ -219,6 +243,14 @@ struct TimerView: View {
             )
             .sheet(isPresented: $showSettings) {
                 SettingsView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showWatchHelp) {
+                WatchTroubleshootingView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $viewModel.showWatchUpgradePrompt, onDismiss: {
+                viewModel.hasSeenWatchUpgradePrompt = true
+            }) {
+                WatchUpgradeOnboardingView(viewModel: viewModel)
             }
             .sheet(isPresented: $showHistory) {
                 StreakHistoryView(viewModel: viewModel)
@@ -341,7 +373,7 @@ struct TimerView: View {
     }
 }
 
-private struct PostWorkoutSummaryView: View {
+struct PostWorkoutSummaryView: View {
     @ObservedObject var viewModel: TimerViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -601,8 +633,11 @@ private struct ScienceCardView: View {
     }
 }
 
-private struct StreakHistoryView: View {
+struct StreakHistoryView: View {
     @ObservedObject var viewModel: TimerViewModel
+    /// When true, the view is hosted inside a tab (not a sheet), so the
+    /// dismiss-style "Done" button is omitted.
+    var embedded: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var selectedWorkout: WorkoutLogEntry?
     @State private var selectedPerfModality: TrainingModality?
@@ -626,8 +661,10 @@ private struct StreakHistoryView: View {
             }
             .navigationTitle("Weekly Streaks")
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
                 }
             }
         }
@@ -902,7 +939,7 @@ private struct StreakHistoryView: View {
 
 // MARK: - Milestone celebration
 
-private struct MilestoneCelebrationView: View {
+struct MilestoneCelebrationView: View {
     let count: Int
     let onContinue: () -> Void
 

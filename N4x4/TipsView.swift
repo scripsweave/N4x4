@@ -98,6 +98,10 @@ private let advancedTips: [Tip] = [
         body: "The 4×4 stresses your heart's stroke volume significantly. Never do it on back-to-back days. Your VO₂ max gains — the cardiac remodelling — happen during the recovery window, not during the workout itself."),
     Tip(icon: "exclamationmark.triangle.fill", title: "Recognise a Plateau Early",
         body: "If you're giving maximum effort but can no longer reach your target heart rate, your nervous system is likely overreached. Take 3–5 days of full rest or easy walking, then return refreshed."),
+    Tip(icon: "figure.outdoor.cycle",    title: "Keep Your Zone 2 Base",
+        body: "Don't replace your easy steady-state cardio with the 4×4 — complement it. Zone 2 training builds the aerobic base that supports performance at higher intensities. Dropping it can actually stall or reverse your VO₂ max gains."),
+    Tip(icon: "bed.double.fill",          title: "Sleep Is Where You Improve",
+        body: "Cardiac remodelling — the increased stroke volume that raises VO₂ max — happens during recovery, not during the workout. Poor sleep sabotages adaptation even if your sessions are perfect. Prioritise 7–9 hours on training days."),
 ]
 
 // MARK: - Main view

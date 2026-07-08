@@ -12,12 +12,9 @@ struct WatchTimerView: View {
     @EnvironmentObject var sessionManager: WatchSessionManager
     @EnvironmentObject var workoutManager: WorkoutManager
 
-    // Local 1-second tick drives the countdown re-render.
-    @State private var tick = Date()
     @State private var lastIntervalIndex = 0
     @Environment(\.scenePhase) private var scenePhase
 
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private var state: WatchTimerState { sessionManager.timerState }
 
     var body: some View {
@@ -31,34 +28,40 @@ struct WatchTimerView: View {
                 .minimumScaleFactor(0.7)
 
             // ── Progress ring + countdown + HR ──────────────
-            ZStack {
-                Circle()
-                    .stroke(Color.gray.opacity(0.25), lineWidth: 6)
+            // TimelineView drives a smooth 1 s countdown. A plain Timer.publish
+            // is throttled to ~5 s on watchOS; TimelineView is refreshed by the
+            // system every second, so the ring and clock stay live.
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = state.timeRemaining(asOf: context.date)
+                ZStack {
+                    Circle()
+                        .stroke(Color.gray.opacity(0.25), lineWidth: 6)
 
-                Circle()
-                    .trim(from: 0, to: state.progressValue)
-                    .stroke(style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .foregroundColor(state.phase.color)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.linear(duration: 1), value: state.timeRemaining)
+                    Circle()
+                        .trim(from: 0, to: state.progressValue(asOf: context.date))
+                        .stroke(style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .foregroundColor(state.phase.color)
+                        .rotationEffect(.degrees(-90))
 
-                VStack(spacing: 2) {
-                    Text(timeString(state.timeRemaining))
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                    VStack(spacing: 2) {
+                        Text(timeString(remaining))
+                            .font(.system(size: 28, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
 
-                    if workoutManager.heartRate > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "heart.fill")
-                                .font(.system(size: 10))
-                            Text("\(Int(workoutManager.heartRate))")
-                                .font(.system(size: 15, weight: .bold, design: .monospaced))
+                        if workoutManager.heartRate > 0 {
+                            HStack(spacing: 2) {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.red)
+                                Text("\(Int(workoutManager.heartRate))")
+                                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                                    .foregroundColor(hrColor)
+                            }
                         }
-                        .foregroundColor(hrColor)
                     }
                 }
+                .frame(width: 130, height: 130)
             }
-            .frame(width: 130, height: 130)
 
             // ── Out-of-zone hint ────────────────────────────
             if let hint = zoneHint {
@@ -96,8 +99,6 @@ struct WatchTimerView: View {
                 .buttonStyle(.plain)
             }
         }
-        .onReceive(ticker) { tick = $0 }   // re-renders the countdown
-
         // Drive the zone-feedback engine off each fresh HR reading.
         .onChange(of: workoutManager.heartRate) { _, bpm in
             sessionManager.evaluateZoneHaptic(bpm: bpm)
