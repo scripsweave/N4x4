@@ -63,6 +63,31 @@ private func intervalColor(_ type: IntervalType?) -> Color {
     }
 }
 
+/// A heart that beats once per actual heartbeat (period = 60 / BPM). Re-create it
+/// with `.id(Int(bpm.rounded()))`-style keying so the beat rate tracks live BPM.
+struct PulsingHeart: View {
+    var bpm: Double
+    var size: CGFloat
+    @State private var big = false
+
+    /// Seconds per beat, clamped to a sane range so extreme/garbage BPM can't
+    /// produce a strobing or frozen heart.
+    private var beatPeriod: Double { 60.0 / min(210, max(40, bpm)) }
+
+    var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: size))
+            .foregroundStyle(Palette.danger)
+            .scaleEffect(big ? 1.0 : 0.72)
+            .shadow(color: Palette.danger.opacity(0.7), radius: big ? size * 0.4 : 0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: beatPeriod / 2).repeatForever(autoreverses: true)) {
+                    big = true
+                }
+            }
+    }
+}
+
 /// Horizontal timeline of every interval, sized proportionally to duration and
 /// coloured by phase. With `showProgress`, a live marker shows how far through
 /// the whole session the user is (and how much is left).
@@ -768,15 +793,15 @@ struct WorkoutRing: View {
             }
 
             if let hr = viewModel.currentHeartRate {
-                HStack(spacing: 5) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Palette.danger)
+                HStack(spacing: 8) {
+                    PulsingHeart(bpm: hr, size: 26)
+                        .id(Int((hr / 4).rounded()))
                     Text("\(Int(hr))")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 34, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.textPrimary)
+                        .monospacedDigit()
                 }
-                .padding(.top, 2)
+                .padding(.top, 8)
             }
         }
     }
@@ -845,9 +870,17 @@ struct HRZoneBar: View {
                     .foregroundStyle(Palette.textTertiary)
                 Spacer()
                 if let hr = viewModel.currentHeartRate {
-                    Text("\(Int(hr)) BPM")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(Palette.textPrimary)
+                    HStack(spacing: 6) {
+                        PulsingHeart(bpm: hr, size: 15)
+                            .id(Int((hr / 4).rounded()))
+                        Text("\(Int(hr))")
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Palette.textPrimary)
+                            .monospacedDigit()
+                        Text("BPM")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Palette.textSecondary)
+                    }
                 }
             }
 
@@ -861,7 +894,7 @@ struct HRZoneBar: View {
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
         }
     }
 
@@ -887,13 +920,15 @@ struct HRZoneBar: View {
                     }
                 }
 
-                // Live HR arrow.
+                // Live HR arrow — larger and glowing so the current position is obvious.
                 if let hr = viewModel.currentHeartRate {
                     let x = arrowFraction(for: hr) * w
                     Image(systemName: "arrowtriangle.down.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Palette.textPrimary)
-                        .position(x: min(max(6, x), w - 6), y: -8)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 2)
+                        .position(x: min(max(8, x), w - 8), y: -10)
+                        .animation(.easeInOut(duration: 0.5), value: hr)
                 }
             }
             .frame(height: 10)
