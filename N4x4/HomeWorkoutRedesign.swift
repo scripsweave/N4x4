@@ -867,13 +867,12 @@ struct HRZoneBar: View {
     ]
 
     /// Which zone the current phase is targeting (index into `zones`), if any.
-    /// Warm-up pulses the work zone (Z4) it's building toward, so there's always
-    /// a visible target during an active session.
+    /// Only work and recovery carry a target; warm-up and cool-down have none.
     private var targetIndex: Int? {
         switch viewModel.currentIntervalType {
-        case .warmup, .highIntensity: return 3   // Z4 (85–95%)
-        case .rest:                   return 1   // Z2 (60–70%)
-        case .cooldown, .none:        return nil
+        case .highIntensity:   return 3   // Z4 (85–95%)
+        case .rest:            return 1   // Z2 (60–70%)
+        case .warmup, .cooldown, .none: return nil
         }
     }
 
