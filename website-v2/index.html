@@ -15,43 +15,12 @@
 </head>
 <body>
 
-<!-- Shared SVG defs for the Apple Watch Ultra mockup -->
+<!-- Shared SVG defs for the Apple Watch face -->
 <svg width="0" height="0" aria-hidden="true" style="position:absolute;pointer-events:none">
     <defs>
-        <linearGradient id="uCase" x1="0.05" y1="0" x2="0.7" y2="1">
-            <stop offset="0" stop-color="#7d7e83"/>
-            <stop offset="0.22" stop-color="#4b4c50"/>
-            <stop offset="0.55" stop-color="#303135"/>
-            <stop offset="0.8" stop-color="#212227"/>
-            <stop offset="1" stop-color="#141519"/>
-        </linearGradient>
-        <linearGradient id="uGuard" x1="0" y1="0" x2="1" y2="0.35">
-            <stop offset="0" stop-color="#585a5f"/>
-            <stop offset="1" stop-color="#1b1c20"/>
-        </linearGradient>
-        <linearGradient id="uBand" x1="0" y1="0" x2="0.4" y2="1">
-            <stop offset="0" stop-color="#323438"/>
-            <stop offset="0.5" stop-color="#17181b"/>
-            <stop offset="1" stop-color="#0a0b0d"/>
-        </linearGradient>
-        <linearGradient id="uCrown" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stop-color="#101113"/>
-            <stop offset="0.45" stop-color="#63666c"/>
-            <stop offset="0.55" stop-color="#6c6f75"/>
-            <stop offset="1" stop-color="#232428"/>
-        </linearGradient>
-        <linearGradient id="uAction" x1="0" y1="0" x2="1" y2="0.2">
-            <stop offset="0" stop-color="#A63000"/>
-            <stop offset="0.5" stop-color="#FF5A1F"/>
-            <stop offset="1" stop-color="#FF8038"/>
-        </linearGradient>
         <linearGradient id="uRing" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#FFB84D"/>
             <stop offset="1" stop-color="#FF7A00"/>
-        </linearGradient>
-        <linearGradient id="uGlass" x1="0" y1="0" x2="0.55" y2="1">
-            <stop offset="0" stop-color="#ffffff" stop-opacity="0.12"/>
-            <stop offset="0.4" stop-color="#ffffff" stop-opacity="0"/>
         </linearGradient>
     </defs>
 </svg>
@@ -96,40 +65,28 @@
             <img src="images/screen-home.png" alt="N4x4 home screen showing weekly streak and VO₂ max trend">
         </div>
         <div class="watch-mock">
-            <svg class="watch-svg" viewBox="0 0 320 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch Ultra showing live heart rate 172 BPM with a Speed Up coaching cue">
-                <rect x="82" y="2" width="156" height="142" rx="38" fill="url(#uBand)"/>
-                <rect x="96" y="30" width="128" height="7" rx="3.5" fill="#000000" opacity="0.16"/>
-                <rect x="96" y="52" width="128" height="7" rx="3.5" fill="#000000" opacity="0.12"/>
-                <rect x="82" y="296" width="156" height="142" rx="38" fill="url(#uBand)"/>
-                <rect x="96" y="403" width="128" height="7" rx="3.5" fill="#000000" opacity="0.16"/>
-                <rect x="96" y="381" width="128" height="7" rx="3.5" fill="#000000" opacity="0.12"/>
-                <rect x="28" y="168" width="16" height="62" rx="6" fill="url(#uAction)" stroke="#000000" stroke-opacity="0.25"/>
-                <rect x="272" y="170" width="30" height="100" rx="15" fill="url(#uGuard)" stroke="#0a0b0d" stroke-width="1"/>
-                <rect x="296" y="278" width="13" height="46" rx="6" fill="url(#uCrown)"/>
-                <rect x="296" y="196" width="24" height="44" rx="11" fill="url(#uCrown)" stroke="#0a0b0d" stroke-width="0.8"/>
-                <line x1="301" y1="200" x2="301" y2="236" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                <line x1="305" y1="199" x2="305" y2="237" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                <line x1="309" y1="199" x2="309" y2="237" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                <line x1="313" y1="199" x2="313" y2="237" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                <line x1="317" y1="200" x2="317" y2="236" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                <rect x="40" y="84" width="240" height="272" rx="66" fill="url(#uCase)" stroke="#08090b" stroke-width="2"/>
-                <rect x="44" y="88" width="232" height="264" rx="62" fill="none" stroke="#9a9ba0" stroke-opacity="0.35" stroke-width="1.5"/>
-                <rect x="47" y="91" width="226" height="258" rx="59" fill="none" stroke="#000000" stroke-opacity="0.30" stroke-width="1"/>
-                <rect x="64" y="112" width="192" height="216" rx="48" fill="#000000"/>
-                <svg x="64" y="112" width="192" height="216" viewBox="0 0 210 256" preserveAspectRatio="xMidYMid meet">
-                    <text x="105" y="30" text-anchor="middle" fill="#FF9400" font-size="11" font-weight="700" letter-spacing="1.5">HIGH INTENSITY</text>
-                    <text x="105" y="47" text-anchor="middle" fill="#8b8b90" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
-                    <g transform="rotate(-90 105 130)">
-                        <circle cx="105" cy="130" r="76" fill="none" stroke="#2b2b2e" stroke-width="8"/>
-                        <circle cx="105" cy="130" r="76" fill="none" stroke="url(#uRing)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477" stroke-dashoffset="143"/>
+            <div class="watch-tile">
+                <svg viewBox="0 0 210 256" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch showing live heart rate 172 BPM with a Speed Up coaching cue">
+                    <text x="105" y="34" text-anchor="middle" fill="#FF9400" font-size="11" font-weight="700" letter-spacing="1.5">HIGH INTENSITY</text>
+                    <text x="105" y="51" text-anchor="middle" fill="#8b8b90" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
+                    <g transform="rotate(-90 105 132)">
+                        <circle cx="105" cy="132" r="74" fill="none" stroke="#2b2b2e" stroke-width="8"/>
+                        <circle cx="105" cy="132" r="74" fill="none" stroke="url(#uRing)" stroke-width="8" stroke-linecap="round" stroke-dasharray="465" stroke-dashoffset="140"/>
                     </g>
-                    <text x="105" y="148" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="800" letter-spacing="-2">172</text>
-                    <text x="105" y="171" text-anchor="middle" fill="#8b8b90" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
+                    <text x="105" y="150" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="800" letter-spacing="-2">172</text>
+                    <text x="105" y="173" text-anchor="middle" fill="#8b8b90" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
                     <text x="105" y="228" text-anchor="middle" fill="#FF9400" font-size="16" font-weight="800" letter-spacing="0.5">▲ SPEED UP</text>
                     <text x="105" y="247" text-anchor="middle" fill="#6f6f74" font-size="10.5" font-weight="600" letter-spacing="0.5">TARGET 158–172</text>
                 </svg>
-                <rect x="64" y="112" width="192" height="216" rx="48" fill="url(#uGlass)"/>
-            </svg>
+            </div>
+            <div class="watch-caption">
+                <svg viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <rect x="5" y="7" width="14" height="16" rx="4" stroke="currentColor" stroke-width="1.6"/>
+                    <path d="M8 7l1-4h6l1 4M8 23l1 4h6l1-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                    <rect x="19" y="12" width="1.7" height="5" rx="0.85" fill="currentColor"/>
+                </svg>
+                Apple Watch
+            </div>
         </div>
     </div>
     <div class="hero-scroll-hint">
@@ -351,40 +308,28 @@
             </div>
             <div class="watch-stage animate-in delay-1">
                 <div class="watch-mock">
-                    <svg class="watch-svg" viewBox="0 0 320 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch Ultra showing live heart rate 172 BPM with a Speed Up coaching cue">
-                        <rect x="82" y="2" width="156" height="142" rx="38" fill="url(#uBand)"/>
-                        <rect x="96" y="30" width="128" height="7" rx="3.5" fill="#000000" opacity="0.16"/>
-                        <rect x="96" y="52" width="128" height="7" rx="3.5" fill="#000000" opacity="0.12"/>
-                        <rect x="82" y="296" width="156" height="142" rx="38" fill="url(#uBand)"/>
-                        <rect x="96" y="403" width="128" height="7" rx="3.5" fill="#000000" opacity="0.16"/>
-                        <rect x="96" y="381" width="128" height="7" rx="3.5" fill="#000000" opacity="0.12"/>
-                        <rect x="28" y="168" width="16" height="62" rx="6" fill="url(#uAction)" stroke="#000000" stroke-opacity="0.25"/>
-                        <rect x="272" y="170" width="30" height="100" rx="15" fill="url(#uGuard)" stroke="#0a0b0d" stroke-width="1"/>
-                        <rect x="296" y="278" width="13" height="46" rx="6" fill="url(#uCrown)"/>
-                        <rect x="296" y="196" width="24" height="44" rx="11" fill="url(#uCrown)" stroke="#0a0b0d" stroke-width="0.8"/>
-                        <line x1="301" y1="200" x2="301" y2="236" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                        <line x1="305" y1="199" x2="305" y2="237" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                        <line x1="309" y1="199" x2="309" y2="237" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                        <line x1="313" y1="199" x2="313" y2="237" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                        <line x1="317" y1="200" x2="317" y2="236" stroke="#0d0e10" stroke-opacity="0.5" stroke-width="1"/>
-                        <rect x="40" y="84" width="240" height="272" rx="66" fill="url(#uCase)" stroke="#08090b" stroke-width="2"/>
-                        <rect x="44" y="88" width="232" height="264" rx="62" fill="none" stroke="#9a9ba0" stroke-opacity="0.35" stroke-width="1.5"/>
-                        <rect x="47" y="91" width="226" height="258" rx="59" fill="none" stroke="#000000" stroke-opacity="0.30" stroke-width="1"/>
-                        <rect x="64" y="112" width="192" height="216" rx="48" fill="#000000"/>
-                        <svg x="64" y="112" width="192" height="216" viewBox="0 0 210 256" preserveAspectRatio="xMidYMid meet">
-                            <text x="105" y="30" text-anchor="middle" fill="#FF9400" font-size="11" font-weight="700" letter-spacing="1.5">HIGH INTENSITY</text>
-                            <text x="105" y="47" text-anchor="middle" fill="#8b8b90" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
-                            <g transform="rotate(-90 105 130)">
-                                <circle cx="105" cy="130" r="76" fill="none" stroke="#2b2b2e" stroke-width="8"/>
-                                <circle cx="105" cy="130" r="76" fill="none" stroke="url(#uRing)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477" stroke-dashoffset="143"/>
+                    <div class="watch-tile">
+                        <svg viewBox="0 0 210 256" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch showing live heart rate 172 BPM with a Speed Up coaching cue">
+                            <text x="105" y="34" text-anchor="middle" fill="#FF9400" font-size="11" font-weight="700" letter-spacing="1.5">HIGH INTENSITY</text>
+                            <text x="105" y="51" text-anchor="middle" fill="#8b8b90" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
+                            <g transform="rotate(-90 105 132)">
+                                <circle cx="105" cy="132" r="74" fill="none" stroke="#2b2b2e" stroke-width="8"/>
+                                <circle cx="105" cy="132" r="74" fill="none" stroke="url(#uRing)" stroke-width="8" stroke-linecap="round" stroke-dasharray="465" stroke-dashoffset="140"/>
                             </g>
-                            <text x="105" y="148" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="800" letter-spacing="-2">172</text>
-                            <text x="105" y="171" text-anchor="middle" fill="#8b8b90" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
+                            <text x="105" y="150" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="800" letter-spacing="-2">172</text>
+                            <text x="105" y="173" text-anchor="middle" fill="#8b8b90" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
                             <text x="105" y="228" text-anchor="middle" fill="#FF9400" font-size="16" font-weight="800" letter-spacing="0.5">▲ SPEED UP</text>
                             <text x="105" y="247" text-anchor="middle" fill="#6f6f74" font-size="10.5" font-weight="600" letter-spacing="0.5">TARGET 158–172</text>
                         </svg>
-                        <rect x="64" y="112" width="192" height="216" rx="48" fill="url(#uGlass)"/>
-                    </svg>
+                    </div>
+                    <div class="watch-caption">
+                        <svg viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <rect x="5" y="7" width="14" height="16" rx="4" stroke="currentColor" stroke-width="1.6"/>
+                            <path d="M8 7l1-4h6l1 4M8 23l1 4h6l1-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                            <rect x="19" y="12" width="1.7" height="5" rx="0.85" fill="currentColor"/>
+                        </svg>
+                        Apple Watch
+                    </div>
                 </div>
             </div>
         </div>
