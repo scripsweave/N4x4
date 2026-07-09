@@ -266,35 +266,37 @@ struct HomeScreen: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
             Text("N4x4")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                 .foregroundStyle(Palette.textPrimary)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
-            StartRingButton(title: "START", side: 360) { viewModel.startTimer() }
+            StartRingButton(title: "START", side: 340) { viewModel.startTimer() }
 
-            // The session's interval plan, always visible (same bar as the
-            // workout screen, minus the live progress marker).
-            VStack(spacing: 8) {
-                IntervalTimelineBar(viewModel: viewModel, showProgress: false)
-                Text(planSummary)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Palette.textTertiary)
+            // Interval plan + VO₂ trend, pulled up to overlay the ring's floor
+            // reflection and slightly transparent so the glow shows through.
+            VStack(spacing: 14) {
+                VStack(spacing: 6) {
+                    IntervalTimelineBar(viewModel: viewModel, showProgress: false)
+                    Text(planSummary)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Palette.textTertiary)
+                }
+                .padding(.horizontal, 8)
+
+                // Only show the VO₂ card when there's actually a trend to display.
+                if viewModel.healthKitEnabled, viewModel.vo2DataPoints.count >= 2 {
+                    VO2HistoryCard(viewModel: viewModel)
+                }
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 20)
+            .padding(.horizontal, 20)
+            .opacity(0.9)
+            .padding(.top, -78)
 
-            Spacer(minLength: 8)
-
-            // Only show the VO₂ card when there's actually a trend to display.
-            if viewModel.healthKitEnabled, viewModel.vo2DataPoints.count >= 2 {
-                VO2HistoryCard(viewModel: viewModel)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
-            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -553,9 +555,24 @@ struct VO2HistoryCard: View {
             }
         }
         .chartXAxis {
-            AxisMarks { _ in
-                AxisValueLabel(format: range == .month ? .dateTime.day() : .dateTime.month(.abbreviated))
-                    .foregroundStyle(Palette.textTertiary)
+            switch range {
+            case .max:
+                // Multi-year span: label by year (one mark per year) so it doesn't
+                // repeat "Jan Jan Jan".
+                AxisMarks(values: .stride(by: .year)) { _ in
+                    AxisValueLabel(format: .dateTime.year())
+                        .foregroundStyle(Palette.textTertiary)
+                }
+            case .year:
+                AxisMarks(values: .stride(by: .month, count: 3)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated))
+                        .foregroundStyle(Palette.textTertiary)
+                }
+            case .month:
+                AxisMarks(values: .stride(by: .weekOfYear)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                        .foregroundStyle(Palette.textTertiary)
+                }
             }
         }
         .frame(height: 150)
@@ -607,6 +624,10 @@ struct WorkoutScreen: View {
 
             WorkoutRing(viewModel: viewModel)
                 .frame(width: 280, height: 280)
+
+            zoneCue
+                .padding(.top, 10)
+                .frame(height: 28)
 
             Spacer(minLength: 8)
 
@@ -662,6 +683,37 @@ struct WorkoutScreen: View {
         case .rest:          return "RECOVERY \(viewModel.restCount) OF \(viewModel.numberOfIntervals)"
         case .cooldown:      return "COOL DOWN"
         case .none:          return ""
+        }
+    }
+
+    /// Live coaching cue under the ring: speed up if below the target zone, slow
+    /// down if above, in-zone otherwise. Only while a target applies and HR is
+    /// streaming, and honours the visual-zone-alert setting.
+    @ViewBuilder private var zoneCue: some View {
+        if viewModel.zoneVisualAlertsEnabled, let hr = viewModel.currentHeartRate {
+            let status = viewModel.currentZoneStatus(for: hr)
+            if status != .noTarget {
+                let cue = zoneCueStyle(status)
+                HStack(spacing: 8) {
+                    Image(systemName: cue.icon)
+                        .font(.system(size: 17, weight: .heavy))
+                    Text(cue.text)
+                        .font(.system(size: 22, weight: .heavy))
+                        .tracking(1)
+                }
+                .foregroundStyle(cue.color)
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.3), value: status)
+            }
+        }
+    }
+
+    private func zoneCueStyle(_ status: HRZoneStatus) -> (text: String, icon: String, color: Color) {
+        switch status {
+        case .below:    return ("SPEED UP",  "arrow.up.circle.fill",   Palette.amber)
+        case .above:    return ("SLOW DOWN", "arrow.down.circle.fill", Palette.electricBlue)
+        case .inZone:   return ("IN ZONE",   "checkmark.circle.fill",  Palette.recovery)
+        case .noTarget: return ("", "", .clear)
         }
     }
 
@@ -725,7 +777,7 @@ struct WorkoutRing: View {
     private var phaseLabel: String {
         switch viewModel.currentIntervalType {
         case .warmup:        return "WARM UP"
-        case .highIntensity: return "HARD"
+        case .highIntensity: return "HIGH INTENSITY"
         case .rest:          return "RECOVERY"
         case .cooldown:      return "COOL DOWN"
         case .none:          return ""
@@ -736,9 +788,14 @@ struct WorkoutRing: View {
 
     private var targetText: String? {
         switch viewModel.currentIntervalType {
-        case .highIntensity: return "TARGET 85–95% HR"
-        case .rest:          return "TARGET 60–70% HR"
-        default:             return nil
+        case .highIntensity:
+            let r = viewModel.highIntensityTargetRange
+            return "TARGET \(r.lowerBound)–\(r.upperBound) BPM"
+        case .rest:
+            let r = viewModel.recoveryTargetRange
+            return "TARGET \(r.lowerBound)–\(r.upperBound) BPM"
+        default:
+            return nil
         }
     }
 
@@ -794,6 +851,9 @@ struct WorkoutRing: View {
                 .font(.system(size: 16, weight: .heavy))
                 .foregroundStyle(phaseColor)
                 .tracking(1)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 8)
 
             if let target = targetText {
                 Text(target)
