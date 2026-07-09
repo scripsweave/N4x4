@@ -390,6 +390,7 @@ struct StartRingButton: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: side, height: side)
+                .opacity(0.85)   // slightly transparent so it blends into the background
                 .overlay {
                     Text(title)
                         .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
