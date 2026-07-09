@@ -20,68 +20,51 @@ struct WatchTimerView: View {
     var body: some View {
         VStack(spacing: 6) {
 
-            // ── Phase label ─────────────────────────────────
-            Text(intervalLabel)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(state.phase.color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            // ── Progress ring + countdown + HR ──────────────
-            // TimelineView drives a smooth 1 s countdown. A plain Timer.publish
-            // is throttled to ~5 s on watchOS; TimelineView is refreshed by the
-            // system every second, so the ring and clock stay live.
+            // ── Phase label + countdown + progress ring ─────
+            // TimelineView drives a smooth 1 s countdown (a plain Timer.publish
+            // is throttled to ~5 s on watchOS). The centre shows the live heart
+            // rate with a Speed Up / Slow Down coaching cue, matching the phone.
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let remaining = state.timeRemaining(asOf: context.date)
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.25), lineWidth: 6)
-
-                    Circle()
-                        .trim(from: 0, to: state.progressValue(asOf: context.date))
-                        .stroke(style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                        .foregroundColor(state.phase.color)
-                        .rotationEffect(.degrees(-90))
-
-                    VStack(spacing: 2) {
+                VStack(spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(intervalLabel)
+                            .foregroundColor(state.phase.color)
                         Text(timeString(remaining))
-                            .font(.system(size: 28, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-
-                        if workoutManager.heartRate > 0 {
-                            HStack(spacing: 2) {
-                                Image(systemName: "heart.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.red)
-                                Text("\(Int(workoutManager.heartRate))")
-                                    .font(.system(size: 15, weight: .bold, design: .monospaced))
-                                    .foregroundColor(hrColor)
-                            }
-                        }
+                            .foregroundColor(.white.opacity(0.6))
+                            .monospacedDigit()
                     }
-                }
-                .frame(width: 130, height: 130)
-            }
-
-            // ── Out-of-zone hint ────────────────────────────
-            if let hint = zoneHint {
-                Text(hint)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(hrColor)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.15), lineWidth: 8)
+
+                        Circle()
+                            .trim(from: 0, to: state.progressValue(asOf: context.date))
+                            .stroke(style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                            .foregroundColor(state.phase.color)
+                            .rotationEffect(.degrees(-90))
+                            .shadow(color: state.phase.color.opacity(0.6), radius: 4)
+
+                        centerContent(remaining: remaining)
+                    }
+                    .frame(width: 128, height: 128)
+                }
             }
 
             // ── Controls ────────────────────────────────────
-            HStack(spacing: 16) {
+            HStack(spacing: 14) {
                 Button {
                     sessionManager.sendStartPause()
                 } label: {
                     Image(systemName: state.isRunning ? "pause.fill" : "play.fill")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(width: 52, height: 44)
-                        .background(Color.gray.opacity(0.3),
+                        .frame(width: 54, height: 42)
+                        .background(Color.white.opacity(0.12),
                                     in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
@@ -92,8 +75,8 @@ struct WatchTimerView: View {
                     Image(systemName: "forward.end.alt.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
-                        .frame(width: 52, height: 44)
-                        .background(Color.gray.opacity(0.3),
+                        .frame(width: 54, height: 42)
+                        .background(Color.white.opacity(0.12),
                                     in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
@@ -133,24 +116,52 @@ struct WatchTimerView: View {
 
     // MARK: - Helpers
 
-    private var intervalLabel: String {
-        switch state.phase {
-        case .highIntensity: return "Work \(state.highIntensityCount)/\(state.totalIntervals)"
-        case .rest:          return "Recovery"
-        case .warmup:        return "Warm Up"
-        case .cooldown:      return "Cool Down"
+    /// Ring centre: live heart rate with a Speed Up / Slow Down cue. Falls back
+    /// to the countdown until a heart rate is streaming.
+    @ViewBuilder
+    private func centerContent(remaining: TimeInterval) -> some View {
+        if workoutManager.heartRate > 0 {
+            VStack(spacing: 1) {
+                HStack(spacing: 3) {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.red)
+                    Text("\(Int(workoutManager.heartRate))")
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                }
+                if let cue = zoneCue {
+                    Text(cue.text)
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundColor(cue.color)
+                }
+            }
+        } else {
+            Text(timeString(remaining))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
         }
     }
 
-    /// Heart-rate colour: green = in target, yellow = below, red = above.
-    private var hrColor: Color {
-        sessionManager.zoneStatus(bpm: workoutManager.heartRate).tint ?? .white
+    private var intervalLabel: String {
+        switch state.phase {
+        case .highIntensity: return "HIGH \(state.highIntensityCount)/\(state.totalIntervals)"
+        case .rest:          return "RECOVERY"
+        case .warmup:        return "WARM UP"
+        case .cooldown:      return "COOL DOWN"
+        }
     }
 
-    /// Short coaching hint shown under the ring when out of zone.
-    private var zoneHint: String? {
-        ZoneFeedbackCopy.hint(phase: state.phase,
-                              status: sessionManager.zoneStatus(bpm: workoutManager.heartRate))
+    /// Coaching cue from live HR vs the target zone (matches the phone).
+    private var zoneCue: (text: String, color: Color)? {
+        switch sessionManager.zoneStatus(bpm: workoutManager.heartRate) {
+        case .below:    return ("SPEED UP", .orange)
+        case .above:    return ("SLOW DOWN", .cyan)
+        case .inZone:   return ("IN ZONE", .green)
+        case .noTarget: return nil
+        }
     }
 
     private func timeString(_ t: TimeInterval) -> String {

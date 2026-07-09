@@ -19,7 +19,7 @@ import Charts
 /// Dark, disciplined palette. Charcoal/black surfaces with electric-blue, amber
 /// and lime accents reserved for actions, active states and performance feedback.
 enum Palette {
-    static let background   = Color(red: 0.04, green: 0.04, blue: 0.05)   // near-black
+    static let background   = Color(red: 0.04, green: 0.04, blue: 0.05)   // near-black charcoal
     static let surface      = Color(red: 0.09, green: 0.10, blue: 0.12)   // cards
     static let surfaceRaised = Color(red: 0.13, green: 0.14, blue: 0.16)  // controls
     static let hairline     = Color.white.opacity(0.08)
@@ -253,6 +253,10 @@ struct HomeScreen: View {
     /// reappears next launch if the Watch app is still not installed.
     @State private var watchBannerDismissed = false
 
+    private var hasVO2Data: Bool {
+        viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -266,18 +270,21 @@ struct HomeScreen: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            Spacer(minLength: 4)
+            // Top flex expands only when the tall VO₂ card is present (to balance
+            // it); with no card it stays small so content sits higher.
+            Spacer(minLength: 8)
+                .frame(maxHeight: hasVO2Data ? .infinity : 28)
 
             Text("N4x4")
                 .font(.system(size: 30, weight: .heavy, design: .rounded))
                 .foregroundStyle(Palette.textPrimary)
-
-            Spacer(minLength: 4)
+                .padding(.bottom, 12)
 
             StartRingButton(title: "START", side: 340) { viewModel.startTimer() }
 
-            // Interval plan + VO₂ trend, pulled up to overlay the ring's floor
-            // reflection and slightly transparent so the glow shows through.
+            // Interval plan + VO₂ trend. With data present it's pulled up to overlay
+            // the ring's floor reflection (and dimmed so the glow shows through);
+            // with no card it sits below the reflection so nothing overlaps.
             VStack(spacing: 14) {
                 VStack(spacing: 6) {
                     IntervalTimelineBar(viewModel: viewModel, showProgress: false)
@@ -287,14 +294,13 @@ struct HomeScreen: View {
                 }
                 .padding(.horizontal, 8)
 
-                // Only show the VO₂ card when there's actually a trend to display.
-                if viewModel.healthKitEnabled, viewModel.vo2DataPoints.count >= 2 {
+                if hasVO2Data {
                     VO2HistoryCard(viewModel: viewModel)
                 }
             }
             .padding(.horizontal, 20)
-            .opacity(0.9)
-            .padding(.top, -78)
+            .opacity(hasVO2Data ? 0.9 : 1)
+            .padding(.top, hasVO2Data ? -78 : 14)
 
             Spacer(minLength: 0)
         }
@@ -390,7 +396,6 @@ struct StartRingButton: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: side, height: side)
-                .opacity(0.85)   // slightly transparent so it blends into the background
                 .overlay {
                     Text(title)
                         .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
