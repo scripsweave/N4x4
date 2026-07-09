@@ -278,16 +278,11 @@ struct HomeScreen: View {
             Spacer(minLength: 8)
                 .frame(maxHeight: hasVO2Data ? .infinity : 28)
 
-            Text("N4x4")
-                .font(.system(size: 30, weight: .heavy, design: .rounded))
-                .foregroundStyle(Palette.textPrimary)
-                .padding(.bottom, 12)
-
             StartRingButton(title: "START", side: 340) { viewModel.startTimer() }
 
-            // Interval plan + VO₂ trend. With data present it's pulled up to overlay
-            // the ring's floor reflection (and dimmed so the glow shows through);
-            // with no card it sits below the reflection so nothing overlaps.
+            // Interval plan + VO₂ trend, always sitting clearly below the ring.
+            // The bottom-anchored layout means this block's height pushes the ring
+            // upward, so a positive gap here keeps the timeline off the ring.
             VStack(spacing: 14) {
                 VStack(spacing: 6) {
                     IntervalTimelineBar(viewModel: viewModel, showProgress: false)
@@ -302,8 +297,7 @@ struct HomeScreen: View {
                 }
             }
             .padding(.horizontal, 20)
-            .opacity(hasVO2Data ? 0.9 : 1)
-            .padding(.top, hasVO2Data ? -78 : 14)
+            .padding(.top, 14)
 
             Spacer(minLength: 0)
         }
