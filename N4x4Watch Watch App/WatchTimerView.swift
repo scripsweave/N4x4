@@ -18,6 +18,12 @@ struct WatchTimerView: View {
 
     private var state: WatchTimerState { sessionManager.timerState }
 
+    /// The ring scales to the watch's actual screen width so it never clips on
+    /// small models (e.g. 40 mm Series 4), while staying capped on large ones.
+    private var ringSize: CGFloat {
+        min(WKInterfaceDevice.current().screenBounds.width * 0.60, 132)
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 8) {
@@ -56,7 +62,7 @@ struct WatchTimerView: View {
 
                             centerContent(remaining: remaining)
                         }
-                        .frame(width: 124, height: 124)
+                        .frame(width: ringSize, height: ringSize)
 
                         // ── Coaching cue + target range ──
                         VStack(spacing: 1) {
@@ -104,6 +110,8 @@ struct WatchTimerView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 6)
             .padding(.vertical, 4)
         }
         // Drive the zone-feedback engine off each fresh HR reading.
