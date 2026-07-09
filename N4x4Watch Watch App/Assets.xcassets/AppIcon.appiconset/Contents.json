@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "N4x4_WatchIcon.png",
       "idiom" : "universal",
       "platform" : "watchos",
       "size" : "1024x1024"
