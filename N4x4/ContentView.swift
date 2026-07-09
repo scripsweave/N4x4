@@ -56,8 +56,21 @@ struct ContentView: View {
     @StateObject var viewModel = TimerViewModel()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
+    /// Flip to false to fall back to the legacy single-screen `TimerView`.
+    /// The redesign lives entirely in HomeWorkoutRedesign.swift, so rollback is
+    /// this one line plus (optionally) deleting that file.
+    private let useRedesignedUI = true
+
+    @ViewBuilder private var root: some View {
+        if useRedesignedUI {
+            RedesignRootView(viewModel: viewModel)
+        } else {
+            TimerView(viewModel: viewModel)
+        }
+    }
+
     var body: some View {
-        TimerView(viewModel: viewModel)
+        root
             .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
                 OnboardingView(
                     timerViewModel: viewModel,

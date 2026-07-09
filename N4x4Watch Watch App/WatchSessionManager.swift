@@ -6,6 +6,7 @@
 import WatchConnectivity
 import Foundation
 import WatchKit
+import Combine   // @Published / ObservableObject — not transitively available on watchOS
 
 // MARK: - WatchTimerState
 
@@ -36,6 +37,18 @@ struct WatchTimerState: Equatable {
     var progressValue: CGFloat {
         guard intervalDuration > 0 else { return 0 }
         return CGFloat(min(1, max(0, timeRemaining / intervalDuration)))
+    }
+
+    /// Countdown as of a specific instant — used by the TimelineView so the ring
+    /// and clock recompute against each 1 s tick without drift.
+    func timeRemaining(asOf now: Date) -> TimeInterval {
+        guard isRunning else { return max(0, reportedTimeRemaining) }
+        return max(0, intervalEndTime.timeIntervalSince(now))
+    }
+
+    func progressValue(asOf now: Date) -> CGFloat {
+        guard intervalDuration > 0 else { return 0 }
+        return CGFloat(min(1, max(0, timeRemaining(asOf: now) / intervalDuration)))
     }
 
     /// Elapsed time within the current interval — feeds the zone-feedback grace window.

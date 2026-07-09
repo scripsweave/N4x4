@@ -5,10 +5,14 @@ import WatchConnectivity
 
 struct SettingsView: View {
     @ObservedObject var viewModel: TimerViewModel
+    /// When true, the view is hosted inside a tab (not a sheet), so the
+    /// dismiss-style "Done" button is omitted.
+    var embedded: Bool = false
     @Environment(\.presentationMode) var presentationMode
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showResetAlert = false
     @State private var showTips = false
+    @State private var showWatchHelp = false
 
     var body: some View {
         NavigationView {
@@ -118,12 +122,26 @@ struct SettingsView: View {
                 // Apple Watch
                 Section(header: Text("Apple Watch").font(.headline)) {
                     if WCSession.isSupported() {
-                        Label(
-                            viewModel.isWatchAppInstalled ? "Watch app installed" : "Watch app not installed",
-                            systemImage: viewModel.isWatchAppInstalled ? "applewatch" : "applewatch.slash"
-                        )
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
+                        Button {
+                            showWatchHelp = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: watchStatusIcon)
+                                    .foregroundColor(watchStatusTint)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(watchStatusTitle)
+                                        .font(.body)
+                                        .foregroundColor(.primary)
+                                    Text("Tap for setup & troubleshooting")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                     Text("Wear your Apple Watch and start the workout from either device to stream live heart rate. The iPhone has no heart-rate sensor of its own.")
                         .font(.footnote)
@@ -310,8 +328,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .navigationBarItems(trailing: Button("Done") {
-                presentationMode.wrappedValue.dismiss()
+            .navigationBarItems(trailing: Group {
+                if !embedded {
+                    Button("Done") { presentationMode.wrappedValue.dismiss() }
+                }
             })
             .alert(isPresented: $showResetAlert) {
                 Alert(
@@ -333,6 +353,39 @@ struct SettingsView: View {
             .sheet(isPresented: $showTips) {
                 TipsView()
             }
+            .sheet(isPresented: $showWatchHelp) {
+                WatchTroubleshootingView(viewModel: viewModel)
+            }
+        }
+    }
+
+    // MARK: - Apple Watch status row
+
+    private var watchStatusIcon: String {
+        switch viewModel.watchConnectionStatus {
+        case .noWatchPaired, .appNotInstalled: return "applewatch.slash"
+        case .notReachable:                    return "applewatch"
+        case .connected:
+            return viewModel.currentHeartRate == nil ? "applewatch" : "applewatch.radiowaves.left.and.right"
+        }
+    }
+
+    private var watchStatusTint: Color {
+        switch viewModel.watchConnectionStatus {
+        case .noWatchPaired:   return .secondary
+        case .appNotInstalled: return .orange
+        case .notReachable:    return .secondary
+        case .connected:       return viewModel.currentHeartRate == nil ? .secondary : .green
+        }
+    }
+
+    private var watchStatusTitle: String {
+        switch viewModel.watchConnectionStatus {
+        case .noWatchPaired:   return "No Apple Watch paired"
+        case .appNotInstalled: return "Watch app not installed"
+        case .notReachable:    return "Watch app installed"
+        case .connected:
+            return viewModel.currentHeartRate == nil ? "Connected" : "Connected · HR streaming"
         }
     }
 

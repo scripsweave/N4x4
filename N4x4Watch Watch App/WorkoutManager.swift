@@ -8,6 +8,7 @@
 import Foundation
 import HealthKit
 import WatchConnectivity
+import Combine   // @Published / ObservableObject — not transitively available on watchOS
 
 final class WorkoutManager: NSObject, ObservableObject {
 

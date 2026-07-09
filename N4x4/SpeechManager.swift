@@ -5,7 +5,11 @@
 
 import AVFoundation
 
-class SpeechManager: NSObject, AVSpeechSynthesizerDelegate {
+// @unchecked Sendable: the required `shared` singleton forces Sendability, but
+// AVSpeechSynthesizer isn't Sendable. All access happens on the main thread
+// (speak/stop are called from the main-actor view model, and the delegate
+// callbacks are delivered on the main queue), so this is safe in practice.
+final class SpeechManager: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     static let shared = SpeechManager()
 
     private let synthesizer = AVSpeechSynthesizer()

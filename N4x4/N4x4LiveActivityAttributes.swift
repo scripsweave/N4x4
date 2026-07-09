@@ -56,10 +56,10 @@ enum WorkoutPhase: String, Codable, Hashable {
     /// without requiring Assets.xcassets to be added to the extension bundle.
     var color: Color {
         switch self {
-        case .warmup:        return Color(red: 0.227, green: 0.525, blue: 1.0)
-        case .highIntensity: return Color(red: 1.0,   green: 0.227, blue: 0.361)
-        case .rest:          return Color(red: 0.188, green: 0.820, blue: 0.345)
-        case .cooldown:      return Color(red: 0.0,   green: 0.76,  blue: 0.80)
+        case .warmup:        return Color(red: 0.18,  green: 0.52,  blue: 1.0)
+        case .highIntensity: return Color(red: 1.0,   green: 0.58,  blue: 0.0)   // amber (matches phone/brand)
+        case .rest:          return Color(red: 0.20,  green: 0.78,  blue: 0.55)
+        case .cooldown:      return Color(red: 0.20,  green: 0.75,  blue: 0.85)
         }
     }
 
