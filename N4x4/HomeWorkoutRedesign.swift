@@ -412,10 +412,14 @@ struct MetalRing<Center: View>: View {
         let dot = side * 0.05
         ZStack {
             // Floor reflection: two soft colour beams descending from the ring's
-            // base onto a glossy floor, fading out — like the original artwork.
-            reflectionBeam(color: reflectLeft ?? glowColor)
+            // base. Each beam sits under one side of the ring and its brightness
+            // tracks whether the glow arc still reaches that side — so as the
+            // countdown arc recedes (right stays lit longer than left), the
+            // matching beam dims and disappears. `litFraction` is that side's
+            // position along the trim (from the top, clockwise).
+            reflectionBeam(color: reflectLeft ?? glowColor, litFraction: 0.60)
                 .offset(x: -side * 0.19, y: rim + side * 0.24)
-            reflectionBeam(color: reflectRight ?? glowColor)
+            reflectionBeam(color: reflectRight ?? glowColor, litFraction: 0.40)
                 .offset(x: side * 0.19, y: rim + side * 0.24)
 
             // Static chrome bezel.
@@ -454,13 +458,19 @@ struct MetalRing<Center: View>: View {
         }
     }
 
-    /// A soft vertical light beam for the floor reflection.
-    private func reflectionBeam(color: Color) -> some View {
-        Capsule()
+    /// A soft vertical light beam for the floor reflection. Its opacity ramps up
+    /// only once the glow arc has reached this side (`progress >= litFraction`),
+    /// so the reflection is dynamic with the countdown.
+    private func reflectionBeam(color: Color, litFraction: CGFloat) -> some View {
+        let fade: CGFloat = 0.08
+        let lit = Double(min(1, max(0, (progress - litFraction) / fade)))
+        return Capsule()
             .fill(LinearGradient(colors: [color.opacity(0.85), color.opacity(0.0)],
                                  startPoint: .top, endPoint: .bottom))
             .frame(width: side * 0.11, height: side * 0.5)
             .blur(radius: side * 0.035)
+            .opacity(lit)
+            .animation(animates ? .easeInOut(duration: 0.6) : nil, value: progress)
     }
 
     private func arc(rim: CGFloat, lineWidth: CGFloat) -> some View {
