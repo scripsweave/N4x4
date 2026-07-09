@@ -34,12 +34,15 @@ enum Palette {
     static let danger       = Color(red: 1.0,  green: 0.27, blue: 0.27)
     static let recovery     = Color(red: 0.20, green: 0.78, blue: 0.55)
 
-    /// Blue → amber ring gradient used on both the Start and timer rings.
-    static let ringGradient = AngularGradient(
-        gradient: Gradient(colors: [electricBlue, electricBlue, amber, amber]),
+    /// Brand glow for the idle Home ring: electric-blue on the right, amber on the
+    /// left, symmetric (seamless) — mirrors the original rendered ring artwork.
+    /// startAngle is +90° to cancel the glow arc's −90° rotation so blue lands on
+    /// the right (not the top).
+    static let brandGlow = AngularGradient(
+        gradient: Gradient(colors: [electricBlue, amber, electricBlue]),
         center: .center,
-        startAngle: .degrees(-90),
-        endAngle: .degrees(270)
+        startAngle: .degrees(90),
+        endAngle: .degrees(450)
     )
 }
 
@@ -51,12 +54,12 @@ private func rdTime(_ t: TimeInterval) -> String {
     return String(format: "%02d:%02d", m, s)
 }
 
-/// Single accent colour per interval phase — matches the legacy scheme:
-/// blue warm-up, red high-intensity, green recovery, teal cool-down.
+/// Single accent colour per interval phase: blue warm-up, amber high-intensity
+/// (matching the background/brand orange), green recovery, teal cool-down.
 private func intervalColor(_ type: IntervalType?) -> Color {
     switch type {
     case .warmup:        return Palette.electricBlue
-    case .highIntensity: return Palette.danger
+    case .highIntensity: return Palette.amber
     case .rest:          return Palette.recovery
     case .cooldown:      return Color(red: 0.20, green: 0.75, blue: 0.85)
     case .none:          return Palette.textSecondary
@@ -378,30 +381,107 @@ struct HomeScreen: View {
     }
 }
 
-/// Rendered metal glowing ring (with floor reflection) as the Home "Start"
-/// affordance, with the label overlaid on the ring's dark centre. The ring sits
-/// above the image's geometric centre (the reflection occupies the lower part),
-/// so the label is nudged up by `centerOffsetRatio` to land on the ring.
+/// Shared chrome ring: the static brushed-metal bezel (`ChromeRing` asset, black
+/// already transparent) with a programmatic neon glow arc, tip dot and floor
+/// reflection layered on top, plus a centre slot. Used on both Home (full ring,
+/// brand gradient glow) and Workout (progress arc, phase colour, dot) so the two
+/// screens share one ring system.
+struct MetalRing<Center: View>: View {
+    var side: CGFloat
+    /// Fraction of the ring drawn as glow (1 = full). Workout passes remaining time.
+    var progress: CGFloat = 1
+    /// Neon glow style — a solid phase colour (workout) or brand gradient (home).
+    var glow: AnyShapeStyle
+    /// Dominant colour for the dot, bloom and reflection tint.
+    var glowColor: Color
+    var showDot: Bool = false
+    var animates: Bool = false
+    @ViewBuilder var center: () -> Center
+
+    /// Radius of the chrome ring's inner lip, where the glow sits (fraction of side).
+    private let rimRatio: CGFloat = 0.315
+
+    var body: some View {
+        let rim = side * rimRatio
+        let dot = side * 0.05
+        ZStack {
+            // Ambient bloom behind the ring.
+            Circle()
+                .fill(glowColor)
+                .frame(width: rim * 1.5, height: rim * 1.5)
+                .blur(radius: side * 0.11)
+                .opacity(0.22)
+
+            // Floor reflection: flipped, squashed, faded copy of the glow.
+            glowStack(rim: rim, scale: 1)
+                .scaleEffect(x: 1, y: -0.55, anchor: .center)
+                .offset(y: side * 0.62)
+                .mask(LinearGradient(colors: [.white, .white.opacity(0.15), .clear],
+                                     startPoint: .top, endPoint: .bottom))
+                .blur(radius: 3)
+                .opacity(0.5)
+
+            // Static chrome bezel.
+            Image("ChromeRing")
+                .resizable()
+                .scaledToFit()
+                .frame(width: side, height: side)
+
+            // Neon glow on the inner rim.
+            glowStack(rim: rim, scale: 1)
+
+            // Glowing tip dot at the arc's end.
+            if showDot {
+                Circle()
+                    .fill(.white)
+                    .frame(width: dot, height: dot)
+                    .shadow(color: glowColor, radius: side * 0.035)
+                    .offset(y: -rim)
+                    .frame(width: side, height: side)
+                    .rotationEffect(.degrees(Double(progress) * 360))
+                    .animation(animates ? .linear(duration: 1) : nil, value: progress)
+            }
+
+            center()
+        }
+        .frame(width: side, height: side)
+    }
+
+    /// Layered neon: wide soft bloom + mid glow + crisp core, trimmed to progress.
+    private func glowStack(rim: CGFloat, scale: CGFloat) -> some View {
+        ZStack {
+            arc(rim: rim, lineWidth: side * 0.085).blur(radius: side * 0.05).opacity(0.5)
+            arc(rim: rim, lineWidth: side * 0.03).blur(radius: side * 0.015).opacity(0.9)
+            arc(rim: rim, lineWidth: side * 0.011)
+        }
+    }
+
+    private func arc(rim: CGFloat, lineWidth: CGFloat) -> some View {
+        Circle()
+            .trim(from: 0, to: progress)
+            .stroke(glow, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            .frame(width: rim * 2, height: rim * 2)
+            .rotationEffect(.degrees(-90))
+            .animation(animates ? .linear(duration: 1) : nil, value: progress)
+    }
+}
+
+/// Home "Start" affordance — the shared chrome ring with the brand gradient glow.
 struct StartRingButton: View {
     let title: String
-    var side: CGFloat = 360
-    /// Fraction of `side` to shift the label up so it sits on the ring's centre
-    /// (the ring is above the image's midpoint because the reflection is below).
-    var centerOffsetRatio: CGFloat = 0.06
+    var side: CGFloat = 340
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image("HomeRing")
-                .resizable()
-                .scaledToFit()
-                .frame(width: side, height: side)
-                .overlay {
-                    Text(title)
-                        .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .offset(y: -side * centerOffsetRatio)
-                }
+            MetalRing(side: side,
+                      progress: 1,
+                      glow: AnyShapeStyle(Palette.brandGlow),
+                      glowColor: Palette.amber) {
+                Text(title)
+                    .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+            }
         }
         .buttonStyle(.plain)
     }
@@ -628,8 +708,7 @@ struct WorkoutScreen: View {
 
             Spacer(minLength: 4)
 
-            WorkoutRing(viewModel: viewModel)
-                .frame(width: 280, height: 280)
+            WorkoutRing(viewModel: viewModel, side: 300)
 
             zoneCue
                 .padding(.top, 10)
@@ -805,81 +884,53 @@ struct WorkoutRing: View {
         }
     }
 
+    var side: CGFloat = 320
+
     var body: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width, geo.size.height)
-            let lineWidth: CGFloat = 16
-            let radius = side / 2 - lineWidth / 2
-
-            ZStack {
-                // Track and progress arc are inset by lineWidth/2 so their
-                // centre-line radius equals `radius` — the same radius the dot
-                // orbits at, which keeps the dot centred on the line.
-                Circle()
-                    .stroke(Palette.surfaceRaised, lineWidth: lineWidth)
-                    .padding(lineWidth / 2)
-
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(phaseColor,
-                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .padding(lineWidth / 2)
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: phaseColor.opacity(0.6), radius: 8)
-                    .animation(.linear(duration: 1), value: viewModel.timeRemaining)
-
-                // Glowing dot at the tip of the arc. Pinned to top-centre of a
-                // full-ring frame, then that frame is rotated so the dot orbits
-                // the centre to the arc's end (clockwise from 12 o'clock).
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: lineWidth + 4, height: lineWidth + 4)
-                    .shadow(color: phaseColor, radius: 10)
-                    .offset(y: -radius)
-                    .frame(width: side, height: side, alignment: .center)
-                    .rotationEffect(.degrees(Double(progress) * 360))
-                    .animation(.linear(duration: 1), value: viewModel.timeRemaining)
-
-                centerStack
-            }
-            .frame(width: side, height: side)
+        MetalRing(side: side,
+                  progress: progress,
+                  glow: AnyShapeStyle(phaseColor),
+                  glowColor: phaseColor,
+                  showDot: true,
+                  animates: true) {
+            centerStack
         }
     }
 
     private var centerStack: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 3) {
             Text(rdTime(viewModel.timeRemaining))
-                .font(.system(size: 62, weight: .heavy, design: .rounded))
+                .font(.system(size: side * 0.155, weight: .heavy, design: .rounded))
                 .foregroundStyle(Palette.textPrimary)
                 .monospacedDigit()
 
             Text(phaseLabel)
-                .font(.system(size: 16, weight: .heavy))
+                .font(.system(size: side * 0.05, weight: .heavy))
                 .foregroundStyle(phaseColor)
                 .tracking(1)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, 8)
+                .minimumScaleFactor(0.6)
 
             if let target = targetText {
                 Text(target)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: side * 0.034, weight: .semibold))
                     .foregroundStyle(Palette.textTertiary)
                     .tracking(0.5)
             }
 
             if let hr = viewModel.currentHeartRate {
-                HStack(spacing: 8) {
-                    PulsingHeart(bpm: hr, size: 26)
+                HStack(spacing: 6) {
+                    PulsingHeart(bpm: hr, size: side * 0.072)
                         .id(Int((hr / 4).rounded()))
                     Text("\(Int(hr))")
-                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .font(.system(size: side * 0.095, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.textPrimary)
                         .monospacedDigit()
                 }
-                .padding(.top, 8)
+                .padding(.top, side * 0.02)
             }
         }
+        .frame(maxWidth: side * 0.58)
     }
 }
 
