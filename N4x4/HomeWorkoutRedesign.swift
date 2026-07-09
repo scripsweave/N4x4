@@ -392,34 +392,31 @@ struct MetalRing<Center: View>: View {
     var progress: CGFloat = 1
     /// Neon glow style — a solid phase colour (workout) or brand gradient (home).
     var glow: AnyShapeStyle
-    /// Dominant colour for the dot, bloom and reflection tint.
+    /// Dominant colour for the dot and bloom.
     var glowColor: Color
+    /// Floor-reflection beam colours (left / right). Default to `glowColor`
+    /// (workout); Home passes amber-left / blue-right to mirror the artwork.
+    var reflectLeft: Color? = nil
+    var reflectRight: Color? = nil
     var showDot: Bool = false
     var animates: Bool = false
     @ViewBuilder var center: () -> Center
 
-    /// Radius of the chrome ring's inner lip, where the glow sits (fraction of side).
-    private let rimRatio: CGFloat = 0.315
+    /// Radius where the glow sits — the chrome bezel's *outer* edge, so the neon
+    /// glows outward into the black and the centre stays clean and dark (matching
+    /// the original render), rather than washing the interior.
+    private let rimRatio: CGFloat = 0.385
 
     var body: some View {
         let rim = side * rimRatio
         let dot = side * 0.05
         ZStack {
-            // Ambient bloom behind the ring.
-            Circle()
-                .fill(glowColor)
-                .frame(width: rim * 1.5, height: rim * 1.5)
-                .blur(radius: side * 0.11)
-                .opacity(0.22)
-
-            // Floor reflection: flipped, squashed, faded copy of the glow.
-            glowStack(rim: rim, scale: 1)
-                .scaleEffect(x: 1, y: -0.55, anchor: .center)
-                .offset(y: side * 0.62)
-                .mask(LinearGradient(colors: [.white, .white.opacity(0.15), .clear],
-                                     startPoint: .top, endPoint: .bottom))
-                .blur(radius: 3)
-                .opacity(0.5)
+            // Floor reflection: two soft colour beams descending from the ring's
+            // base onto a glossy floor, fading out — like the original artwork.
+            reflectionBeam(color: reflectLeft ?? glowColor)
+                .offset(x: -side * 0.19, y: rim + side * 0.24)
+            reflectionBeam(color: reflectRight ?? glowColor)
+                .offset(x: side * 0.19, y: rim + side * 0.24)
 
             // Static chrome bezel.
             Image("ChromeRing")
@@ -427,8 +424,8 @@ struct MetalRing<Center: View>: View {
                 .scaledToFit()
                 .frame(width: side, height: side)
 
-            // Neon glow on the inner rim.
-            glowStack(rim: rim, scale: 1)
+            // Neon glow on the outer rim.
+            glowStack(rim: rim)
 
             // Glowing tip dot at the arc's end.
             if showDot {
@@ -447,13 +444,23 @@ struct MetalRing<Center: View>: View {
         .frame(width: side, height: side)
     }
 
-    /// Layered neon: wide soft bloom + mid glow + crisp core, trimmed to progress.
-    private func glowStack(rim: CGFloat, scale: CGFloat) -> some View {
+    /// Layered neon: a wide soft halo (spills outward into the black) plus a bright
+    /// crisp core. Kept fully saturated so the colour reads vivid, not washed.
+    private func glowStack(rim: CGFloat) -> some View {
         ZStack {
-            arc(rim: rim, lineWidth: side * 0.085).blur(radius: side * 0.05).opacity(0.5)
-            arc(rim: rim, lineWidth: side * 0.03).blur(radius: side * 0.015).opacity(0.9)
-            arc(rim: rim, lineWidth: side * 0.011)
+            arc(rim: rim, lineWidth: side * 0.075).blur(radius: side * 0.055).opacity(0.7)
+            arc(rim: rim, lineWidth: side * 0.024).blur(radius: side * 0.010).opacity(1.0)
+            arc(rim: rim, lineWidth: side * 0.010)
         }
+    }
+
+    /// A soft vertical light beam for the floor reflection.
+    private func reflectionBeam(color: Color) -> some View {
+        Capsule()
+            .fill(LinearGradient(colors: [color.opacity(0.85), color.opacity(0.0)],
+                                 startPoint: .top, endPoint: .bottom))
+            .frame(width: side * 0.11, height: side * 0.5)
+            .blur(radius: side * 0.035)
     }
 
     private func arc(rim: CGFloat, lineWidth: CGFloat) -> some View {
@@ -477,7 +484,9 @@ struct StartRingButton: View {
             MetalRing(side: side,
                       progress: 1,
                       glow: AnyShapeStyle(Palette.brandGlow),
-                      glowColor: Palette.amber) {
+                      glowColor: Palette.amber,
+                      reflectLeft: Palette.amber,
+                      reflectRight: Palette.electricBlue) {
                 Text(title)
                     .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
