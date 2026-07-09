@@ -1307,9 +1307,12 @@ struct RedesignHistoryView: View {
                     Text(d).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.textTertiary)
                         .frame(maxWidth: .infinity)
                 }
-                ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 34) }
-                ForEach(1...currentMonthDays, id: \.self) { day in
-                    dayCell(day)
+                ForEach(Array(monthCells.enumerated()), id: \.offset) { _, day in
+                    if let day {
+                        dayCell(day)
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity, minHeight: 34)
+                    }
                 }
             }
         }
@@ -1495,6 +1498,10 @@ struct RedesignHistoryView: View {
         let comps = cal.dateComponents([.year, .month], from: Date())
         guard let first = cal.date(from: comps) else { return 0 }
         return cal.component(.weekday, from: first) - 1
+    }
+    /// Calendar cells: leading nils to align day 1 to its weekday, then day numbers.
+    private var monthCells: [Int?] {
+        Array(repeating: Int?.none, count: leadingBlanks) + (1...currentMonthDays).map { Int?($0) }
     }
     private func isToday(_ day: Int) -> Bool { cal.component(.day, from: Date()) == day }
     private func isFutureDay(_ day: Int) -> Bool { day > cal.component(.day, from: Date()) }
