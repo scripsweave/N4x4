@@ -213,13 +213,14 @@ body {
 }
 .hero-devices .device img { width: 288px; }
 .hero-devices .watch-mock {
-    margin-left: -66px;
-    margin-bottom: 40px;
+    width: 202px;
+    margin-left: -54px;
+    margin-bottom: 46px;
     transform: rotate(-4deg);
 }
 @media (max-width: 560px) {
     .hero-devices .device img { width: 216px; }
-    .hero-devices .watch-mock { width: 150px; margin-left: -46px; margin-bottom: 24px; }
+    .hero-devices .watch-mock { width: 150px; margin-left: -40px; margin-bottom: 28px; }
 }
 
 .hero-scroll-hint {
@@ -608,37 +609,52 @@ body {
 
 .watch-stage { display: flex; justify-content: center; }
 
-/* Apple Watch mockup */
+/* Apple Watch Ultra mockup (black titanium) */
 .watch-mock {
-    width: 240px;
-    aspect-ratio: 0.84 / 1;
-    border-radius: 62px;
-    background: linear-gradient(150deg, #34363c 0%, #17181c 55%, #0c0d10 100%);
-    padding: 18px;
+    width: 244px;
+    aspect-ratio: 0.9 / 1;
+    border-radius: 54px;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.10), transparent 32%),
+        linear-gradient(155deg, #45474c 0%, #292b2f 46%, #131417 100%);
+    padding: 20px;
     position: relative;
     box-shadow:
         0 46px 100px rgba(0,0,0,0.65),
-        inset 0 0 0 2px rgba(255,255,255,0.06),
-        inset 0 2px 6px rgba(255,255,255,0.12);
+        inset 0 0 0 1.5px rgba(255,255,255,0.16),
+        inset 0 3px 8px rgba(255,255,255,0.10),
+        inset 0 -8px 16px rgba(0,0,0,0.55);
 }
-/* Digital crown + side button */
+/* Right side: digital crown (upper) + side button (lower) */
 .watch-mock::before,
 .watch-mock::after {
     content: '';
     position: absolute;
-    right: -5px;
-    width: 6px;
-    background: linear-gradient(90deg, #2b2d31, #4a4d54);
-    border-radius: 3px;
+    right: -6px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #16171a 0%, #55585f 55%, #303237 100%);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
 }
-.watch-mock::before { top: 30%; height: 46px; box-shadow: 0 0 0 1px rgba(0,0,0,0.4); }
-.watch-mock::after  { top: 52%; height: 30px; }
+.watch-mock::before { top: 31%; width: 9px; height: 40px; }   /* digital crown */
+.watch-mock::after  { top: 55%; width: 7px; height: 30px; }   /* side button */
+/* Left side: orange Action Button — the Ultra signature */
+.watch-action {
+    position: absolute;
+    left: -5px;
+    top: 42%;
+    width: 8px;
+    height: 46px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #C23B00 0%, #FF5A1F 55%, #FF7A2B 100%);
+    box-shadow: 0 0 10px rgba(255,90,0,0.45), 0 0 0 1px rgba(0,0,0,0.3);
+}
 .watch-screen {
     width: 100%; height: 100%;
-    border-radius: 46px;
+    border-radius: 40px;
     background: #000;
     overflow: hidden;
     position: relative;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9);
 }
 .watch-screen svg { width: 100%; height: 100%; display: block; }
 
