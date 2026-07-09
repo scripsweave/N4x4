@@ -15,6 +15,35 @@
 </head>
 <body>
 
+<!-- Shared SVG defs for the Apple Watch Ultra mockup -->
+<svg width="0" height="0" aria-hidden="true" style="position:absolute;pointer-events:none">
+    <defs>
+        <linearGradient id="uCase" x1="0.12" y1="0" x2="0.6" y2="1">
+            <stop offset="0" stop-color="#565860"/>
+            <stop offset="0.44" stop-color="#2d2f34"/>
+            <stop offset="1" stop-color="#121316"/>
+        </linearGradient>
+        <linearGradient id="uBand" x1="0" y1="0" x2="0.35" y2="1">
+            <stop offset="0" stop-color="#26272b"/>
+            <stop offset="1" stop-color="#0c0d0f"/>
+        </linearGradient>
+        <linearGradient id="uCrown" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#141517"/>
+            <stop offset="0.5" stop-color="#5c5f65"/>
+            <stop offset="1" stop-color="#2b2d31"/>
+        </linearGradient>
+        <linearGradient id="uAction" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#B23500"/>
+            <stop offset="0.55" stop-color="#FF5A1F"/>
+            <stop offset="1" stop-color="#FF8A3D"/>
+        </linearGradient>
+        <linearGradient id="uRing" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFB84D"/>
+            <stop offset="1" stop-color="#FF7A00"/>
+        </linearGradient>
+    </defs>
+</svg>
+
 <!-- ───────────────── NAV ───────────────── -->
 <nav class="nav" id="nav">
     <div class="nav-inner">
@@ -55,27 +84,32 @@
             <img src="images/screen-home.png" alt="N4x4 home screen showing weekly streak and VO₂ max trend">
         </div>
         <div class="watch-mock">
-            <span class="watch-action"></span>
-            <div class="watch-screen">
-                <svg viewBox="0 0 210 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch Ultra showing live heart rate 172 BPM with a Speed Up coaching cue">
-                    <defs>
-                        <linearGradient id="ringAmberHero" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0" stop-color="#FFB84D"/>
-                            <stop offset="1" stop-color="#FF7A00"/>
-                        </linearGradient>
-                    </defs>
+            <svg class="watch-svg" viewBox="0 0 320 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch Ultra showing live heart rate 172 BPM with a Speed Up coaching cue">
+                <rect x="86" y="4" width="148" height="132" rx="30" fill="url(#uBand)"/>
+                <rect x="86" y="304" width="148" height="132" rx="30" fill="url(#uBand)"/>
+                <rect x="26" y="170" width="18" height="58" rx="7" fill="url(#uAction)"/>
+                <rect x="270" y="176" width="30" height="90" rx="15" fill="url(#uCase)" stroke="#0a0b0d" stroke-width="1"/>
+                <rect x="293" y="194" width="21" height="36" rx="9" fill="url(#uCrown)"/>
+                <rect x="293" y="202" width="21" height="2.4" fill="#0c0d0f" opacity="0.55"/>
+                <rect x="293" y="209" width="21" height="2.4" fill="#0c0d0f" opacity="0.55"/>
+                <rect x="293" y="216" width="21" height="2.4" fill="#0c0d0f" opacity="0.55"/>
+                <rect x="292" y="272" width="14" height="42" rx="7" fill="url(#uCrown)"/>
+                <rect x="42" y="86" width="236" height="268" rx="62" fill="url(#uCase)" stroke="#0a0b0d" stroke-width="1.5"/>
+                <rect x="46" y="90" width="228" height="260" rx="58" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5"/>
+                <rect x="66" y="114" width="188" height="212" rx="44" fill="#000000"/>
+                <svg x="66" y="114" width="188" height="212" viewBox="0 0 210 256" preserveAspectRatio="xMidYMid meet">
                     <text x="105" y="30" text-anchor="middle" fill="#FF9400" font-size="11" font-weight="700" letter-spacing="1.5">HIGH INTENSITY</text>
-                    <text x="105" y="47" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
+                    <text x="105" y="47" text-anchor="middle" fill="#8b8b90" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
                     <g transform="rotate(-90 105 130)">
-                        <circle cx="105" cy="130" r="76" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="8"/>
-                        <circle cx="105" cy="130" r="76" fill="none" stroke="url(#ringAmberHero)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477" stroke-dashoffset="143"/>
+                        <circle cx="105" cy="130" r="76" fill="none" stroke="#2b2b2e" stroke-width="8"/>
+                        <circle cx="105" cy="130" r="76" fill="none" stroke="url(#uRing)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477" stroke-dashoffset="143"/>
                     </g>
                     <text x="105" y="148" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="800" letter-spacing="-2">172</text>
-                    <text x="105" y="171" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
+                    <text x="105" y="171" text-anchor="middle" fill="#8b8b90" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
                     <text x="105" y="228" text-anchor="middle" fill="#FF9400" font-size="16" font-weight="800" letter-spacing="0.5">▲ SPEED UP</text>
-                    <text x="105" y="247" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10.5" font-weight="600" letter-spacing="0.5">TARGET 158–172</text>
+                    <text x="105" y="247" text-anchor="middle" fill="#6f6f74" font-size="10.5" font-weight="600" letter-spacing="0.5">TARGET 158–172</text>
                 </svg>
-            </div>
+            </svg>
         </div>
     </div>
     <div class="hero-scroll-hint">
@@ -297,27 +331,32 @@
             </div>
             <div class="watch-stage animate-in delay-1">
                 <div class="watch-mock">
-                    <span class="watch-action"></span>
-                    <div class="watch-screen">
-                        <svg viewBox="0 0 210 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch Ultra showing live heart rate 172 BPM with a Speed Up coaching cue">
-                            <defs>
-                                <linearGradient id="ringAmberWatch" x1="0" y1="0" x2="1" y2="1">
-                                    <stop offset="0" stop-color="#FFB84D"/>
-                                    <stop offset="1" stop-color="#FF7A00"/>
-                                </linearGradient>
-                            </defs>
+                    <svg class="watch-svg" viewBox="0 0 320 440" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Apple Watch Ultra showing live heart rate 172 BPM with a Speed Up coaching cue">
+                        <rect x="86" y="4" width="148" height="132" rx="30" fill="url(#uBand)"/>
+                        <rect x="86" y="304" width="148" height="132" rx="30" fill="url(#uBand)"/>
+                        <rect x="26" y="170" width="18" height="58" rx="7" fill="url(#uAction)"/>
+                        <rect x="270" y="176" width="30" height="90" rx="15" fill="url(#uCase)" stroke="#0a0b0d" stroke-width="1"/>
+                        <rect x="293" y="194" width="21" height="36" rx="9" fill="url(#uCrown)"/>
+                        <rect x="293" y="202" width="21" height="2.4" fill="#0c0d0f" opacity="0.55"/>
+                        <rect x="293" y="209" width="21" height="2.4" fill="#0c0d0f" opacity="0.55"/>
+                        <rect x="293" y="216" width="21" height="2.4" fill="#0c0d0f" opacity="0.55"/>
+                        <rect x="292" y="272" width="14" height="42" rx="7" fill="url(#uCrown)"/>
+                        <rect x="42" y="86" width="236" height="268" rx="62" fill="url(#uCase)" stroke="#0a0b0d" stroke-width="1.5"/>
+                        <rect x="46" y="90" width="228" height="260" rx="58" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="1.5"/>
+                        <rect x="66" y="114" width="188" height="212" rx="44" fill="#000000"/>
+                        <svg x="66" y="114" width="188" height="212" viewBox="0 0 210 256" preserveAspectRatio="xMidYMid meet">
                             <text x="105" y="30" text-anchor="middle" fill="#FF9400" font-size="11" font-weight="700" letter-spacing="1.5">HIGH INTENSITY</text>
-                            <text x="105" y="47" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
+                            <text x="105" y="47" text-anchor="middle" fill="#8b8b90" font-size="11" font-weight="600" letter-spacing="1">INTERVAL 3 / 4</text>
                             <g transform="rotate(-90 105 130)">
-                                <circle cx="105" cy="130" r="76" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="8"/>
-                                <circle cx="105" cy="130" r="76" fill="none" stroke="url(#ringAmberWatch)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477" stroke-dashoffset="143"/>
+                                <circle cx="105" cy="130" r="76" fill="none" stroke="#2b2b2e" stroke-width="8"/>
+                                <circle cx="105" cy="130" r="76" fill="none" stroke="url(#uRing)" stroke-width="8" stroke-linecap="round" stroke-dasharray="477" stroke-dashoffset="143"/>
                             </g>
                             <text x="105" y="148" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="800" letter-spacing="-2">172</text>
-                            <text x="105" y="171" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
+                            <text x="105" y="171" text-anchor="middle" fill="#8b8b90" font-size="12" font-weight="700" letter-spacing="2">BPM</text>
                             <text x="105" y="228" text-anchor="middle" fill="#FF9400" font-size="16" font-weight="800" letter-spacing="0.5">▲ SPEED UP</text>
-                            <text x="105" y="247" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="10.5" font-weight="600" letter-spacing="0.5">TARGET 158–172</text>
+                            <text x="105" y="247" text-anchor="middle" fill="#6f6f74" font-size="10.5" font-weight="600" letter-spacing="0.5">TARGET 158–172</text>
                         </svg>
-                    </div>
+                    </svg>
                 </div>
             </div>
         </div>

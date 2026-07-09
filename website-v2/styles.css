@@ -213,14 +213,14 @@ body {
 }
 .hero-devices .device img { width: 288px; }
 .hero-devices .watch-mock {
-    width: 202px;
-    margin-left: -54px;
-    margin-bottom: 46px;
+    width: 218px;
+    margin-left: -56px;
+    margin-bottom: -18px;
     transform: rotate(-4deg);
 }
 @media (max-width: 560px) {
     .hero-devices .device img { width: 216px; }
-    .hero-devices .watch-mock { width: 150px; margin-left: -40px; margin-bottom: 28px; }
+    .hero-devices .watch-mock { width: 162px; margin-left: -42px; margin-bottom: -12px; }
 }
 
 .hero-scroll-hint {
@@ -609,53 +609,13 @@ body {
 
 .watch-stage { display: flex; justify-content: center; }
 
-/* Apple Watch Ultra mockup (black titanium) */
+/* Apple Watch Ultra mockup (inline SVG) */
 .watch-mock {
-    width: 244px;
-    aspect-ratio: 0.9 / 1;
-    border-radius: 54px;
-    background:
-        linear-gradient(135deg, rgba(255,255,255,0.10), transparent 32%),
-        linear-gradient(155deg, #45474c 0%, #292b2f 46%, #131417 100%);
-    padding: 20px;
     position: relative;
-    box-shadow:
-        0 46px 100px rgba(0,0,0,0.65),
-        inset 0 0 0 1.5px rgba(255,255,255,0.16),
-        inset 0 3px 8px rgba(255,255,255,0.10),
-        inset 0 -8px 16px rgba(0,0,0,0.55);
+    width: 268px;
+    filter: drop-shadow(0 44px 70px rgba(0,0,0,0.6));
 }
-/* Right side: digital crown (upper) + side button (lower) */
-.watch-mock::before,
-.watch-mock::after {
-    content: '';
-    position: absolute;
-    right: -6px;
-    border-radius: 4px;
-    background: linear-gradient(90deg, #16171a 0%, #55585f 55%, #303237 100%);
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
-}
-.watch-mock::before { top: 31%; width: 9px; height: 40px; }   /* digital crown */
-.watch-mock::after  { top: 55%; width: 7px; height: 30px; }   /* side button */
-/* Left side: orange Action Button — the Ultra signature */
-.watch-action {
-    position: absolute;
-    left: -5px;
-    top: 42%;
-    width: 8px;
-    height: 46px;
-    border-radius: 4px;
-    background: linear-gradient(90deg, #C23B00 0%, #FF5A1F 55%, #FF7A2B 100%);
-    box-shadow: 0 0 10px rgba(255,90,0,0.45), 0 0 0 1px rgba(0,0,0,0.3);
-}
-.watch-screen {
-    width: 100%; height: 100%;
-    border-radius: 40px;
-    background: #000;
-    overflow: hidden;
-    position: relative;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.9);
-}
+.watch-mock .watch-svg { width: 100%; height: auto; display: block; }
 .watch-screen svg { width: 100%; height: 100%; display: block; }
 
 /* ─── Video ─────────────────────────────────────────────── */
