@@ -211,7 +211,7 @@ struct RedesignRootView: View {
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
 
-            StreakHistoryView(viewModel: viewModel, embedded: true)
+            RedesignHistoryView(viewModel: viewModel, embedded: true)
                 .tabItem { Label("History", systemImage: "clock") }
                 .tag(1)
 
@@ -241,7 +241,7 @@ struct RedesignRootView: View {
             }
         }
         .sheet(isPresented: $viewModel.showWeeklyStreaks) {
-            StreakHistoryView(viewModel: viewModel)
+            RedesignHistoryView(viewModel: viewModel)
                 .onDisappear { viewModel.showWeeklyStreaks = false }
         }
     }
@@ -1125,5 +1125,407 @@ struct HRZoneBar: View {
             }
             Spacer()
         }
+    }
+}
+
+// MARK: - History / streaks screen
+
+/// Premium redesign of the streaks/history screen: a glowing streak hero with a
+/// last-8-weeks strip, stat tiles, an aligned month calendar, and a styled
+/// performance-trend chart — all in the app's dark design language.
+struct RedesignHistoryView: View {
+    @ObservedObject var viewModel: TimerViewModel
+    var embedded: Bool = false
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedWorkout: WorkoutLogEntry?
+    @State private var selectedPerfModality: TrainingModality?
+    @State private var selectedChartDate: Date?
+
+    private let cal = Calendar.current
+    private let daySymbols = ["S", "M", "T", "W", "T", "F", "S"]
+    private struct WeekKey: Hashable { let year: Int; let week: Int }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                header
+                streakHero
+                statTiles
+                calendarCard
+                performanceCard
+                if let workout = selectedWorkout {
+                    workoutDetailCard(workout)
+                }
+            }
+            .padding(20)
+            .padding(.bottom, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.background.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("History")
+                .font(.system(size: 30, weight: .heavy, design: .rounded))
+                .foregroundStyle(Palette.textPrimary)
+            Spacer()
+            if !embedded {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Palette.surfaceRaised))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: Streak hero
+
+    private var streakHero: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(Palette.amber)
+                        .frame(width: 54, height: 54)
+                        .blur(radius: 18)
+                        .opacity(viewModel.currentStreak > 0 ? 0.7 : 0)
+                    Image(systemName: viewModel.currentStreak > 0 ? "flame.fill" : "flame")
+                        .font(.system(size: 40, weight: .bold))
+                        .foregroundStyle(
+                            viewModel.currentStreak > 0
+                            ? LinearGradient(colors: [Palette.amber, Color(red: 1, green: 0.82, blue: 0.3)],
+                                             startPoint: .bottom, endPoint: .top)
+                            : LinearGradient(colors: [Palette.textTertiary], startPoint: .top, endPoint: .bottom)
+                        )
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(viewModel.currentStreak)")
+                        .font(.system(size: 52, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("WEEK STREAK")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Palette.textSecondary)
+                        .tracking(1)
+                }
+                Spacer()
+                VStack(spacing: 3) {
+                    Image(systemName: "trophy.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Palette.amber)
+                    Text("\(viewModel.longestStreak)")
+                        .font(.system(size: 20, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Palette.textPrimary)
+                    Text("BEST")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Palette.textTertiary)
+                        .tracking(0.5)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surfaceRaised))
+            }
+
+            // Last 8 weeks strip.
+            HStack(spacing: 6) {
+                ForEach(Array(last8Weeks.enumerated()), id: \.offset) { _, done in
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(done ? Palette.amber : Palette.surfaceRaised)
+                        .frame(height: 8)
+                        .overlay {
+                            if done {
+                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(Palette.amber).blur(radius: 4).opacity(0.6)
+                            }
+                        }
+                }
+            }
+            HStack {
+                Text("8 WEEKS AGO").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.textTertiary)
+                Spacer()
+                Text("THIS WEEK").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.textTertiary)
+            }
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Palette.surface))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+    }
+
+    private var last8Weeks: [Bool] {
+        let now = Date()
+        let entryWeeks = Set(viewModel.workoutLogEntries.map { WeekKey(year: $0.year, week: $0.weekOfYear) })
+        return (0..<8).reversed().map { i in
+            guard let d = cal.date(byAdding: .weekOfYear, value: -i, to: now) else { return false }
+            let key = WeekKey(year: cal.component(.yearForWeekOfYear, from: d),
+                              week: cal.component(.weekOfYear, from: d))
+            return entryWeeks.contains(key)
+        }
+    }
+
+    // MARK: Stat tiles
+
+    private var statTiles: some View {
+        HStack(spacing: 10) {
+            statTile(value: "\(viewModel.workoutLogEntries.count)", label: "TOTAL", icon: "checkmark.seal.fill", tint: Palette.recovery)
+            statTile(value: "\(thisMonthCount)", label: "THIS MONTH", icon: "calendar", tint: Palette.electricBlue)
+            statTile(value: "\(viewModel.longestStreak)", label: "BEST STREAK", icon: "flame.fill", tint: Palette.amber)
+        }
+    }
+
+    private func statTile(value: String, label: String, icon: String, tint: Color) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(tint)
+            Text(value).font(.system(size: 24, weight: .heavy, design: .rounded)).foregroundStyle(Palette.textPrimary)
+            Text(label).font(.system(size: 9, weight: .bold)).foregroundStyle(Palette.textTertiary).tracking(0.5)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.surface))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+    }
+
+    private var thisMonthCount: Int {
+        guard let interval = cal.dateInterval(of: .month, for: Date()) else { return 0 }
+        return viewModel.workoutLogEntries.filter { interval.contains($0.completedAt) }.count
+    }
+
+    // MARK: Calendar
+
+    private var calendarCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(monthTitle)
+                .font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.textSecondary).tracking(0.5)
+
+            let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
+            LazyVGrid(columns: columns, spacing: 6) {
+                ForEach(Array(daySymbols.enumerated()), id: \.offset) { _, d in
+                    Text(d).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.textTertiary)
+                        .frame(maxWidth: .infinity)
+                }
+                ForEach(0..<leadingBlanks, id: \.self) { _ in Color.clear.frame(height: 34) }
+                ForEach(1...currentMonthDays, id: \.self) { day in
+                    dayCell(day)
+                }
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+    }
+
+    private func dayCell(_ day: Int) -> some View {
+        let workout = workoutOnDay(day)
+        let today = isToday(day)
+        let future = isFutureDay(day)
+        return Button {
+            if let w = workout { selectedWorkout = w }
+        } label: {
+            ZStack {
+                if workout != nil {
+                    Circle().fill(Palette.amber)
+                    Circle().fill(Palette.amber).blur(radius: 6).opacity(0.5)
+                } else if today {
+                    Circle().stroke(Palette.electricBlue, lineWidth: 2)
+                }
+                if workout != nil {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(.black)
+                } else {
+                    Text("\(day)")
+                        .font(.system(size: 13, weight: today ? .heavy : .medium))
+                        .foregroundStyle(future ? Palette.textTertiary : (today ? Palette.electricBlue : Palette.textSecondary))
+                }
+            }
+            .frame(height: 34)
+        }
+        .buttonStyle(.plain)
+        .disabled(workout == nil)
+    }
+
+    // MARK: Performance trend
+
+    private var performanceCard: some View {
+        Group {
+            if let modality = activePerfModality {
+                let points = performancePoints(for: modality)
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("PERFORMANCE TREND")
+                            .font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.textSecondary).tracking(0.5)
+                        Spacer()
+                        if loggedModalities.count > 1 {
+                            Picker("", selection: Binding(
+                                get: { activePerfModality ?? modality },
+                                set: { selectedPerfModality = $0 })) {
+                                ForEach(loggedModalities, id: \.self) { Text($0.rawValue).tag($0) }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .tint(Palette.electricBlue)
+                        }
+                    }
+                    perfChart(points: points, modality: modality)
+                    Text("\(modality.rawValue) • \(modality.performanceMetric.label) (\(unitLabel(for: modality)))")
+                        .font(.system(size: 11)).foregroundStyle(Palette.textTertiary)
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func perfChart(points: [(date: Date, value: Double)], modality: TrainingModality) -> some View {
+#if canImport(Charts)
+        if points.count >= 2 {
+            Chart {
+                ForEach(points, id: \.date) { p in
+                    AreaMark(x: .value("Date", p.date), y: .value("v", p.value))
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(LinearGradient(colors: [Palette.electricBlue.opacity(0.35), .clear],
+                                                        startPoint: .top, endPoint: .bottom))
+                    LineMark(x: .value("Date", p.date), y: .value("v", p.value))
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(Palette.electricBlue)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                }
+            }
+            .chartXSelection(value: $selectedChartDate)
+            .chartYAxis { AxisMarks(position: .leading) { _ in
+                AxisValueLabel().foregroundStyle(Palette.textTertiary)
+                AxisGridLine().foregroundStyle(Palette.hairline)
+            } }
+            .chartXAxis { AxisMarks { _ in
+                AxisValueLabel(format: .dateTime.month(.abbreviated)).foregroundStyle(Palette.textTertiary)
+            } }
+            .frame(height: 150)
+            .onChange(of: selectedChartDate) { _, date in
+                guard let date else { return }
+                let candidates = viewModel.workoutLogEntries.filter {
+                    $0.modality == modality && !($0.intervalPerformances ?? []).isEmpty
+                }
+                if let nearest = candidates.min(by: {
+                    abs($0.completedAt.timeIntervalSince(date)) < abs($1.completedAt.timeIntervalSince(date))
+                }) { selectedWorkout = nearest }
+            }
+        } else {
+            Text("Log at least two \(modality.rawValue) sessions to see your trend.")
+                .font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+        }
+#else
+        Text("Trend chart requires iOS Charts support.")
+            .font(.footnote).foregroundStyle(Palette.textSecondary)
+#endif
+    }
+
+    // MARK: Workout detail
+
+    private func workoutDetailCard(_ workout: WorkoutLogEntry) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.recovery)
+                Text(workout.workoutType.rawValue).font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.textPrimary)
+                Spacer()
+                Text(workout.completedAt, style: .date).font(.system(size: 12)).foregroundStyle(Palette.textSecondary)
+                Button { selectedWorkout = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.textTertiary)
+                }.buttonStyle(.plain)
+            }
+            if let b = workout.sessionBreakdown {
+                Divider().overlay(Palette.hairline)
+                VStack(alignment: .leading, spacing: 4) {
+                    detailRow("Total", formatMinutes(b.totalDuration))
+                    detailRow("High intensity", formatMinutes(b.highIntensityDuration))
+                    detailRow("Recovery", formatMinutes(b.recoveryDuration))
+                    detailRow("Cooldown", b.cooldownSkipped ? "Skipped" : formatMinutes(b.cooldownDuration))
+                }
+            }
+            if let perfs = workout.intervalPerformances, !perfs.isEmpty, let modality = workout.modality {
+                Divider().overlay(Palette.hairline)
+                Text("\(modality.performanceMetric.label) per interval")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.textTertiary)
+                ForEach(perfs) { perf in
+                    HStack {
+                        Text("Interval \(perf.intervalNumber)").font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
+                        Spacer()
+                        if let v = perf.primary {
+                            Text("\(formatPerf(viewModel.displayValue(v, for: modality), for: modality)) \(unitLabel(for: modality))")
+                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textPrimary)
+                        } else {
+                            Text("—").font(.system(size: 13)).foregroundStyle(Palette.textTertiary)
+                        }
+                    }
+                }
+            }
+            if !workout.notes.isEmpty {
+                Divider().overlay(Palette.hairline)
+                Text(workout.notes).font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+        .transition(.opacity)
+    }
+
+    private func detailRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
+            Spacer()
+            Text(value).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textPrimary)
+        }
+    }
+
+    // MARK: Data helpers
+
+    private var monthTitle: String {
+        let f = DateFormatter(); f.dateFormat = "MMMM"
+        return f.string(from: Date()).uppercased()
+    }
+    private var currentMonthDays: Int { cal.range(of: .day, in: .month, for: Date())?.count ?? 30 }
+    private var leadingBlanks: Int {
+        let comps = cal.dateComponents([.year, .month], from: Date())
+        guard let first = cal.date(from: comps) else { return 0 }
+        return cal.component(.weekday, from: first) - 1
+    }
+    private func isToday(_ day: Int) -> Bool { cal.component(.day, from: Date()) == day }
+    private func isFutureDay(_ day: Int) -> Bool { day > cal.component(.day, from: Date()) }
+    private func workoutOnDay(_ day: Int) -> WorkoutLogEntry? {
+        guard let interval = cal.dateInterval(of: .month, for: Date()) else { return nil }
+        return viewModel.workoutLogEntries
+            .filter { interval.contains($0.completedAt) && cal.component(.day, from: $0.completedAt) == day }
+            .max(by: { $0.completedAt < $1.completedAt })
+    }
+    private func formatMinutes(_ s: TimeInterval) -> String { "\(max(0, Int(s) / 60)) min" }
+
+    private var loggedModalities: [TrainingModality] {
+        var seen: [TrainingModality] = []
+        for e in viewModel.workoutLogEntries where e.modality != nil && !(e.intervalPerformances ?? []).isEmpty {
+            if let m = e.modality, !seen.contains(m) { seen.append(m) }
+        }
+        return seen
+    }
+    private var activePerfModality: TrainingModality? { selectedPerfModality ?? loggedModalities.first }
+    private func performancePoints(for modality: TrainingModality) -> [(date: Date, value: Double)] {
+        viewModel.workoutLogEntries
+            .filter { $0.modality == modality }
+            .compactMap { e in e.averagePrimaryPerformance.map { (e.completedAt, viewModel.displayValue($0, for: modality)) } }
+            .sorted { $0.date < $1.date }
+    }
+    private func unitLabel(for modality: TrainingModality) -> String {
+        let m = modality.performanceMetric
+        if m.localeConverted, viewModel.usesImperialUnits, let imp = m.imperialUnit { return imp }
+        return m.unit
+    }
+    private func formatPerf(_ v: Double, for modality: TrainingModality) -> String {
+        String(format: "%.\(modality.performanceMetric.step < 1 ? 1 : 0)f", v)
     }
 }
