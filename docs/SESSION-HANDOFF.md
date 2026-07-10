@@ -1,9 +1,10 @@
 # N4x4 — Session Handoff
 
-> **Newer work:** the website rework, Apple Watch UI/advertising alignment, and
-> the on-device Home/watch-ring fixes are documented in
-> [`SESSION-HANDOFF-2026-07-09.md`](SESSION-HANDOFF-2026-07-09.md). Read that
-> first for current state; the notes below are older context.
+> **Newer work:** the final quality review + bug fixes, App Store submission
+> fixes, and watch/App Store screenshots are documented in
+> [`SESSION-HANDOFF-2026-07-10.md`](SESSION-HANDOFF-2026-07-10.md) (which
+> supersedes the 2026-07-09 handoff). Read that first for current state; the
+> notes below are older context.
 
 Authoritative status for resuming work. Last updated 2026-06-19.
 
