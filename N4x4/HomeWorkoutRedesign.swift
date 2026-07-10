@@ -530,7 +530,10 @@ struct VO2HistoryCard: View {
     /// Visible x-axis window for the selected range. Clamped so short histories
     /// still render (a 2-week history under "Year" just shows those 2 weeks).
     private var xDomain: ClosedRange<Date>? {
-        guard let first = allPoints.first?.date, let last = allPoints.last?.date, first < last else { return nil }
+        guard let first = allPoints.first?.date, let last = allPoints.last?.date else { return nil }
+        // Guard against a degenerate (zero-width) domain when every sample shares
+        // one timestamp — Swift Charts renders a collapsed spike otherwise.
+        guard first < last else { return first...first.addingTimeInterval(86_400) }
         guard let months = range.months,
               let start = Calendar.current.date(byAdding: .month, value: -months, to: last) else {
             return first...last
@@ -967,7 +970,7 @@ struct HRZoneBar: View {
     private let zones: [Zone] = [
         Zone(name: "Z1", lo: 50, hi: 60,  color: Color.white.opacity(0.28)),
         Zone(name: "Z2", lo: 60, hi: 70,  color: Palette.electricBlue),
-        Zone(name: "Z3", lo: 70, hi: 80,  color: Palette.recovery),
+        Zone(name: "Z3", lo: 70, hi: 85,  color: Palette.recovery),
         Zone(name: "Z4", lo: 85, hi: 95,  color: Palette.amber),
         Zone(name: "Z5", lo: 95, hi: 100, color: Palette.danger),
     ]

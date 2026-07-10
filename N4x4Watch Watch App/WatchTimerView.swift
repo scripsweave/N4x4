@@ -119,20 +119,28 @@ struct WatchTimerView: View {
             sessionManager.evaluateZoneHaptic(bpm: bpm)
         }
 
-        // Start/stop the HKWorkoutSession alongside the timer.
-        .onChange(of: state.isRunning) { _, isRunning in
-            if isRunning, !workoutManager.isSessionActive {
+        // Manage the HKWorkoutSession off the full timer state. The session must
+        // be active while running OR paused mid-workout, and ended on completion,
+        // reset, or abandon. Keying only off `isRunning` (with a workoutComplete
+        // guard) leaked the session on every non-completed exit — the phone
+        // pushing an idle/reset or a complete-while-paused state never stopped it.
+        .onChange(of: sessionManager.timerState) { _, s in
+            let shouldRun = s.isRunning || (!s.workoutComplete && s.intervalDuration > 0)
+            if shouldRun, !workoutManager.isSessionActive {
                 workoutManager.startWorkout()
-            } else if !isRunning, workoutManager.isSessionActive, state.workoutComplete {
+            } else if !shouldRun, workoutManager.isSessionActive {
                 workoutManager.stopWorkout()
             }
         }
 
-        // Crown-click haptic on interval change.
+        // Crown-click haptic on interval change — only while actively running, so
+        // the reset-to-idle index change doesn't fire a spurious tap.
         .onChange(of: state.currentIntervalIndex) { _, newIndex in
-            guard newIndex != lastIntervalIndex else { return }
+            let advanced = newIndex != lastIntervalIndex
             lastIntervalIndex = newIndex
-            WKInterfaceDevice.current().play(.notification)
+            if advanced, state.isRunning {
+                WKInterfaceDevice.current().play(.notification)
+            }
         }
 
         // Success haptic on completion.

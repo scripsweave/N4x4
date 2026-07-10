@@ -960,6 +960,10 @@ class TimerViewModel: ObservableObject {
         // user hasn't trained yet this week but has a streak leading into it.
         for key in sortedWeeks {
             if key.year == expectedYear && key.week == expectedWeek {
+                // Once the current week is matched, the head-gap forgiveness is
+                // spent — it must only excuse a not-yet-trained *current* week,
+                // never a missed week later in the streak.
+                allowedHeadGap = false
                 streak += 1
                 (expectedYear, expectedWeek) = previousWeek(fromYear: expectedYear, week: expectedWeek)
                 continue
@@ -2171,11 +2175,14 @@ class TimerViewModel: ObservableObject {
             : Date().addingTimeInterval(timeRemaining)
         let maxHR = maximumHeartRate
         let (hrLow, hrHigh): (Int, Int) = {
+            // Round (not truncate) so the Dynamic Island matches the target
+            // ranges shown in-app and on the Watch.
+            func bound(_ pct: Double) -> Int { Int((Double(maxHR) * pct).rounded()) }
             switch phase {
-            case .highIntensity: return (Int(Double(maxHR) * 0.85), Int(Double(maxHR) * 0.95))
-            case .warmup:        return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
-            case .rest:          return (Int(Double(maxHR) * 0.60), Int(Double(maxHR) * 0.70))
-            case .cooldown:      return (Int(Double(maxHR) * 0.50), Int(Double(maxHR) * 0.60))
+            case .highIntensity: return (bound(0.85), bound(0.95))
+            case .warmup:        return (bound(0.60), bound(0.70))
+            case .rest:          return (bound(0.60), bound(0.70))
+            case .cooldown:      return (bound(0.50), bound(0.60))
             }
         }()
         return N4x4LiveActivityAttributes.ContentState(

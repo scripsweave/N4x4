@@ -29,6 +29,7 @@ final class N4x4Tests: XCTestCase {
 
     func testSetupIntervalsIncludesWarmupAndCorrectPattern() {
         let vm = TimerViewModel()
+        vm.cooldownEnabled = false   // isolate the warmup + work/recovery pattern
         vm.numberOfIntervals = 3
         vm.warmupDuration = 120
         vm.highIntensityDuration = 240
@@ -44,6 +45,20 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.intervals[4].type, .rest)
         XCTAssertEqual(vm.intervals[4].name, "Recovery")
         XCTAssertEqual(vm.intervals[5].type, .highIntensity)
+    }
+
+    func testSetupIntervalsAppendsCooldownWhenEnabled() {
+        let vm = TimerViewModel()
+        vm.cooldownEnabled = true
+        vm.numberOfIntervals = 2
+        vm.warmupDuration = 120
+        vm.highIntensityDuration = 240
+        vm.restDuration = 180
+        vm.setupIntervals()
+
+        // warmup + [HI, rest, HI] + cooldown
+        XCTAssertEqual(vm.intervals.count, 5)
+        XCTAssertEqual(vm.intervals.last?.type, .cooldown)
     }
 
     func testCatchUpAdvancesAcrossMultipleIntervals() {
@@ -71,6 +86,7 @@ final class N4x4Tests: XCTestCase {
 
     func testCatchUpCompletesWorkoutWhenFarPastEnd() {
         let vm = TimerViewModel()
+        vm.cooldownEnabled = false   // completion is being tested, not the cooldown tail
         vm.numberOfIntervals = 1
         vm.warmupDuration = 5
         vm.highIntensityDuration = 5
@@ -136,6 +152,7 @@ final class N4x4Tests: XCTestCase {
 
     func testSkippingFinalIntervalWhileRunningEndsWorkoutWithoutRestartingTimer() {
         let vm = TimerViewModel()
+        vm.cooldownEnabled = false   // so the high-intensity interval is the final one
         vm.numberOfIntervals = 1
         vm.warmupDuration = 0
         vm.highIntensityDuration = 10
@@ -213,13 +230,14 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
     }
 
-    func testSelectingWeeklyModeAutoPopulatesWeekday() {
+    func testSelectingWeekdaysSyncsAndStaysValid() {
+        // The reminder model is multi-day now (selectedWeekdaysList); the legacy
+        // single `workoutReminderWeekday` is only a migration shim.
         let vm = TimerViewModel()
-        vm.workoutReminderWeekday = 0
+        vm.selectedWeekdaysList = [2, 5, 7]
 
-        vm.workoutReminderMode = .weeklyWeekday
-
-        XCTAssertTrue((1...7).contains(vm.workoutReminderWeekday))
+        XCTAssertEqual(vm.selectedWeekdaysList.sorted(), [2, 5, 7])
+        XCTAssertTrue(vm.selectedWeekdaysList.allSatisfy { (1...7).contains($0) })
         XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
     }
 
@@ -284,14 +302,13 @@ final class N4x4Tests: XCTestCase {
         XCTAssertEqual(vm.userAge, 40)
     }
 
-    func testWorkoutReminderWeekdayInvalidValueSanitizesWithoutChangingMode() {
+    func testInvalidReminderWeekdaysAreFilteredOut() {
+        // Out-of-range weekday values from stored strings must be dropped so the
+        // schedule only ever contains valid 1...7 days.
         let vm = TimerViewModel()
-        vm.workoutReminderMode = .weeklyWeekday
-        vm.workoutReminderWeekday = 3
+        vm.workoutReminderWeekdays = "999,3,0,7"
 
-        vm.workoutReminderWeekday = 999
-
-        XCTAssertEqual(vm.workoutReminderWeekday, 0)
+        XCTAssertEqual(vm.selectedWeekdaysList.sorted(), [3, 7])
         XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
     }
 
@@ -305,6 +322,48 @@ final class N4x4Tests: XCTestCase {
 
         vm.workoutReminderMode = .weeklyWeekday
         XCTAssertEqual(vm.workoutReminderWeekday, weeklyDay)
+    }
+
+    // MARK: - Streak calculation
+
+    private func makeEntry(_ date: Date) -> WorkoutLogEntry {
+        WorkoutLogEntry(completedAt: date, workoutType: .norwegian4x4,
+                        notes: "", modality: nil, intervalPerformances: nil)
+    }
+
+    func testStreakBreaksOnMissedMiddleWeek() {
+        // Trained this week and two weeks ago, but skipped last week: the missed
+        // week must break the streak (regression for the head-gap-forgiveness bug).
+        let vm = TimerViewModel()
+        let cal = Calendar.current, now = Date()
+        vm.workoutLogEntries = [
+            makeEntry(now),
+            makeEntry(cal.date(byAdding: .weekOfYear, value: -2, to: now)!),
+        ]
+        XCTAssertEqual(vm.currentWeekStreak, 1)
+    }
+
+    func testStreakCountsConsecutiveWeeks() {
+        let vm = TimerViewModel()
+        let cal = Calendar.current, now = Date()
+        vm.workoutLogEntries = [
+            makeEntry(now),
+            makeEntry(cal.date(byAdding: .weekOfYear, value: -1, to: now)!),
+            makeEntry(cal.date(byAdding: .weekOfYear, value: -2, to: now)!),
+        ]
+        XCTAssertEqual(vm.currentWeekStreak, 3)
+    }
+
+    func testStreakForgivesNotYetTrainedCurrentWeek() {
+        // No workout yet this week, but trained the prior two weeks: the head gap
+        // legitimately forgives the current week, so the streak is 2.
+        let vm = TimerViewModel()
+        let cal = Calendar.current, now = Date()
+        vm.workoutLogEntries = [
+            makeEntry(cal.date(byAdding: .weekOfYear, value: -1, to: now)!),
+            makeEntry(cal.date(byAdding: .weekOfYear, value: -2, to: now)!),
+        ]
+        XCTAssertEqual(vm.currentWeekStreak, 2)
     }
 
     // MARK: - Performance logging (Phase 1)
