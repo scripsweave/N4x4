@@ -10,7 +10,6 @@
 		3D5014002FFC30D100AB87B8 /* N4x4Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3D5013F62FFC30CF00AB87B8 /* N4x4Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3D516A652CAB347F001279C0 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D516A642CAB347F001279C0 /* HelpView.swift */; };
 		3DD9A5BE2F4CB5C70022AC16 /* StreakCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */; };
-		3DFEED000000000000000A01 /* HomeWorkoutRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */; };
 		3DF13A452C9389C100DD18E7 /* N4x4App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A442C9389C100DD18E7 /* N4x4App.swift */; };
 		3DF13A472C9389C100DD18E7 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A462C9389C100DD18E7 /* ContentView.swift */; };
 		3DF13A492C9389C200DD18E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A482C9389C200DD18E7 /* Assets.xcassets */; };
@@ -24,6 +23,7 @@
 		3DF13A752C938A9E00DD18E7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A742C938A9E00DD18E7 /* SettingsView.swift */; };
 		3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A762C938ABA00DD18E7 /* Extensions.swift */; };
 		3DF13A802C94D28B00DD18E7 /* alarm.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */; };
+		3DFEED000000000000000A01 /* HomeWorkoutRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */; };
 		5EA1000000000000000000B1 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F1 /* WatchMessage.swift */; };
 		5EA1000000000000000000B2 /* ZoneFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F2 /* ZoneFeedback.swift */; };
 		5EA1000000000000000000B3 /* ZoneFeedbackStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */; };
@@ -105,7 +105,6 @@
 		3D516A642CAB347F001279C0 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		3D53FCC72CA0667200E4A09A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakCard.swift; sourceTree = "<group>"; };
-		3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWorkoutRedesign.swift; sourceTree = "<group>"; };
 		3DF13A412C9389C100DD18E7 /* N4x4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = N4x4.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DF13A442C9389C100DD18E7 /* N4x4App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4App.swift; sourceTree = "<group>"; };
 		3DF13A462C9389C100DD18E7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -122,6 +121,7 @@
 		3DF13A742C938A9E00DD18E7 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		3DF13A762C938ABA00DD18E7 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = alarm.mp3; sourceTree = "<group>"; };
+		3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeWorkoutRedesign.swift; sourceTree = "<group>"; };
 		4A37A004B0EA4A46A5664A04 /* TipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipsView.swift; sourceTree = "<group>"; };
 		5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityBundle.swift; sourceTree = "<group>"; };
 		55D2367A38B64576AC4EEB00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -579,6 +579,7 @@
 				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "N4x4Watch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = N4x4Watch;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your heart rate during a workout to guide you into your target zone.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 records your interval workout to Apple Health.";
@@ -588,7 +589,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 4.00;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -615,6 +616,7 @@
 				DEVELOPMENT_TEAM = 8VG9JUJ855;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "N4x4Watch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = N4x4Watch;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your heart rate during a workout to guide you into your target zone.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 records your interval workout to Apple Health.";
@@ -624,7 +626,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 4.00;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -787,7 +789,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.44;
+				MARKETING_VERSION = 4.00;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -828,7 +830,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.44;
+				MARKETING_VERSION = 4.00;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

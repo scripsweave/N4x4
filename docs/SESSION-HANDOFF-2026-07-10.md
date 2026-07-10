@@ -72,10 +72,13 @@ They predated two intentional features and were never updated:
   streak boundary. Fixing means pinning an ISO calendar for both the entry week
   keys and the streak math together — deferred to avoid a coordinated change
   right at submission. Impact: rare, edge-of-year, off-by-one in a displayed streak.
-- **Watch has no `WKBackgroundModes`** (workout background). The HKWorkoutSession
-  runs foregrounded; if you want it to survive wrist-down/screen-sleep mid-workout,
-  add `WKBackgroundModes = [workout-processing]` (valid on watchOS) + the Workout
-  Processing capability to the watch target. Not required to ship. Untested.
+- ~~Watch has no `WKBackgroundModes`.~~ **Fixed 2026-07-10:** the watch target now
+  sets `WKBackgroundModes = [workout-processing]` so the HKWorkoutSession keeps
+  running when the wrist drops / screen sleeps mid-workout. Implemented via a
+  root-level `N4x4Watch-Info.plist` (kept outside the watch's synchronized folder
+  so it is used as `INFOPLIST_FILE`, not copied as a resource) merged with the
+  generated plist. Verified: the built watch `Info.plist` contains the key and
+  retains the generated `WK*` keys.
 - Watch does **not** save an `HKWorkout` (only `session.end()`); this is
   intentional — the **phone** writes the workout via `HKWorkoutBuilder.finishWorkout`
   (`TimerViewModel.swift:2582`). Saving on the watch too would double-count.
