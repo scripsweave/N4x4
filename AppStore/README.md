@@ -22,6 +22,22 @@ The 6.7" set is a straight resize of the 6.9" set (same composition).
 `01`, `02`, `04` are composed from live app captures. `03` features an **Apple
 Watch Ultra** rather than a phone (see below).
 
+## `watch-screenshots/` — Apple Watch slot (required)
+
+Because the binary includes a watchOS app, App Store Connect requires at least
+one Apple Watch screenshot. These are the raw watch screen (no device frame),
+rendered to match the real `WatchTimerView` UI. Upload one that matches an
+accepted size — **`watch-ultra3-422x514.png`** or `watch-ultra-410x502.png` are
+the safe defaults.
+
+| File | Size | Device |
+|------|------|--------|
+| `watch-ultra3-422x514.png` | 422×514 | Ultra 3 |
+| `watch-ultra-410x502.png` | 410×502 | Ultra / Ultra 2 |
+| `watch-series11-416x496.png` | 416×496 | Series 11 (46mm) |
+| `watch-45mm-396x484.png` | 396×484 | Series 9 (45mm) |
+| `watch-44mm-368x448.png` | 368×448 | Series 6 (44mm) |
+
 ## `assets/` — reusable source
 
 - `watch-ultra-framed.png` (1800 × 2580, transparent) — the Apple Watch Ultra
