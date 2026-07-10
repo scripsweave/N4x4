@@ -4,8 +4,13 @@ Marketing screenshots for the App Store listing.
 
 ## `screenshots/` — final, upload-ready
 
-All exactly **1290 × 2796** (6.9" iPhone — the required size; also accepted for
-the 6.5"/6.7" slots).
+Two sizes are provided; upload the set that matches the App Store Connect slot:
+
+- `screenshots/*.png` — **1290 × 2796** (6.9" iPhone: 16 Pro Max etc.)
+- `screenshots/6.7in/*.png` — **1284 × 2778** (6.7"/6.5" slot: 15/14 Pro Max,
+  11 Pro Max). Use these if ASC rejects 1290×2796 with a dimension error.
+
+The 6.7" set is a straight resize of the 6.9" set (same composition).
 
 | File | Caption |
 |------|---------|
