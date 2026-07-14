@@ -589,7 +589,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.00;
+				MARKETING_VERSION = 4.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -626,7 +626,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.00;
+				MARKETING_VERSION = 4.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -789,7 +789,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.00;
+				MARKETING_VERSION = 4.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -830,7 +830,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.00;
+				MARKETING_VERSION = 4.01;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
