@@ -203,7 +203,9 @@ To verify:
 
 ## Apple Watch (WatchConnectivity)
 
-> Status: code written, not yet built. Needs one-time Xcode target setup — see
+> Status: integrated and shipping. The `N4x4Watch Watch App` target is a real
+> watchOS application, embedded into the phone app and driven over
+> WatchConnectivity. Background on the design lives in
 > `docs/Watch App - HR Zone Feedback Handoff.md` and `docs/SESSION-HANDOFF.md`.
 
 - **Phone is the source of truth.** It runs the timer and broadcasts state; the

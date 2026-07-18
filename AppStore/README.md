@@ -48,7 +48,7 @@ the safe defaults.
 
 The Ultra frame originated from a supplied render that was a flattened preview
 (no real alpha). It was keyed into a transparent-screen PNG that lives at
-`website-v2/images/watch-ultra-frame.png` and is used on the website too. The
+`website/images/watch-ultra-frame.png` and is used on the website too. The
 live face is the same one rendered on the site, so **the advertised watch and
 the real app UI match** — keep them in sync (see
 `docs/SESSION-HANDOFF-2026-07-09.md`).
