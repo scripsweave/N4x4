@@ -13,6 +13,7 @@ import SwiftUI
 struct WatchTroubleshootingView: View {
     @ObservedObject var viewModel: TimerViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showMonitorSheet = false
 
     var body: some View {
         NavigationView {
@@ -34,7 +35,7 @@ struct WatchTroubleshootingView: View {
 
                 Section(
                     header: Text("Try this"),
-                    footer: Text("Heart rate requires an Apple Watch Series 4 or later. The iPhone has no heart-rate sensor of its own.")
+                    footer: Text("Heart rate requires an Apple Watch Series 4 or later, or a Bluetooth heart rate monitor. The iPhone has no heart-rate sensor of its own.")
                 ) {
                     ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                         HStack(alignment: .top, spacing: 12) {
@@ -50,13 +51,33 @@ struct WatchTroubleshootingView: View {
                         .padding(.vertical, 2)
                     }
                 }
+
+                // Highest-intent moment for the Bluetooth path: the user is
+                // here because heart rate isn't flowing. Hidden once it is.
+                if viewModel.currentHeartRate == nil {
+                    Section {
+                        Button {
+                            showMonitorSheet = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "sensor.tag.radiowaves.forward")
+                                    .foregroundStyle(.blue)
+                                Text("Have a chest strap? Connect it instead")
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                    }
+                }
             }
-            .navigationTitle("Apple Watch")
+            .navigationTitle("Heart Rate Help")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showMonitorSheet) {
+                HeartRateMonitorSheet(manager: viewModel.bleHeartRateManager)
             }
         }
     }

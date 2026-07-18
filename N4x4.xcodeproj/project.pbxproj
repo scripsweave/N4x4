@@ -35,6 +35,11 @@
 		5EA1000000000000000000C4 /* Interval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A6E2C938A4F00DD18E7 /* Interval.swift */; };
 		5EA1000000000000000000C5 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B1E0000000000000000000B1 /* HeartRateMeasurementParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */; };
+		B1E0000000000000000000B2 /* HeartRateAggregator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F2 /* HeartRateAggregator.swift */; };
+		B1E0000000000000000000B3 /* BluetoothHeartRateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */; };
+		B1E0000000000000000000B4 /* HeartRateMonitorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */; };
+		B1E0000000000000000000C1 /* HeartRateBluetoothTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
 		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
@@ -111,6 +116,11 @@
 		3DF13A482C9389C200DD18E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3DF13A4B2C9389C200DD18E7 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		3DF13A512C9389C200DD18E7 /* N4x4Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = N4x4Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMeasurementParser.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F2 /* HeartRateAggregator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAggregator.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateManager.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorViews.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateBluetoothTests.swift; sourceTree = "<group>"; };
 		3DF13A552C9389C200DD18E7 /* N4x4Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4Tests.swift; sourceTree = "<group>"; };
 		3DF13A5B2C9389C200DD18E7 /* N4x4UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = N4x4UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DF13A5F2C9389C200DD18E7 /* N4x4UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4UITests.swift; sourceTree = "<group>"; };
@@ -226,10 +236,22 @@
 				4A37A004B0EA4A46A5664A04 /* TipsView.swift */,
 				5739937EF07648BE8983755B /* SpeechManager.swift */,
 				9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */,
+				B1E0000000000000000000A0 /* Bluetooth */,
 				5EA1000000000000000000F4 /* PhoneSessionManager.swift */,
 				5EA1000000000000000000F5 /* WatchSetupViews.swift */,
 			);
 			path = N4x4;
+			sourceTree = "<group>";
+		};
+		B1E0000000000000000000A0 /* Bluetooth */ = {
+			isa = PBXGroup;
+			children = (
+				B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */,
+				B1E0000000000000000000F2 /* HeartRateAggregator.swift */,
+				B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */,
+				B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */,
+			);
+			path = Bluetooth;
 			sourceTree = "<group>";
 		};
 		3DF13A4A2C9389C200DD18E7 /* Preview Content */ = {
@@ -244,6 +266,7 @@
 			isa = PBXGroup;
 			children = (
 				3DF13A552C9389C200DD18E7 /* N4x4Tests.swift */,
+				B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */,
 			);
 			path = N4x4Tests;
 			sourceTree = "<group>";
@@ -512,6 +535,10 @@
 				5EA1000000000000000000B3 /* ZoneFeedbackStyle.swift in Sources */,
 				5EA1000000000000000000B4 /* PhoneSessionManager.swift in Sources */,
 				5EA1000000000000000000B5 /* WatchSetupViews.swift in Sources */,
+				B1E0000000000000000000B1 /* HeartRateMeasurementParser.swift in Sources */,
+				B1E0000000000000000000B2 /* HeartRateAggregator.swift in Sources */,
+				B1E0000000000000000000B3 /* BluetoothHeartRateManager.swift in Sources */,
+				B1E0000000000000000000B4 /* HeartRateMonitorViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -520,6 +547,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3DF13A562C9389C200DD18E7 /* N4x4Tests.swift in Sources */,
+				B1E0000000000000000000C1 /* HeartRateBluetoothTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -776,6 +804,7 @@
 				INFOPLIST_FILE = N4x4/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = N4x4;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "N4x4 connects to Bluetooth heart rate monitors like chest straps to show your live heart rate and coach you into your target zone.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your VO₂ max data to show your fitness trend over time.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 writes completed interval workouts to Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
@@ -817,6 +846,7 @@
 				INFOPLIST_FILE = N4x4/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = N4x4;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "N4x4 connects to Bluetooth heart rate monitors like chest straps to show your live heart rate and coach you into your target zone.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your VO₂ max data to show your fitness trend over time.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 writes completed interval workouts to Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;

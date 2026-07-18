@@ -11,6 +11,7 @@ final class OnboardingFlowViewModel: ObservableObject {
         case audioMode
         case notifications
         case health
+        case heartRate
         case launch
 
         var title: String {
@@ -24,6 +25,7 @@ final class OnboardingFlowViewModel: ObservableObject {
             case .audioMode: return "How should we guide you?"
             case .notifications: return "Stay consistent"
             case .health: return "Track your progress"
+            case .heartRate: return "See your heart rate live"
             case .launch: return "You're ready"
             }
         }
@@ -164,6 +166,8 @@ private struct OnboardingView: View {
                         )
                     case .vo2Goal:
                         vo2GoalCard
+                    case .heartRate:
+                        heartRateSourceCard
                     case .launch:
                         permissionCard(
                             icon: "bolt.heart.fill",
@@ -294,6 +298,75 @@ private struct OnboardingView: View {
                 }
                     .buttonStyle(OnboardingPrimaryButtonStyle())
             }
+            .padding(.top, 8)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.58), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+    }
+
+    /// Heart-rate source step: N4x4's zone coaching needs a live heart rate.
+    /// Apple Watch needs no setup; a Bluetooth monitor can be paired inline.
+    /// Fully skippable, and the Bluetooth permission prompt only ever fires on
+    /// an explicit Connect tap inside MonitorPairingCompact.
+    private var heartRateSourceCard: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "bolt.heart.fill")
+                .font(.system(size: 38, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(16)
+                .background(Circle().fill(Color.white.opacity(0.16)))
+
+            Text("See your heart rate live")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("N4x4 coaches you into the right zone every interval — it needs a live heart rate to do that.")
+                .font(.body)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.9))
+                .padding(.horizontal, 8)
+
+            VStack(spacing: 10) {
+                HStack(spacing: 14) {
+                    Image(systemName: "applewatch")
+                        .font(.title3)
+                        .frame(width: 28)
+                        .foregroundStyle(.white)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Apple Watch")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Text(timerViewModel.watchPaired
+                             ? "Detected — just wear it. Nothing to set up."
+                             : "Just wear it. Nothing to set up.")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    Spacer()
+                    if timerViewModel.watchPaired {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(timerViewModel.watchPaired
+                              ? Color.white.opacity(0.22) : Color.white.opacity(0.08))
+                )
+
+                MonitorPairingCompact(manager: timerViewModel.bleHeartRateManager)
+            }
+
+            HeartRateStepFooter(
+                manager: timerViewModel.bleHeartRateManager,
+                watchPaired: timerViewModel.watchPaired,
+                advance: flow.next
+            )
             .padding(.top, 8)
         }
         .padding(28)
@@ -902,6 +975,31 @@ private struct OnboardingView: View {
         // so fetchVO2MaxSamples() has valid auth before it runs.
         timerViewModel.requestHealthKitAuthorizationIfNeeded {
             flow.next()
+        }
+    }
+}
+
+/// Footer for the heart-rate onboarding step. Observes the Bluetooth manager
+/// directly so the button label flips to "Continue" the moment a monitor
+/// connects (the parent card doesn't observe the manager).
+private struct HeartRateStepFooter: View {
+    @ObservedObject var manager: BluetoothHeartRateManager
+    let watchPaired: Bool
+    let advance: () -> Void
+
+    private var primaryTitle: String {
+        if case .connected = manager.state { return "Continue" }
+        return watchPaired ? "Continue" : "Set Up Later"
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Button(primaryTitle) { advance() }
+                .buttonStyle(OnboardingPrimaryButtonStyle())
+
+            Text("You can connect a monitor anytime in Settings.")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.6))
         }
     }
 }

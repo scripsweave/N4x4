@@ -13,6 +13,7 @@ SwiftUI iOS fitness app for the Norwegian 4x4 HIIT protocol. Guides users throug
 - **No external dependencies** — only Apple frameworks
 
 ## Recent Work
+- **Bluetooth HR monitors (2026-07-18)** — chest straps/armbands via Core Bluetooth join the Watch as live HR sources. Plan: `docs/Bluetooth HR Monitor Plan.md`. Code: `N4x4/Bluetooth/` (parser + aggregator pure & tested, manager, views). One funnel: `TimerViewModel.ingestHeartRate(_:from:)`; BLE beats Watch; 10 s staleness clears frozen readings. New onboarding step `.heartRate`; Settings section "Heart Rate Monitor"; troubleshooting sheet offers the strap path. Config: `NSBluetoothAlwaysUsageDescription` (pbxproj), `bluetooth-central` background mode (N4x4/Info.plist). Rules in AGENTS.md §Bluetooth. Needs on-device verification (CoreBluetooth ≠ Simulator).
 - [Home/Workout redesign](home-workout-redesign.md) — dark premium 2-screen redesign on branch `feature/home-workout-redesign`; behind `useRedesignedUI` flag in ContentView, all in `HomeWorkoutRedesign.swift`.
 - [simctl blank-screen gotcha](simctl-blank-screen-debug-dylib.md) — headless screenshots need `ENABLE_DEBUG_DYLIB=NO` + a freshly-erased sim.
 

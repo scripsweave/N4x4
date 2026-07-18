@@ -245,3 +245,30 @@ To verify:
 - The metric per modality comes from one place: `TrainingModality.performanceMetric`.
   Modality is derived from the user-facing Type picker via
   `WorkoutType.trainingModality` (one picker, not two). Add new metrics there.
+
+## Bluetooth heart rate monitors (Core Bluetooth)
+
+- All CoreBluetooth code lives in `N4x4/Bluetooth/BluetoothHeartRateManager.swift`
+  — nothing else may import CoreBluetooth. The packet parser
+  (`HeartRateMeasurementParser`) and source arbitration (`HeartRateAggregator`)
+  are pure Foundation and unit-tested in `N4x4Tests/HeartRateBluetoothTests.swift`.
+- **Never instantiate `CBCentralManager` at launch for users who haven't paired
+  a monitor** — creating it is what fires the system Bluetooth permission
+  prompt. `startIfRemembered()` is the only launch-time entry point and no-ops
+  without a remembered device.
+- **One HR funnel**: every source calls
+  `TimerViewModel.ingestHeartRate(_:from:)`. Do not write `currentHeartRate`
+  directly — the aggregator (BLE beats Watch, 10 s staleness window) is the only
+  thing allowed to decide the displayed value, and the staleness sweep
+  (`scheduleHeartRateStalenessSweep`) is what clears frozen readings.
+- **The strap connection is independent of the workout lifecycle.** Never
+  disconnect on workout end/reset; a pending `connect()` is free and completes
+  when the strap is worn. Only `forgetMonitor()` (user action / settings reset)
+  disconnects.
+- Readings with the sensor-contact bit reporting "no contact" must never reach
+  the funnel (`HeartRateReading.isUsable`) — they are garbage and fire false
+  zone alerts.
+- User-initiated disconnects are tracked per peripheral identifier
+  (`userInitiatedDisconnects: Set<UUID>`), consumed **before** the
+  current-peripheral guard — a plain bool gets stranded when callbacks arrive
+  out of order and silently kills auto-reconnect.

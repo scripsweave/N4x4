@@ -266,7 +266,10 @@ struct HomeScreen: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
 
-            if viewModel.watchAppMissingOnPairedWatch, !watchBannerDismissed {
+            // Suppressed for users already covered by a Bluetooth monitor —
+            // nagging them about the Watch app would be noise.
+            if viewModel.watchAppMissingOnPairedWatch, !watchBannerDismissed,
+               !viewModel.bleHeartRateManager.hasRememberedMonitor {
                 watchConnectBanner
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -737,7 +740,8 @@ struct WorkoutScreen: View {
 
             Spacer(minLength: 12)
 
-            HRZoneBar(viewModel: viewModel)
+            HRZoneBar(viewModel: viewModel,
+                      onMissingHeartRateTap: { showWatchHelp = true })
                 .padding(.horizontal, 20)
                 .padding(.bottom, 12)
         }
@@ -957,6 +961,9 @@ struct WorkoutRing: View {
 /// is streaming it.
 struct HRZoneBar: View {
     @ObservedObject var viewModel: TimerViewModel
+    /// Invoked when the user taps the missing-heart-rate warning — the
+    /// highest-intent moment for the troubleshooting / connect-a-strap flow.
+    var onMissingHeartRateTap: (() -> Void)? = nil
 
     @State private var pulse = false
 
@@ -1024,6 +1031,11 @@ struct HRZoneBar: View {
                         Text("BPM")
                             .font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Palette.textSecondary)
+                        if let symbol = viewModel.heartRateSourceSymbol {
+                            Image(systemName: symbol)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Palette.textTertiary)
+                        }
                     }
                 }
             }
@@ -1106,14 +1118,21 @@ struct HRZoneBar: View {
             Spacer()
             if viewModel.currentHeartRate != nil {
                 Circle().fill(Palette.recovery).frame(width: 7, height: 7)
-                Text("Apple Watch Connected")
+                Text("\(viewModel.heartRateSourceLabel ?? "Heart Rate") Connected")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Palette.textSecondary)
             } else if viewModel.shouldWarnMissingHeartRate {
-                Circle().fill(Palette.amber).frame(width: 7, height: 7)
-                Text(viewModel.watchAppInstalled ? "Waiting for heart rate…" : "Set up N4x4 on your Watch")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Palette.amber)
+                Button {
+                    onMissingHeartRateTap?()
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle().fill(Palette.amber).frame(width: 7, height: 7)
+                        Text("\(viewModel.missingHeartRateHint) — tap for help")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Palette.amber)
+                    }
+                }
+                .buttonStyle(.plain)
             } else {
                 Circle().fill(Palette.textTertiary).frame(width: 7, height: 7)
                 Text("No heart rate")

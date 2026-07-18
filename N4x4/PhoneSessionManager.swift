@@ -144,7 +144,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             sendStateUpdate(to: vm)
         case WatchMessageKey.heartRate:
             if let bpm = message[WatchMessageKey.hrBPM] as? Double {
-                vm.ingestStreamedHeartRate(bpm)
+                vm.ingestHeartRate(bpm, from: .watch)
             }
         default:
             break

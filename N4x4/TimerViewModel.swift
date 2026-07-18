@@ -703,12 +703,22 @@ class TimerViewModel: ObservableObject {
 
     // MARK: - Apple Watch
     let phoneSessionManager = PhoneSessionManager()
-    /// Live heart rate streamed from a paired Apple Watch during a workout.
-    /// nil when no Watch is streaming (the iPhone has no HR sensor of its own).
+    /// Live heart rate from whichever source is currently streaming (Apple
+    /// Watch via WatchConnectivity, or a Bluetooth monitor via Core Bluetooth).
+    /// nil when every source is stale — the UI shows "—", never a frozen number.
     @Published var currentHeartRate: Double? = nil
     /// Phone-side engine for spoken zone nudges. The Watch runs its own engine
     /// for haptics; the shared logic keeps the two channels consistent.
     private let zoneVoiceEngine = ZoneFeedbackEngine()
+
+    // MARK: - Bluetooth heart rate monitor
+    /// Chest straps / armbands. Lazy about permissions: it never touches
+    /// CoreBluetooth until the user pairs (or has paired) a monitor.
+    let bleHeartRateManager = BluetoothHeartRateManager()
+    /// Arbitrates between sources: Bluetooth wins when live, Watch fills in,
+    /// stale sources age out (see HeartRateAggregator for the policy).
+    private var heartRateAggregator = HeartRateAggregator()
+    private var heartRateStalenessWork: DispatchWorkItem?
 
     // Live WatchConnectivity state, mirrored from PhoneSessionManager's delegate
     // callbacks (see updateWatchConnectionState) so SwiftUI can react to it.
@@ -759,12 +769,46 @@ class TimerViewModel: ObservableObject {
     }
 
     /// True when we should warn on the timer screen that HR isn't coming through:
-    /// a workout is running on a phone whose owner has a Watch, but no heart rate
-    /// has arrived after a short settling window. Covers both "Watch app not
-    /// open/installed" and "HealthKit permission not granted" — the troubleshooting
-    /// sheet then diagnoses which.
+    /// a workout is running, the user owns at least one HR source (a paired
+    /// Watch or a remembered Bluetooth monitor), but no reading has arrived
+    /// after a short settling window. The troubleshooting sheet diagnoses why.
     var shouldWarnMissingHeartRate: Bool {
-        isRunning && watchPaired && currentHeartRate == nil && workoutElapsedSeconds > 15
+        isRunning
+            && (watchPaired || bleHeartRateManager.hasRememberedMonitor)
+            && currentHeartRate == nil
+            && workoutElapsedSeconds > 15
+    }
+
+    /// SF Symbol for the small badge next to the BPM readout indicating where
+    /// the number comes from. nil when no source is live.
+    var heartRateSourceSymbol: String? {
+        switch heartRateAggregator.liveSource(now: Date()) {
+        case .bluetooth: return "sensor.tag.radiowaves.forward"
+        case .watch:     return "applewatch"
+        case nil:        return nil
+        }
+    }
+
+    /// Human label for the live heart-rate source ("Apple Watch" or the
+    /// monitor's name). nil when no source is live.
+    var heartRateSourceLabel: String? {
+        switch heartRateAggregator.liveSource(now: Date()) {
+        case .bluetooth: return bleHeartRateManager.rememberedName ?? "Heart Rate Monitor"
+        case .watch:     return "Apple Watch"
+        case nil:        return nil
+        }
+    }
+
+    /// One-line hint for the workout screen when HR is expected but missing,
+    /// phrased for whichever source the user actually owns.
+    var missingHeartRateHint: String {
+        if watchPaired && !watchAppInstalled {
+            return "Set up N4x4 on your Watch"
+        }
+        if !watchPaired && bleHeartRateManager.hasRememberedMonitor {
+            return "Check your heart rate monitor"
+        }
+        return "Waiting for heart rate…"
     }
 
     /// Called by PhoneSessionManager whenever WCSession state changes.
@@ -1200,6 +1244,14 @@ class TimerViewModel: ObservableObject {
         phoneSessionManager.timerViewModel = self
         phoneSessionManager.activate()
 
+        // Bluetooth heart rate monitor: readings join the same funnel as the
+        // Watch. startIfRemembered() is a no-op for users who never paired
+        // one, so this can't trigger a Bluetooth permission prompt at launch.
+        bleHeartRateManager.onReading = { [weak self] reading in
+            self?.ingestHeartRate(Double(reading.bpm), from: .bluetooth)
+        }
+        bleHeartRateManager.startIfRemembered()
+
         // Broadcast to the Watch reactively whenever the state it renders
         // changes. Observing these published properties covers every timer
         // transition (intervalEndTime always changes alongside isRunning or the
@@ -1424,8 +1476,7 @@ class TimerViewModel: ObservableObject {
         triggerCompletionHaptic()
         endLiveActivity()
         stopTimer()
-        currentHeartRate = nil
-        zoneVoiceEngine.reset()
+        clearHeartRateState()
         workoutCompletionDate = Date()
         speakWorkoutComplete()
         intervalEndTime = nil
@@ -1539,8 +1590,7 @@ class TimerViewModel: ObservableObject {
         workoutCompletionDate = nil
         cooldownCompletionNotice = false
         skippedCooldownThisSession = false
-        currentHeartRate = nil
-        zoneVoiceEngine.reset()
+        clearHeartRateState()
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
     }
 
@@ -2084,8 +2134,8 @@ class TimerViewModel: ObservableObject {
         zoneHapticAlertsEnabled = true
         zoneVoiceAlertsEnabled = false
         unitPreference = .system
-        currentHeartRate = nil
-        zoneVoiceEngine.reset()
+        clearHeartRateState()
+        bleHeartRateManager.forgetMonitor()
     }
 
     // MARK: - Apple Watch & Heart-Rate Zone Feedback
@@ -2096,11 +2146,47 @@ class TimerViewModel: ObservableObject {
         phoneSessionManager.sendStateUpdate(to: self)
     }
 
-    /// Handle an HR reading streamed from the Watch: store it for display and
-    /// run the phone-side (voice) zone-feedback engine.
-    func ingestStreamedHeartRate(_ bpm: Double) {
-        currentHeartRate = bpm
-        evaluateZoneVoiceFeedback(bpm: bpm)
+    /// Single funnel for live heart rate from any source. The aggregator
+    /// decides what to display (Bluetooth beats Watch when both are live);
+    /// the voice zone engine always evaluates the displayed value, so a
+    /// lower-priority source can never drive coaching.
+    func ingestHeartRate(_ bpm: Double, from source: HeartRateAggregator.Source) {
+        currentHeartRate = heartRateAggregator.ingest(bpm: bpm, from: source, at: Date())
+        scheduleHeartRateStalenessSweep()
+        if let displayed = currentHeartRate {
+            evaluateZoneVoiceFeedback(bpm: displayed)
+        }
+    }
+
+    /// Clears the displayed heart rate shortly after the last source stops
+    /// sending. Rescheduled on every sample, so it only ever fires once the
+    /// stream has actually gone quiet — no permanent timer needed, and it
+    /// works outside workouts too (when tick() isn't running).
+    private func scheduleHeartRateStalenessSweep() {
+        heartRateStalenessWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.currentHeartRate = self.heartRateAggregator.currentValue(now: Date())
+            if self.currentHeartRate != nil {
+                self.scheduleHeartRateStalenessSweep()
+            }
+        }
+        heartRateStalenessWork = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + heartRateAggregator.freshnessWindow + 0.5,
+            execute: work
+        )
+    }
+
+    /// Drop all remembered heart-rate samples (workout ended or reset). A
+    /// still-connected Bluetooth monitor will simply repopulate on its next
+    /// notification, which is deliberate — recovery HR is worth seeing.
+    private func clearHeartRateState() {
+        heartRateStalenessWork?.cancel()
+        heartRateStalenessWork = nil
+        heartRateAggregator.reset()
+        currentHeartRate = nil
+        zoneVoiceEngine.reset()
     }
 
     /// Current zone classification for the live reading — drives HR colour-coding.
@@ -2619,6 +2705,10 @@ class TimerViewModel: ObservableObject {
                 requestHealthKitAuthorizationIfNeeded()
             }
         }
+
+        // If a remembered Bluetooth monitor hit its connect-retry cap while we
+        // were backgrounded, give it a fresh start.
+        bleHeartRateManager.reconnectIfNeeded()
     }
 
     func openAppSettings() {

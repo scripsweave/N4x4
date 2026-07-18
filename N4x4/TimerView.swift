@@ -120,11 +120,11 @@ struct TimerView: View {
                     }
                     .frame(width: 250, height: 250)
 
-                    // Live heart rate streamed from a paired Apple Watch.
+                    // Live heart rate from the Watch or a Bluetooth monitor.
                     // Shown prominently and colour-coded to the active zone.
                     if let hr = viewModel.currentHeartRate {
                         HStack(spacing: 8) {
-                            Image(systemName: "applewatch")
+                            Image(systemName: viewModel.heartRateSourceSymbol ?? "applewatch")
                                 .font(.system(size: 16))
                                 .foregroundColor(.secondary)
                             Image(systemName: "heart.fill")
@@ -156,9 +156,7 @@ struct TimerView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
-                                Text(viewModel.watchAppInstalled
-                                     ? "No heart rate from your Watch — tap for help"
-                                     : "Set up N4x4 on your Apple Watch — tap for help")
+                                Text("\(viewModel.missingHeartRateHint) — tap for help")
                                     .multilineTextAlignment(.leading)
                             }
                             .font(.footnote.weight(.semibold))

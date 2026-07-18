@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showResetAlert = false
     @State private var showTips = false
     @State private var showWatchHelp = false
+    @State private var showMonitorSheet = false
 
     var body: some View {
         NavigationView {
@@ -143,7 +144,19 @@ struct SettingsView: View {
                             }
                         }
                     }
-                    Text("Wear your Apple Watch and start the workout from either device to stream live heart rate. The iPhone has no heart-rate sensor of its own.")
+                    Text("Wear your Apple Watch and start the workout from either device to stream live heart rate.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+
+                // Bluetooth heart rate monitor
+                Section(header: Text("Heart Rate Monitor").font(.headline)) {
+                    Button {
+                        showMonitorSheet = true
+                    } label: {
+                        HeartRateMonitorSettingsRow(manager: viewModel.bleHeartRateManager)
+                    }
+                    Text("Connect a Bluetooth chest strap or armband for accurate live heart rate — with or without an Apple Watch. When both are connected, N4x4 uses the monitor.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
@@ -163,7 +176,7 @@ struct SettingsView: View {
                 // Heart-Rate Zone Alerts
                 Section(
                     header: Text("Heart-Rate Zone Alerts").font(.headline),
-                    footer: Text("When your heart rate drifts outside the target zone for the current interval, N4x4 nudges you back. Alerts wait for your heart rate to settle after each interval and never fire more than once a minute. Requires a paired Apple Watch streaming heart rate.")
+                    footer: Text("When your heart rate drifts outside the target zone for the current interval, N4x4 nudges you back. Alerts wait for your heart rate to settle after each interval and never fire more than once a minute. Requires live heart rate from an Apple Watch or a Bluetooth monitor.")
                 ) {
                     Toggle("Haptic (Apple Watch)", isOn: $viewModel.zoneHapticAlertsEnabled)
                         .font(.body)
@@ -355,6 +368,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showWatchHelp) {
                 WatchTroubleshootingView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showMonitorSheet) {
+                HeartRateMonitorSheet(manager: viewModel.bleHeartRateManager)
             }
         }
     }
