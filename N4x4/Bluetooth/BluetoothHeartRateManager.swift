@@ -60,6 +60,12 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
     @Published private(set) var state: MonitorState = .idle
     @Published private(set) var discovered: [DiscoveredMonitor] = []
     @Published private(set) var companionDevices: [CompanionDevice] = []
+    /// The device refused heart-rate notifications even after the retry —
+    /// connected at the GATT level but it will never send a reading (a Garmin
+    /// with Broadcast Heart Rate off behaves exactly like this). The UI uses
+    /// this to drop the "Connected" framing immediately instead of showing an
+    /// eternal "acquiring signal" spinner.
+    @Published private(set) var notifySubscribeFailed = false
     @Published private(set) var batteryPercent: Int?
     /// Latest raw reading while connected (plausible or not) — drives the live
     /// preview in pairing/settings UI. Cleared on disconnect so the preview
@@ -222,6 +228,7 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
         peripheral = nil
         latestReading = nil
         batteryPercent = nil
+        notifySubscribeFailed = false
         stopScan()
         state = .idle
     }
@@ -366,6 +373,7 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
         latestReading = nil
         batteryPercent = nil
         didRetryNotifySubscribe = false
+        notifySubscribeFailed = false
         peripheral = target
         target.delegate = self
         if announceConnecting {
@@ -434,6 +442,7 @@ extension BluetoothHeartRateManager: CBCentralManagerDelegate {
         companionDevices = []
         latestReading = nil
         batteryPercent = nil
+        notifySubscribeFailed = false
         scanTimeoutWork?.cancel()
         scanTimeoutWork = nil
         state = .unavailable(reason)
@@ -578,6 +587,7 @@ extension BluetoothHeartRateManager: CBPeripheralDelegate {
             }
         } else {
             print("HR monitor refused heart-rate notifications: \(error!.localizedDescription)")
+            notifySubscribeFailed = true
         }
     }
 
@@ -588,6 +598,7 @@ extension BluetoothHeartRateManager: CBPeripheralDelegate {
         switch characteristic.uuid {
         case Self.heartRateMeasurement:
             guard let reading = HeartRateMeasurementParser.parse(data) else { return }
+            notifySubscribeFailed = false
             latestReading = reading
             if reading.isUsable {
                 onReading?(reading)

@@ -137,9 +137,11 @@ struct HeartRateMonitorSettingsRow: View {
     }
 
     private var rowSubtitle: String {
-        if case .connected = manager.state,
-           let bpm = manager.latestReading?.bpm, manager.latestReading?.isPlausible == true {
-            return "\(bpm) BPM streaming"
+        if case .connected = manager.state {
+            if let bpm = manager.latestReading?.bpm, manager.latestReading?.isPlausible == true {
+                return "\(bpm) BPM streaming"
+            }
+            return "No heart rate arriving — tap for help"
         }
         return "Tap to set up & manage"
     }
@@ -154,6 +156,28 @@ struct HeartRateMonitorSettingsRow: View {
 struct HeartRateMonitorSheet: View {
     @ObservedObject var manager: BluetoothHeartRateManager
     @Environment(\.dismiss) private var dismiss
+    /// Set once a connected device has produced nothing for the grace period.
+    @State private var acquireTimedOut = false
+
+    /// "Connected" is a lie the user cares about: a Garmin with Broadcast
+    /// Heart Rate off happily accepts the GATT connection and then sends
+    /// nothing, forever. Once the grace period passes (or the device refuses
+    /// the notify subscribe outright), reframe as available-but-not-connected
+    /// and lead with help.
+    private var connectedButSilent: Bool {
+        guard case .connected = manager.state, manager.latestReading == nil else { return false }
+        return manager.notifySubscribeFailed || acquireTimedOut
+    }
+
+    private var connectedName: String? {
+        if case .connected(let name) = manager.state { return name }
+        return nil
+    }
+
+    /// Restarts whenever the connection or the reading-presence changes.
+    private var acquireKey: String {
+        "\(connectedName ?? "-")|\(manager.latestReading == nil)"
+    }
 
     var body: some View {
         NavigationView {
@@ -167,6 +191,16 @@ struct HeartRateMonitorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                }
+            }
+            .task(id: acquireKey) {
+                acquireTimedOut = false
+                guard connectedName != nil, manager.latestReading == nil else { return }
+                // Grace period: straps legitimately take a few seconds after
+                // skin contact. Only after this do we call the state what it is.
+                try? await Task.sleep(nanoseconds: 12_000_000_000)
+                if !Task.isCancelled, connectedName != nil, manager.latestReading == nil {
+                    acquireTimedOut = true
                 }
             }
         }
@@ -185,22 +219,47 @@ struct HeartRateMonitorSheet: View {
     private var statusSection: some View {
         Section {
             HStack(spacing: 12) {
-                Image(systemName: manager.state.statusIcon)
+                Image(systemName: connectedButSilent ? "heart.slash" : manager.state.statusIcon)
                     .font(.system(size: 28))
-                    .foregroundStyle(manager.state.statusTint)
+                    .foregroundStyle(connectedButSilent ? .orange : manager.state.statusTint)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(manager.state.statusTitle).font(.headline)
-                    Text(manager.state.statusDetail)
+                    Text(connectedButSilent ? "Available, not connected" : manager.state.statusTitle)
+                        .font(.headline)
+                    Text(connectedButSilent
+                         ? "\(connectedName ?? "The device") accepted the Bluetooth connection but isn't sending heart rate — usually its broadcast setting is off."
+                         : manager.state.statusDetail)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 4)
 
-            if case .connected = manager.state {
+            if connectedButSilent {
+                helpMeConnectButton
+            } else if case .connected = manager.state {
                 liveReadingRow
             }
         }
+    }
+
+    private var helpMeConnectButton: some View {
+        NavigationLink {
+            HeartRateDeviceGuideView(
+                manager: manager,
+                highlightBrand: connectedName.flatMap(DeviceGuide.brandID(forDeviceNamed:))
+            )
+        } label: {
+            HStack {
+                Spacer()
+                Image(systemName: "questionmark.circle.fill")
+                Text("Help Me Connect")
+                    .font(.headline)
+                Spacer()
+            }
+            .foregroundStyle(.white)
+            .padding(.vertical, 6)
+        }
+        .listRowBackground(Color.accentColor)
     }
 
     @ViewBuilder
@@ -541,40 +600,120 @@ extension BluetoothHeartRateManager.CompanionDevice.Brand {
     }
 }
 
-/// One brand's troubleshooting entry. All copy states only what's verified;
-/// menu paths vary by model year, and the copy says so where it matters.
+/// One brand's troubleshooting entry. All copy states only what's verified
+/// (menu paths sourced from official owner's manuals — see the research notes
+/// in the git history); where paths vary by model year the copy says so.
 private struct DeviceGuide: Identifiable {
     let id: String
     let title: String
     let icon: String
     let summary: String
-    let steps: [String]
-    let caveat: String?
+    var steps: [String] = []
+    var caveat: String? = nil
+    /// Model-family subsections (e.g. Garmin's button vs touchscreen lines).
+    var subGuides: [DeviceGuide] = []
+
+    /// Best-effort brand (or Garmin model-family) match from a peripheral's
+    /// advertised name, so the "Help Me Connect" flow can open the right
+    /// section directly. Family IDs use "brand.family" form; the guide view
+    /// expands both the family and its parent brand.
+    static func brandID(forDeviceNamed name: String) -> String? {
+        let n = name.lowercased()
+        let garmin = ["garmin", "forerunner", "fenix", "fēnix", "epix", "venu",
+                      "instinct", "vivoactive", "vívoactive", "enduro", "marq",
+                      "tactix", "descent"]
+        if garmin.contains(where: n.contains) {
+            if n.contains("245") || n.contains("945")
+                || n.contains("fenix 6") || n.contains("fēnix 6") { return "garmin.fenix6" }
+            if n.contains("forerunner") { return "garmin.forerunner" }
+            if ["fenix", "fēnix", "epix", "enduro", "marq", "tactix", "instinct", "descent"]
+                .contains(where: n.contains) { return "garmin.fenix" }
+            if n.contains("venu") || n.contains("vivoactive") || n.contains("vívoactive") {
+                return "garmin.venu"
+            }
+            return "garmin"
+        }
+        if n.contains("whoop") { return "whoop" }
+        if n.contains("polar") || n.contains("h10") || n.contains("h9") { return "polar" }
+        if n.contains("fitbit") || n.contains("charge") { return "fitbit" }
+        if n.contains("wahoo") || n.contains("tickr") || n.contains("hrm") { return "straps" }
+        return nil
+    }
 
     static let all: [DeviceGuide] = [
         DeviceGuide(
             id: "garmin",
             title: "Garmin watches",
             icon: "applewatch",
-            summary: "Pairing with Garmin Connect is not enough — a Garmin only appears here while its Broadcast Heart Rate mode is on.",
-            steps: [
-                "On the watch, open Settings → Sensors & Accessories → Wrist Heart Rate → Broadcast Heart Rate. (Menu names vary slightly by model.)",
-                "Confirm to start broadcasting. Many models can also broadcast from the controls menu or during an activity.",
-                "Come back here and scan — the watch is visible only while it's broadcasting.",
-            ],
-            caveat: "Older Garmins (vívosmart 4, vívoactive 3/4, the first Venu, and earlier) broadcast over ANT+ only, which iPhones can't receive. Roughly Forerunner 245 / fēnix 6 and newer also broadcast over Bluetooth."
+            summary: "Pairing with Garmin Connect is not enough — the watch only appears here while Broadcast Heart Rate is on. Pick your model family for the exact steps (from Garmin's own manuals).",
+            caveat: "Battery drains faster while broadcasting, and during an activity there's usually no on-screen broadcast indicator — trust the scan here instead.",
+            subGuides: [
+                DeviceGuide(
+                    id: "garmin.forerunner",
+                    title: "Forerunner 165 / 255 / 265 / 955 / 965",
+                    icon: "",
+                    summary: "",
+                    steps: [
+                        "From the watch face, hold UP (MENU on 955/965).",
+                        "Select Health & Wellness → Wrist Heart Rate → Broadcast Heart Rate. On some software versions the menu is just Wrist Heart Rate.",
+                        "Press START. The watch broadcasts until you press STOP.",
+                        "Shortcut: hold LIGHT and pick the broadcast icon from the controls menu.",
+                    ],
+                    caveat: "To broadcast automatically in workouts: press START → pick the activity → hold UP → the activity's settings → Broadcast Heart Rate."
+                ),
+                DeviceGuide(
+                    id: "garmin.fenix",
+                    title: "fēnix 7/8 · epix · Enduro · MARQ · Instinct 2/3",
+                    icon: "",
+                    summary: "",
+                    steps: [
+                        "Hold MENU.",
+                        "Select Sensors & Accessories → Wrist Heart Rate → Broadcast Heart Rate.",
+                        "Press START. STOP ends it. Shortcut: hold LIGHT → broadcast icon.",
+                    ],
+                    caveat: "fēnix 8 and Enduro 3 moved it: hold LIGHT → Watch Settings → Health & Wellness → Wrist Heart Rate → Broadcast Heart Rate."
+                ),
+                DeviceGuide(
+                    id: "garmin.venu",
+                    title: "Venu · vívoactive (touchscreen)",
+                    icon: "",
+                    summary: "",
+                    steps: [
+                        "Venu 2 / Venu Sq 2: hold the button → Settings → Wrist Heart Rate → Broadcast (start now) or Broadcast In Activity (auto in workouts).",
+                        "Venu 3 / vívoactive 5: press the lower button → Settings → Watch Sensors → Wrist Heart Rate → Broadcast Heart Rate → press the top button.",
+                        "vívoactive 6: Settings → Health & Wellness → Wrist Heart Rate → Broadcast Heart Rate, or hold the top button for the controls menu.",
+                    ],
+                    caveat: "First-generation Venu and vívoactive 3/4 broadcast ANT+ only — no iPhone app can see them."
+                ),
+                DeviceGuide(
+                    id: "garmin.fenix6",
+                    title: "fēnix 6 · Forerunner 245 / 945",
+                    icon: "",
+                    summary: "",
+                    steps: [
+                        "fēnix 6: from the heart rate widget, hold MENU → Heart Rate Options → Broadcast Heart Rate → press START. Bluetooth broadcast needs its mid-2020-or-later firmware.",
+                        "Forerunner 245 / 945: the Broadcast Heart Rate menu is ANT+ only, which iPhones can't receive. Instead start a Virtual Run activity — that one broadcasts over Bluetooth.",
+                    ]
+                ),
+                DeviceGuide(
+                    id: "garmin.older",
+                    title: "Older models — can't reach iPhone apps",
+                    icon: "",
+                    summary: "Forerunner 55/235/230/735XT, fēnix 3/5/5 Plus, Instinct 1, first-generation Venu, vívoactive 3/4 and vívosmart broadcast over ANT+ only — iPhones have no ANT+ radio, so no app can ever see them. Lily can't broadcast at all. The practical fix is a Bluetooth strap (Polar H9/H10, Garmin HRM-Dual, Wahoo TICKR)."
+                ),
+            ]
         ),
         DeviceGuide(
             id: "whoop",
             title: "WHOOP",
             icon: "waveform.path.ecg",
-            summary: "WHOOP 4.0 streams live heart rate once HR Broadcast is on in its app.",
+            summary: "Every WHOOP since 3.0 streams live heart rate over Bluetooth once broadcast is on in its app.",
             steps: [
-                "In the WHOOP app, open the menu and go to Device Settings.",
-                "Turn on HR Broadcast.",
+                "In the WHOOP app, open the Menu tab (☰, bottom right) and go to Device Settings. On older app versions: More → Device Settings.",
+                "Turn on Broadcast Heart Rate (also called HR Broadcast). On WHOOP 5.0 / MG it can sit under the Advanced tab.",
                 "Scan here again — the band appears within a few seconds.",
             ],
-            caveat: "App and firmware updates can quietly switch HR Broadcast back off — recheck it after updating. WHOOP streams to one receiver at a time, so disconnect it from Peloton, Zwift, etc. first."
+            caveat: "The toggle can switch itself off after app or firmware updates — recheck it before every session. WHOOP streams to one receiver at a time, so disconnect it from Peloton, Zwift, etc. first. If the toggle won't respond (a known app bug can cover it with a coach button), force-quit the WHOOP app and reopen it."
         ),
         DeviceGuide(
             id: "polar",
@@ -655,7 +794,14 @@ struct HeartRateDeviceGuideView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             var open = Set(manager.companionDevices.map(\.brand.guideID))
-            if let highlightBrand { open.insert(highlightBrand) }
+            if let highlightBrand {
+                open.insert(highlightBrand)
+                // A family ID ("garmin.forerunner") needs its parent brand
+                // group open too, or the family stays hidden inside it.
+                if let dot = highlightBrand.firstIndex(of: ".") {
+                    open.insert(String(highlightBrand[..<dot]))
+                }
+            }
             expanded = open
         }
     }
@@ -706,38 +852,68 @@ struct HeartRateDeviceGuideView: View {
         Section(header: Text("By device")) {
             ForEach(DeviceGuide.all) { guide in
                 DisclosureGroup(isExpanded: expansionBinding(for: guide.id)) {
-                    Text(guide.summary)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 2)
-                    ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
-                        HStack(alignment: .top, spacing: 12) {
-                            Text("\(index + 1)")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(width: 22, height: 22)
-                                .background(Color.accentColor, in: Circle())
-                            Text(step)
-                                .font(.subheadline)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.vertical, 2)
+                    if !guide.summary.isEmpty {
+                        Text(guide.summary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 2)
                     }
-                    if let caveat = guide.caveat {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "exclamationmark.triangle")
-                                .foregroundStyle(.orange)
-                            Text(caveat)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                    if guide.subGuides.isEmpty {
+                        stepAndCaveatRows(for: guide)
+                    } else {
+                        // Model families (e.g. Garmin button vs touchscreen
+                        // lines) nest one level deeper.
+                        ForEach(guide.subGuides) { family in
+                            DisclosureGroup(isExpanded: expansionBinding(for: family.id)) {
+                                if !family.summary.isEmpty {
+                                    Text(family.summary)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.vertical, 2)
+                                }
+                                stepAndCaveatRows(for: family)
+                            } label: {
+                                Text(family.title)
+                                    .font(.subheadline.weight(.semibold))
+                            }
                         }
-                        .padding(.vertical, 2)
+                        // The brand-wide caveat reads after the families.
+                        stepAndCaveatRows(for: DeviceGuide(
+                            id: guide.id + ".caveat", title: "", icon: "",
+                            summary: "", caveat: guide.caveat))
                     }
                 } label: {
                     Label(guide.title, systemImage: guide.icon)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func stepAndCaveatRows(for guide: DeviceGuide) -> some View {
+        ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
+            HStack(alignment: .top, spacing: 12) {
+                Text("\(index + 1)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(Color.accentColor, in: Circle())
+                Text(step)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 2)
+        }
+        if let caveat = guide.caveat {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                Text(caveat)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 2)
         }
     }
 
