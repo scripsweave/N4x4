@@ -160,6 +160,7 @@ struct HeartRateMonitorSheet: View {
             List {
                 statusSection
                 contentSections
+                helpSection
             }
             .navigationTitle("Heart Rate Monitor")
             .navigationBarTitleDisplayMode(.inline)
@@ -252,6 +253,7 @@ struct HeartRateMonitorSheet: View {
 
         case .scanning:
             discoveredSection
+            companionHintSection
 
         case .connected, .searching, .connecting:
             Section {
@@ -296,12 +298,57 @@ struct HeartRateMonitorSheet: View {
                             Text(monitor.name)
                                 .foregroundColor(.primary)
                             Spacer()
-                            Image(systemName: signalBars(rssi: monitor.rssi))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            if monitor.isSystemConnected {
+                                Text("Paired to iPhone")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            } else {
+                                Image(systemName: signalBars(rssi: monitor.rssi))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Wearables paired to this phone via a companion app (Garmin Connect,
+    /// WHOOP) that can never appear in the scan until their broadcast setting
+    /// is on. Named hints beat an empty list that looks broken.
+    @ViewBuilder
+    private var companionHintSection: some View {
+        if !manager.companionDevices.isEmpty {
+            Section {
+                ForEach(manager.companionDevices) { device in
+                    NavigationLink {
+                        HeartRateDeviceGuideView(manager: manager,
+                                                 highlightBrand: device.brand.guideID)
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "exclamationmark.arrow.circlepath")
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(device.name)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(device.brand.scanHint)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var helpSection: some View {
+        Section {
+            NavigationLink {
+                HeartRateDeviceGuideView(manager: manager)
+            } label: {
+                Label("Don't see your device?", systemImage: "questionmark.circle")
             }
         }
     }
@@ -455,7 +502,8 @@ struct MonitorPairingCompact: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                         Spacer()
-                        Image(systemName: signalBars(rssi: monitor.rssi))
+                        Image(systemName: monitor.isSystemConnected
+                              ? "checkmark.circle" : signalBars(rssi: monitor.rssi))
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.7))
                     }
@@ -467,5 +515,238 @@ struct MonitorPairingCompact: View {
         .padding(14)
         .frame(maxWidth: .infinity)
         .background(rowBackground)
+    }
+}
+
+// MARK: - Device guide
+
+extension BluetoothHeartRateManager.CompanionDevice.Brand {
+    /// Key into `DeviceGuide.all` for the matching how-to section.
+    var guideID: String {
+        switch self {
+        case .garmin: return "garmin"
+        case .whoop:  return "whoop"
+        }
+    }
+
+    /// One-liner shown in the scan list when a paired-but-not-broadcasting
+    /// wearable is detected.
+    var scanHint: String {
+        switch self {
+        case .garmin:
+            return "Paired to this iPhone, but Garmin watches only appear here while Broadcast Heart Rate is on. Tap for the steps."
+        case .whoop:
+            return "Paired to this iPhone, but WHOOP only appears here while HR Broadcast is on in the WHOOP app. Tap for the steps."
+        }
+    }
+}
+
+/// One brand's troubleshooting entry. All copy states only what's verified;
+/// menu paths vary by model year, and the copy says so where it matters.
+private struct DeviceGuide: Identifiable {
+    let id: String
+    let title: String
+    let icon: String
+    let summary: String
+    let steps: [String]
+    let caveat: String?
+
+    static let all: [DeviceGuide] = [
+        DeviceGuide(
+            id: "garmin",
+            title: "Garmin watches",
+            icon: "applewatch",
+            summary: "Pairing with Garmin Connect is not enough — a Garmin only appears here while its Broadcast Heart Rate mode is on.",
+            steps: [
+                "On the watch, open Settings → Sensors & Accessories → Wrist Heart Rate → Broadcast Heart Rate. (Menu names vary slightly by model.)",
+                "Confirm to start broadcasting. Many models can also broadcast from the controls menu or during an activity.",
+                "Come back here and scan — the watch is visible only while it's broadcasting.",
+            ],
+            caveat: "Older Garmins (vívosmart 4, vívoactive 3/4, the first Venu, and earlier) broadcast over ANT+ only, which iPhones can't receive. Roughly Forerunner 245 / fēnix 6 and newer also broadcast over Bluetooth."
+        ),
+        DeviceGuide(
+            id: "whoop",
+            title: "WHOOP",
+            icon: "waveform.path.ecg",
+            summary: "WHOOP 4.0 streams live heart rate once HR Broadcast is on in its app.",
+            steps: [
+                "In the WHOOP app, open the menu and go to Device Settings.",
+                "Turn on HR Broadcast.",
+                "Scan here again — the band appears within a few seconds.",
+            ],
+            caveat: "App and firmware updates can quietly switch HR Broadcast back off — recheck it after updating. WHOOP streams to one receiver at a time, so disconnect it from Peloton, Zwift, etc. first."
+        ),
+        DeviceGuide(
+            id: "polar",
+            title: "Polar watches & straps",
+            icon: "heart.circle",
+            summary: "Polar chest straps (H9/H10) work out of the box. Polar watches need heart-rate sharing turned on.",
+            steps: [
+                "On the watch, open Settings → General settings and turn on 'Heart rate visible to other devices' (called HR sensor mode on some models).",
+                "Start a training session on the watch — most Polar watches only share heart rate while recording.",
+                "Scan here again.",
+            ],
+            caveat: "A Polar H10 can hold two Bluetooth connections at once; most other straps hold only one, so close any other app using it."
+        ),
+        DeviceGuide(
+            id: "fitbit",
+            title: "Fitbit",
+            icon: "heart.text.square",
+            summary: "Only recent Fitbits can broadcast heart rate.",
+            steps: [
+                "On a Charge 6 or newer: swipe down and choose 'HR on Equipment'.",
+                "Scan here while that screen is active.",
+            ],
+            caveat: "Fitbit's broadcast asks the receiver to pair first, which many apps and devices don't support — if it never appears, that's why. Older Fitbits can't broadcast heart rate at all."
+        ),
+        DeviceGuide(
+            id: "applewatch",
+            title: "Apple Watch",
+            icon: "applewatch.radiowaves.left.and.right",
+            summary: "Don't connect it here — an Apple Watch can't act as a Bluetooth heart rate strap for iPhone apps.",
+            steps: [
+                "Use the built-in integration instead: install N4x4 on the watch via the Watch app on this iPhone.",
+                "Open N4x4 on your wrist and allow Health access.",
+                "Heart rate then streams automatically during workouts.",
+            ],
+            caveat: nil
+        ),
+        DeviceGuide(
+            id: "straps",
+            title: "Chest straps & armbands",
+            icon: "sensor.tag.radiowaves.forward",
+            summary: "Polar, Garmin HRM, Wahoo TICKR, COROS, Scosche and similar all use the standard heart-rate service and just work — when they're awake.",
+            steps: [
+                "Wear it: straps only wake up on skin contact. Moisten the electrodes for a reliable signal.",
+                "Close other apps or devices that may already be using it — most straps accept only one connection at a time.",
+                "Still nothing? Replace the battery; a dying coin cell fails silently.",
+            ],
+            caveat: nil
+        ),
+    ]
+}
+
+/// Comprehensive per-brand troubleshooting, pushed from the pairing sheet.
+/// Named companion devices (a paired Garmin / WHOOP that isn't broadcasting)
+/// surface at the top with their brand's section pre-expanded.
+struct HeartRateDeviceGuideView: View {
+    @ObservedObject var manager: BluetoothHeartRateManager
+    var highlightBrand: String? = nil
+    @Environment(\.dismiss) private var dismiss
+    @State private var expanded: Set<String> = []
+
+    var body: some View {
+        List {
+            if !manager.companionDevices.isEmpty {
+                companionSection
+            }
+            generalSection
+            brandSection
+            Section {
+                Button {
+                    manager.beginPairing()
+                    dismiss()
+                } label: {
+                    Label("Scan Again", systemImage: "arrow.clockwise")
+                }
+            }
+        }
+        .navigationTitle("Device Guide")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            var open = Set(manager.companionDevices.map(\.brand.guideID))
+            if let highlightBrand { open.insert(highlightBrand) }
+            expanded = open
+        }
+    }
+
+    private var companionSection: some View {
+        Section(
+            header: Text("Paired to this iPhone"),
+            footer: Text("These are paired through their own app, which doesn't share heart rate. Their broadcast setting fixes that — steps below.")
+        ) {
+            ForEach(manager.companionDevices) { device in
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.arrow.circlepath")
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(device.name)
+                            .font(.subheadline.weight(.semibold))
+                        Text("Not broadcasting heart rate yet.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private var generalSection: some View {
+        Section(header: Text("First, the basics")) {
+            checkRow("Bluetooth is on, and N4x4 is allowed to use it (iPhone Settings → N4x4).")
+            checkRow("The device is awake and worn — most only announce themselves on skin contact.")
+            checkRow("Nothing else is holding its connection. Fully close Zwift, Peloton and similar apps; most monitors stream to one receiver at a time.")
+            checkRow("Ready-to-use devices already paired to this iPhone appear in the scan list automatically, marked 'Paired to iPhone'.")
+        }
+    }
+
+    private func checkRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "checkmark.circle")
+                .foregroundStyle(.green)
+            Text(text)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var brandSection: some View {
+        Section(header: Text("By device")) {
+            ForEach(DeviceGuide.all) { guide in
+                DisclosureGroup(isExpanded: expansionBinding(for: guide.id)) {
+                    Text(guide.summary)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 2)
+                    ForEach(Array(guide.steps.enumerated()), id: \.offset) { index, step in
+                        HStack(alignment: .top, spacing: 12) {
+                            Text("\(index + 1)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 22, height: 22)
+                                .background(Color.accentColor, in: Circle())
+                            Text(step)
+                                .font(.subheadline)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    if let caveat = guide.caveat {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text(caveat)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } label: {
+                    Label(guide.title, systemImage: guide.icon)
+                }
+            }
+        }
+    }
+
+    private func expansionBinding(for id: String) -> Binding<Bool> {
+        Binding(
+            get: { expanded.contains(id) },
+            set: { isOpen in
+                if isOpen { expanded.insert(id) } else { expanded.remove(id) }
+            }
+        )
     }
 }

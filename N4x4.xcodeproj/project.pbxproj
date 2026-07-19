@@ -35,13 +35,13 @@
 		5EA1000000000000000000C4 /* Interval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A6E2C938A4F00DD18E7 /* Interval.swift */; };
 		5EA1000000000000000000C5 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
+		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		B1E0000000000000000000B1 /* HeartRateMeasurementParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */; };
 		B1E0000000000000000000B2 /* HeartRateAggregator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F2 /* HeartRateAggregator.swift */; };
 		B1E0000000000000000000B3 /* BluetoothHeartRateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */; };
 		B1E0000000000000000000B4 /* HeartRateMonitorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */; };
 		B1E0000000000000000000C1 /* HeartRateBluetoothTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */; };
-		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
-		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
 		BF3EDE7BA5FC43599829D290 /* TipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A37A004B0EA4A46A5664A04 /* TipsView.swift */; };
 		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
@@ -116,11 +116,6 @@
 		3DF13A482C9389C200DD18E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3DF13A4B2C9389C200DD18E7 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		3DF13A512C9389C200DD18E7 /* N4x4Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = N4x4Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMeasurementParser.swift; sourceTree = "<group>"; };
-		B1E0000000000000000000F2 /* HeartRateAggregator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAggregator.swift; sourceTree = "<group>"; };
-		B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateManager.swift; sourceTree = "<group>"; };
-		B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorViews.swift; sourceTree = "<group>"; };
-		B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateBluetoothTests.swift; sourceTree = "<group>"; };
 		3DF13A552C9389C200DD18E7 /* N4x4Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4Tests.swift; sourceTree = "<group>"; };
 		3DF13A5B2C9389C200DD18E7 /* N4x4UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = N4x4UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DF13A5F2C9389C200DD18E7 /* N4x4UITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4UITests.swift; sourceTree = "<group>"; };
@@ -145,6 +140,11 @@
 		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityAttributes.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMeasurementParser.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F2 /* HeartRateAggregator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAggregator.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateManager.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorViews.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateBluetoothTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -243,17 +243,6 @@
 			path = N4x4;
 			sourceTree = "<group>";
 		};
-		B1E0000000000000000000A0 /* Bluetooth */ = {
-			isa = PBXGroup;
-			children = (
-				B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */,
-				B1E0000000000000000000F2 /* HeartRateAggregator.swift */,
-				B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */,
-				B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */,
-			);
-			path = Bluetooth;
-			sourceTree = "<group>";
-		};
 		3DF13A4A2C9389C200DD18E7 /* Preview Content */ = {
 			isa = PBXGroup;
 			children = (
@@ -296,6 +285,17 @@
 				5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		B1E0000000000000000000A0 /* Bluetooth */ = {
+			isa = PBXGroup;
+			children = (
+				B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */,
+				B1E0000000000000000000F2 /* HeartRateAggregator.swift */,
+				B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */,
+				B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */,
+			);
+			path = Bluetooth;
 			sourceTree = "<group>";
 		};
 		BABF05A41C95414D87FCD532 /* N4x4LiveActivity */ = {
@@ -617,7 +617,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.01;
+				MARKETING_VERSION = 4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -654,7 +654,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.01;
+				MARKETING_VERSION = 4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -818,7 +818,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.01;
+				MARKETING_VERSION = 4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -860,7 +860,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.01;
+				MARKETING_VERSION = 4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -959,7 +959,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.01;
+				MARKETING_VERSION = 4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -985,7 +985,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.01;
+				MARKETING_VERSION = 4.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

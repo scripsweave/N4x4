@@ -62,7 +62,7 @@ struct WatchTroubleshootingView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "sensor.tag.radiowaves.forward")
                                     .foregroundStyle(.blue)
-                                Text("Have a chest strap? Connect it instead")
+                                Text("Have a chest strap, Garmin, or WHOOP? Connect it instead")
                                     .foregroundStyle(.primary)
                             }
                         }

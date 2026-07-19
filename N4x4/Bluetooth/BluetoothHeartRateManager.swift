@@ -40,10 +40,26 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
         let id: UUID
         let name: String
         let rssi: Int
+        /// The system already holds a connection to this device (it was paired
+        /// through another app). Shown as ready-to-use instead of a signal bar.
+        var isSystemConnected: Bool = false
+    }
+
+    /// A wearable paired to this iPhone through its companion app (detected by
+    /// its proprietary GATT service) that is NOT currently exposing the
+    /// standard Heart Rate Service. These can never appear in a 0x180D scan
+    /// until the user flips their broadcast setting — the troubleshooting UI
+    /// uses this to say so by name instead of showing an empty list.
+    struct CompanionDevice: Identifiable, Equatable {
+        enum Brand { case garmin, whoop }
+        let id: UUID
+        let brand: Brand
+        let name: String
     }
 
     @Published private(set) var state: MonitorState = .idle
     @Published private(set) var discovered: [DiscoveredMonitor] = []
+    @Published private(set) var companionDevices: [CompanionDevice] = []
     @Published private(set) var batteryPercent: Int?
     /// Latest raw reading while connected (plausible or not) — drives the live
     /// preview in pairing/settings UI. Cleared on disconnect so the preview
@@ -68,6 +84,17 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
     private static let heartRateMeasurement = CBUUID(string: "2A37")
     private static let batteryService = CBUUID(string: "180F")
     private static let batteryLevel = CBUUID(string: "2A19")
+
+    /// Proprietary companion-app services, used ONLY to detect that a wearable
+    /// is paired to this phone (never to talk to it). Best-effort: a miss just
+    /// means no named hint in the troubleshooting UI.
+    /// Garmin Multi-Link + legacy GFDI, per Gadgetbridge's protocol docs.
+    private static let garminProprietaryServices = [
+        CBUUID(string: "6A4E2800-667B-11E3-949A-0800200C9A66"),
+        CBUUID(string: "6A4E2401-667B-11E3-949A-0800200C9A66"),
+    ]
+    /// WHOOP 4.0 custom service, per the open-source whoomp/whoop-reader work.
+    private static let whoopProprietaryService = CBUUID(string: "61080000-8D6D-82B8-614A-1C8CB0F8DCC6")
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -225,6 +252,22 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
     private func startScan() {
         guard let central, central.state == .poweredOn else { return }
         state = .scanning
+        // A peripheral the system already holds a connection to (paired in
+        // another app, e.g. a Garmin watch with a companion app) does NOT
+        // advertise, so the scan below can never discover it. Surface those
+        // explicitly or they're invisible in the pairing list.
+        for connected in central.retrieveConnectedPeripherals(withServices: [Self.heartRateService])
+        where connected.identifier != peripheral?.identifier {
+            discoveredPeripherals[connected.identifier] = connected
+            let monitor = DiscoveredMonitor(id: connected.identifier,
+                                            name: connected.name ?? "Heart Rate Monitor",
+                                            rssi: 0, // connected ⇒ in range; no RSSI without a live read
+                                            isSystemConnected: true)
+            if !discovered.contains(where: { $0.id == monitor.id }) {
+                discovered.append(monitor)
+            }
+        }
+        refreshCompanionDevices()
         // Filtering on 0x180D is not just hygiene: it's what makes every
         // discovery a heart rate monitor, so the UI needs no further filtering.
         central.scanForPeripherals(withServices: [Self.heartRateService], options: nil)
@@ -245,6 +288,28 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
         if central?.state == .poweredOn {
             central?.stopScan()
         }
+    }
+
+    /// Repopulates `companionDevices`: wearables paired to this phone via
+    /// their companion app but not exposing the Heart Rate Service, i.e.
+    /// devices the scan can never find until their broadcast setting is on.
+    private func refreshCompanionDevices() {
+        guard let central, central.state == .poweredOn else { return }
+        // Anything already exposing 0x180D needs no hint — it's usable as-is.
+        let usable = Set(central.retrieveConnectedPeripherals(withServices: [Self.heartRateService])
+            .map(\.identifier))
+        var found: [CompanionDevice] = []
+        for p in central.retrieveConnectedPeripherals(withServices: Self.garminProprietaryServices)
+        where !usable.contains(p.identifier) {
+            found.append(CompanionDevice(id: p.identifier, brand: .garmin,
+                                         name: p.name ?? "Garmin watch"))
+        }
+        for p in central.retrieveConnectedPeripherals(withServices: [Self.whoopProprietaryService])
+        where !usable.contains(p.identifier) {
+            found.append(CompanionDevice(id: p.identifier, brand: .whoop,
+                                         name: p.name ?? "WHOOP"))
+        }
+        if found != companionDevices { companionDevices = found }
     }
 
     /// Where the state machine settles when no scan is running. Derived from
@@ -366,6 +431,7 @@ extension BluetoothHeartRateManager: CBCentralManagerDelegate {
         userInitiatedDisconnects.removeAll()
         discoveredPeripherals.removeAll()
         discovered = []
+        companionDevices = []
         latestReading = nil
         batteryPercent = nil
         scanTimeoutWork?.cancel()
@@ -388,10 +454,12 @@ extension BluetoothHeartRateManager: CBCentralManagerDelegate {
             return
         }
 
-        let monitor = DiscoveredMonitor(id: peripheral.identifier,
+        var monitor = DiscoveredMonitor(id: peripheral.identifier,
                                         name: name,
                                         rssi: RSSI.intValue)
         if let idx = discovered.firstIndex(where: { $0.id == monitor.id }) {
+            // A system-connected seed stays badged even if it also advertises.
+            monitor.isSystemConnected = discovered[idx].isSystemConnected
             discovered[idx] = monitor
         } else {
             discovered.append(monitor)
