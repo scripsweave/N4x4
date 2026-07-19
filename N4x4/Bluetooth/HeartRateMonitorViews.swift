@@ -926,3 +926,87 @@ struct HeartRateDeviceGuideView: View {
         )
     }
 }
+
+// MARK: - Post-update announcement
+
+/// One-time sheet for upgraders: live heart rate now works with Apple Watch,
+/// Garmin, and WHOOP. "Show me how" opens the device guide (which covers all
+/// three); "Dismiss" just closes. The caller burns the seen-flag on dismiss.
+struct HeartRateSourcesAnnouncementView: View {
+    @ObservedObject var viewModel: TimerViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var showGuide = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            Image(systemName: "heart.circle.fill")
+                .font(.system(size: 64, weight: .regular))
+                .foregroundStyle(.red)
+
+            VStack(spacing: 10) {
+                Text("Real-time heart rate coaching")
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+                Text("N4x4 now supports Apple Watch, Garmin watches, and WHOOP for live heart rate tracking and in-workout coaching — spoken cues, zone colours, and a nudge whenever you drift out of your target zone.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 8)
+
+            VStack(alignment: .leading, spacing: 14) {
+                sourceRow(icon: "applewatch",
+                          text: "Apple Watch — install N4x4 on your wrist and go.")
+                sourceRow(icon: "antenna.radiowaves.left.and.right",
+                          text: "Garmin — turn on Broadcast Heart Rate.")
+                sourceRow(icon: "waveform.path.ecg",
+                          text: "WHOOP — switch on HR Broadcast in its app.")
+            }
+            .padding(.horizontal, 4)
+
+            Spacer()
+
+            VStack(spacing: 12) {
+                Button {
+                    showGuide = true
+                } label: {
+                    Text("Show me how")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                        .foregroundStyle(.white)
+                }
+                Button("Dismiss") { dismiss() }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(28)
+        .sheet(isPresented: $showGuide, onDismiss: { dismiss() }) {
+            NavigationView {
+                HeartRateDeviceGuideView(manager: viewModel.bleHeartRateManager)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { showGuide = false }
+                        }
+                    }
+            }
+        }
+    }
+
+    private func sourceRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.red)
+                .frame(width: 26)
+            Text(text)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+    }
+}

@@ -250,6 +250,14 @@ struct TimerView: View {
             }) {
                 WatchUpgradeOnboardingView(viewModel: viewModel)
             }
+            .sheet(isPresented: $viewModel.showHRSourcesAnnouncement, onDismiss: {
+                viewModel.hasSeenHRSourcesAnnouncement = true
+            }) {
+                HeartRateSourcesAnnouncementView(viewModel: viewModel)
+            }
+            .onAppear {
+                viewModel.evaluateHRSourcesAnnouncement()
+            }
             .sheet(isPresented: $showHistory) {
                 StreakHistoryView(viewModel: viewModel)
             }

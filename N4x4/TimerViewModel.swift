@@ -735,6 +735,26 @@ class TimerViewModel: ObservableObject {
     @AppStorage("hasSeenWatchUpgradePrompt") var hasSeenWatchUpgradePrompt: Bool = false
     @Published var showWatchUpgradePrompt: Bool = false
 
+    /// One-time post-update announcement: live heart rate now works with Apple
+    /// Watch, Garmin, and WHOOP. Upgraders only — fresh installs meet heart-rate
+    /// setup inside onboarding, so the flag is burned there instead.
+    @AppStorage("hasSeenHRSourcesAnnouncement") var hasSeenHRSourcesAnnouncement: Bool = false
+    @Published var showHRSourcesAnnouncement: Bool = false
+
+    /// Call on main-screen appear. Decides once per install whether to show the
+    /// heart-rate-sources announcement.
+    func evaluateHRSourcesAnnouncement() {
+        guard !hasSeenHRSourcesAnnouncement, !showHRSourcesAnnouncement else { return }
+        guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else {
+            // Fresh install: onboarding covers heart-rate setup; never announce.
+            hasSeenHRSourcesAnnouncement = true
+            return
+        }
+        guard !isRunning else { return }            // never pop over a workout
+        guard !showWatchUpgradePrompt else { return } // one prompt per launch
+        showHRSourcesAnnouncement = true
+    }
+
     private var watchBroadcastCancellable: AnyCancellable?
 
     /// High-level connection state for status display and troubleshooting.
@@ -826,6 +846,9 @@ class TimerViewModel: ObservableObject {
         // Only for existing users; brand-new users see Watch setup as part of the
         // regular onboarding flow, so don't compete with it.
         guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else { return }
+        // One prompt per launch — the HR-sources announcement wins ties and
+        // covers the Watch pitch anyway; this one can fire on a later launch.
+        guard !showHRSourcesAnnouncement else { return }
         if watchPaired && !watchAppInstalled {
             showWatchUpgradePrompt = true
         }

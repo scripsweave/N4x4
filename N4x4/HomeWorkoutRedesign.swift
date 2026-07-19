@@ -232,6 +232,14 @@ struct RedesignRootView: View {
         }) {
             WatchUpgradeOnboardingView(viewModel: viewModel)
         }
+        .sheet(isPresented: $viewModel.showHRSourcesAnnouncement, onDismiss: {
+            viewModel.hasSeenHRSourcesAnnouncement = true
+        }) {
+            HeartRateSourcesAnnouncementView(viewModel: viewModel)
+        }
+        .onAppear {
+            viewModel.evaluateHRSourcesAnnouncement()
+        }
         .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
             PostWorkoutSummaryView(viewModel: viewModel)
         }
