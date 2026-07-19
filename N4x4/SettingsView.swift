@@ -10,6 +10,34 @@ struct SettingsView: View {
     var embedded: Bool = false
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.openURL) private var openURL
+
+    /// mailto: link for Submit Feedback, with app/OS/device details prefilled
+    /// below a divider so triage never needs a follow-up email. The body opens
+    /// with blank lines for the user's own text.
+    private var feedbackMailURL: URL? {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let model = withUnsafeBytes(of: &systemInfo.machine) { raw in
+            String(decoding: raw.prefix(while: { $0 != 0 }), as: UTF8.self)
+        }
+        let body = """
+
+
+        —
+        N4x4 \(version) (\(build))
+        iOS \(UIDevice.current.systemVersion) · \(model)
+        """
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "feedback@n4x4.app"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "N4x4 Feedback"),
+            URLQueryItem(name: "body", value: body),
+        ]
+        return components.url
+    }
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showResetAlert = false
     @State private var showTips = false
@@ -41,7 +69,7 @@ struct SettingsView: View {
                 // Feedback
                 Section(header: Text("Feedback").font(.headline)) {
                     Button {
-                        if let url = URL(string: "mailto:feedback@n4x4.app?subject=N4x4%20Feedback") {
+                        if let url = feedbackMailURL {
                             openURL(url)
                         }
                     } label: {

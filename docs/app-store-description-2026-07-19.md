@@ -1,4 +1,4 @@
-# N4x4 — App Store copy (2026-07-19, v4.01 "the heart rate update")
+# N4x4 — App Store copy (2026-07-19, v4.2 "the heart rate update")
 
 Limits: description 4,000 chars · promotional text 170 · What's New 4,000 ·
 subtitle 30. All blocks below are within limit.
