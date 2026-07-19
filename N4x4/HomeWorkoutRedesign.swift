@@ -241,7 +241,7 @@ struct RedesignRootView: View {
             viewModel.evaluateHRSourcesAnnouncement()
         }
         .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
-            PostWorkoutSummaryView(viewModel: viewModel)
+            PostWorkoutSummaryRedesignView(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $viewModel.showMilestoneCelebration) {
             MilestoneCelebrationView(count: viewModel.pendingMilestoneCount) {
@@ -1166,6 +1166,8 @@ struct RedesignHistoryView: View {
     var embedded: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var selectedWorkout: WorkoutLogEntry?
+    /// Entry opened in the full-session detail sheet (charts + intervals).
+    @State private var detailedWorkout: WorkoutLogEntry?
     @State private var selectedPerfModality: TrainingModality?
     @State private var selectedChartDate: Date?
 
@@ -1191,6 +1193,9 @@ struct RedesignHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.background.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .sheet(item: $detailedWorkout) { workout in
+            SessionDetailSheet(entry: workout, viewModel: viewModel)
+        }
     }
 
     private var header: some View {
@@ -1479,19 +1484,39 @@ struct RedesignHistoryView: View {
                     detailRow("Cooldown", b.cooldownSkipped ? "Skipped" : formatMinutes(b.cooldownDuration))
                 }
             }
+            if let summary = workout.hrSummary, !summary.sparkline.isEmpty {
+                Divider().overlay(Palette.hairline)
+                HStack(spacing: 12) {
+                    HRSparklineView(points: summary.sparkline)
+                        .frame(height: 34)
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("\(summary.avgBPM) avg · \(summary.maxBPM) peak")
+                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.textPrimary)
+                        if let z = summary.workInZonePct {
+                            Text("\(z)% in zone")
+                                .font(.system(size: 11)).foregroundStyle(Palette.textSecondary)
+                        }
+                    }
+                }
+            }
             if let perfs = workout.intervalPerformances, !perfs.isEmpty, let modality = workout.modality {
                 Divider().overlay(Palette.hairline)
                 Text("\(modality.performanceMetric.label) per interval")
                     .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.textTertiary)
                 ForEach(perfs) { perf in
-                    HStack {
-                        Text("Interval \(perf.intervalNumber)").font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
-                        Spacer()
-                        if let v = perf.primary {
-                            Text("\(formatPerf(viewModel.displayValue(v, for: modality), for: modality)) \(unitLabel(for: modality))")
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textPrimary)
-                        } else {
-                            Text("—").font(.system(size: 13)).foregroundStyle(Palette.textTertiary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Text("Interval \(perf.intervalNumber)").font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
+                            Spacer()
+                            if let v = perf.primary {
+                                Text("\(formatPerf(viewModel.displayValue(v, for: modality), for: modality)) \(unitLabel(for: modality))")
+                                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textPrimary)
+                            } else {
+                                Text("—").font(.system(size: 13)).foregroundStyle(Palette.textTertiary)
+                            }
+                        }
+                        if let note = perf.note, !note.isEmpty {
+                            Text(note).font(.system(size: 12)).foregroundStyle(Palette.textTertiary)
                         }
                     }
                 }
@@ -1499,6 +1524,26 @@ struct RedesignHistoryView: View {
             if !workout.notes.isEmpty {
                 Divider().overlay(Palette.hairline)
                 Text(workout.notes).font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
+            }
+            if workout.hrSummary != nil {
+                Button {
+                    detailedWorkout = workout
+                } label: {
+                    HStack {
+                        Image(systemName: "chart.xyaxis.line")
+                        Text("View full session")
+                            .font(.system(size: 14, weight: .bold))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundStyle(Palette.electricBlue)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Palette.electricBlue.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(16)

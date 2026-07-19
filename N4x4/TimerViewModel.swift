@@ -120,7 +120,10 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     // Performance logging. Optional so older logs (encoded before this existed)
     // decode with these as nil — synthesized Codable maps missing keys to nil.
     let modality: TrainingModality?
-    let intervalPerformances: [IntervalPerformance]?
+    var intervalPerformances: [IntervalPerformance]?
+    /// Inline heart-rate stats; the full series lives in HeartRateSeriesStore
+    /// keyed by `id`. Optional for the same backward-compat reason as above.
+    let hrSummary: HRSessionSummary?
 
     init(
         id: UUID = UUID(),
@@ -129,7 +132,8 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         notes: String,
         sessionBreakdown: WorkoutSessionBreakdown? = nil,
         modality: TrainingModality? = nil,
-        intervalPerformances: [IntervalPerformance]? = nil
+        intervalPerformances: [IntervalPerformance]? = nil,
+        hrSummary: HRSessionSummary? = nil
     ) {
         self.id = id
         self.completedAt = completedAt
@@ -138,6 +142,7 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         self.sessionBreakdown = sessionBreakdown
         self.modality = modality
         self.intervalPerformances = intervalPerformances
+        self.hrSummary = hrSummary
     }
 
     /// Average of the logged primary values for this entry, ignoring blanks.
@@ -303,12 +308,17 @@ struct IntervalPerformance: Codable, Equatable, Identifiable {
     var intervalNumber: Int   // 1-based work-interval index
     var primary: Double?
     var secondary: Double?
+    /// Free-text per-interval note ("incline 4, felt strong"). Optional so
+    /// pre-existing logs decode with it nil.
+    var note: String?
 
-    init(id: UUID = UUID(), intervalNumber: Int, primary: Double? = nil, secondary: Double? = nil) {
+    init(id: UUID = UUID(), intervalNumber: Int, primary: Double? = nil,
+         secondary: Double? = nil, note: String? = nil) {
         self.id = id
         self.intervalNumber = intervalNumber
         self.primary = primary
         self.secondary = secondary
+        self.note = note
     }
 }
 
@@ -694,6 +704,8 @@ class TimerViewModel: ObservableObject {
     // the user's DISPLAY units; converted to canonical only at save time.
     /// "Set all" value that stamps every work interval.
     @Published var performanceSetAll: Double? = nil
+    /// Free-text note per work interval, parallel to performanceDraft.
+    @Published var performanceNotesDraft: [String] = []
     /// One slot per work interval (1..numberOfIntervals). nil = left blank.
     @Published var performanceDraft: [Double?] = []
     @Published var showPostWorkoutSummary: Bool = false
@@ -1388,6 +1400,10 @@ class TimerViewModel: ObservableObject {
         SpeechManager.shared.beginWorkoutAudio()
         if workoutStartDate == nil {
             workoutStartDate = Date()
+            // Fresh workout: start the fine-grained HR recording.
+            hrRecorder = HeartRateSeriesRecorder()
+            completedSeries = nil
+            recorderBeginCurrentInterval()
         }
         startLiveActivity()
         if intervalEndTime == nil {
@@ -1490,6 +1506,7 @@ class TimerViewModel: ObservableObject {
         timeRemaining = max(0, intervalEndCursor.timeIntervalSince(now))
 
         if advanced {
+            recorderBeginCurrentInterval()
             if playAlarm {
                 playAlarmIfNeeded()
             }
@@ -1502,6 +1519,12 @@ class TimerViewModel: ObservableObject {
         triggerCompletionHaptic()
         endLiveActivity()
         stopTimer()
+        // Seal the HR recording before HR state is cleared; the post-workout
+        // summary charts render from completedSeries.
+        if let recorder = hrRecorder, let offset = recorderOffset {
+            completedSeries = recorder.finish(at: offset)
+        }
+        hrRecorder = nil
         clearHeartRateState()
         workoutCompletionDate = Date()
         speakWorkoutComplete()
@@ -1549,6 +1572,7 @@ class TimerViewModel: ObservableObject {
 
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             updateCounts()
+            recorderBeginCurrentInterval()
             if isRunning {
                 scheduleNextIntervalNotification()
                 updateLiveActivity(isRunning: true)
@@ -1608,6 +1632,8 @@ class TimerViewModel: ObservableObject {
     func reset() {
         SpeechManager.shared.stopSpeaking()
         SpeechManager.shared.endWorkoutAudio()
+        hrRecorder = nil
+        completedSeries = nil
         resetPromptFlags()
         endLiveActivity()
         stopTimer()
@@ -1790,13 +1816,26 @@ class TimerViewModel: ObservableObject {
         let trimmedNotes = workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let completionDate = workoutCompletionDate ?? Date()
         let modality = selectedWorkoutType.trainingModality
+
+        // Persist the fine-grained HR series (own file, keyed by entry id)
+        // and keep only the small summary inline on the entry.
+        let entryID = UUID()
+        var hrSummary: HRSessionSummary?
+        if let series = completedSeries,
+           let summary = HeartRateSeriesAnalytics.summary(for: series) {
+            HeartRateSeriesStore.save(series, for: entryID)
+            hrSummary = summary
+        }
+
         let entry = WorkoutLogEntry(
+            id: entryID,
             completedAt: completionDate,
             workoutType: selectedWorkoutType,
             notes: trimmedNotes,
             sessionBreakdown: currentSessionBreakdown,
             modality: modality,
-            intervalPerformances: builtPerformances(for: modality)
+            intervalPerformances: builtPerformances(for: modality),
+            hrSummary: hrSummary
         )
         workoutLogEntries.insert(entry, at: 0)
         persistWorkoutLogEntries()
@@ -1863,6 +1902,13 @@ class TimerViewModel: ObservableObject {
         let count = max(0, numberOfIntervals)
         let modality = selectedWorkoutType.trainingModality
 
+        // Notes are session-specific — never prefilled from history. Preserve
+        // anything already typed this session (the draft is re-prepared when
+        // the workout type changes).
+        if performanceNotesDraft.count != count {
+            performanceNotesDraft = Array(repeating: "", count: count)
+        }
+
         guard let last = lastLoggedPerformance(for: modality) else {
             performanceSetAll = nil
             performanceDraft = Array(repeating: nil, count: count)
@@ -1899,9 +1945,15 @@ class TimerViewModel: ObservableObject {
     /// dropping blanks. Returns nil when nothing was logged.
     private func builtPerformances(for modality: TrainingModality) -> [IntervalPerformance]? {
         let built: [IntervalPerformance] = performanceDraft.enumerated().compactMap { index, value in
-            guard let value else { return nil }
+            let note = performanceNotesDraft.indices.contains(index)
+                ? performanceNotesDraft[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                : ""
+            // Keep the interval when it has a value OR a note — a note-only
+            // interval ("rower level 6, felt heavy") is worth saving.
+            guard value != nil || !note.isEmpty else { return nil }
             return IntervalPerformance(intervalNumber: index + 1,
-                                       primary: canonicalValue(value, for: modality))
+                                       primary: value.map { canonicalValue($0, for: modality) },
+                                       note: note.isEmpty ? nil : note)
         }
         return built.isEmpty ? nil : built
     }
@@ -2181,11 +2233,58 @@ class TimerViewModel: ObservableObject {
     /// decides what to display (Bluetooth beats Watch when both are live);
     /// the voice zone engine always evaluates the displayed value, so a
     /// lower-priority source can never drive coaching.
+    // MARK: - Heart-rate series recording
+
+    /// Records the live HR stream + interval timeline for the running workout.
+    private var hrRecorder: HeartRateSeriesRecorder?
+    /// The finished series, held from workout completion until the summary is
+    /// saved (written to HeartRateSeriesStore) or discarded. The post-workout
+    /// charts render from this.
+    @Published var completedSeries: HeartRateSeries?
+
+    /// Seconds since the workout started, nil when no workout is in progress.
+    private var recorderOffset: Double? {
+        workoutStartDate.map { Date().timeIntervalSince($0) }
+    }
+
+    private func recorderSpanDescriptor(for index: Int)
+        -> (kind: String, work: Int, lo: Int, hi: Int)? {
+        guard intervals.indices.contains(index) else { return nil }
+        switch intervals[index].type {
+        case .warmup:
+            return (HeartRateSeries.IntervalSpan.kindWarmup, 0, 0, 0)
+        case .highIntensity:
+            let workNumber = intervals[0...index].filter { $0.type == .highIntensity }.count
+            return (HeartRateSeries.IntervalSpan.kindWork, workNumber,
+                    highIntensityTargetRange.lowerBound, highIntensityTargetRange.upperBound)
+        case .rest:
+            return (HeartRateSeries.IntervalSpan.kindRecovery, 0,
+                    recoveryTargetRange.lowerBound, recoveryTargetRange.upperBound)
+        case .cooldown:
+            return (HeartRateSeries.IntervalSpan.kindCooldown, 0, 0, 0)
+        }
+    }
+
+    /// Close the previous span and open one for the current interval. Call at
+    /// workout start and after every interval advance.
+    func recorderBeginCurrentInterval() {
+        guard let recorder = hrRecorder, let offset = recorderOffset,
+              let d = recorderSpanDescriptor(for: currentIntervalIndex) else { return }
+        recorder.beginInterval(kind: d.kind, workNumber: d.work,
+                               targetLo: d.lo, targetHi: d.hi, at: offset)
+    }
+
     func ingestHeartRate(_ bpm: Double, from source: HeartRateAggregator.Source) {
         currentHeartRate = heartRateAggregator.ingest(bpm: bpm, from: source, at: Date())
         scheduleHeartRateStalenessSweep()
         if let displayed = currentHeartRate {
             evaluateZoneVoiceFeedback(bpm: displayed)
+            // Record the aggregator's accepted value (not the raw reading) so
+            // the saved series matches what the user saw. Paused time records
+            // nothing — charts show the gap.
+            if isRunning, let offset = recorderOffset {
+                hrRecorder?.record(bpm: displayed, at: offset)
+            }
         }
     }
 

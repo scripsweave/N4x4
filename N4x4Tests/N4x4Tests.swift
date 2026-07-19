@@ -507,3 +507,138 @@ final class N4x4Tests: XCTestCase {
     }
 
 }
+
+// MARK: - Heart-rate series recording
+
+final class HeartRateSeriesTests: XCTestCase {
+
+    private func span(_ kind: String, _ start: Double, _ end: Double,
+                      work: Int = 0, lo: Int = 0, hi: Int = 0) -> HeartRateSeries.IntervalSpan {
+        .init(kind: kind, workNumber: work, start: start, end: end, targetLo: lo, targetHi: hi)
+    }
+
+    func testRecorderBucketsSamplesToTwoSeconds() {
+        let r = HeartRateSeriesRecorder()
+        r.record(bpm: 100, at: 0)
+        r.record(bpm: 101, at: 0.5)   // dropped: same bucket
+        r.record(bpm: 102, at: 1.9)   // dropped
+        r.record(bpm: 103, at: 2.0)   // kept
+        r.record(bpm: 104, at: 3.9)   // dropped
+        r.record(bpm: 105, at: 4.1)   // kept
+        XCTAssertEqual(r.samples.map(\.bpm), [100, 103, 105])
+    }
+
+    func testRecorderRejectsGarbage() {
+        let r = HeartRateSeriesRecorder()
+        r.record(bpm: 0, at: 0)
+        r.record(bpm: -10, at: 2)
+        r.record(bpm: 120, at: -1)
+        XCTAssertTrue(r.samples.isEmpty)
+    }
+
+    func testRecorderBuildsSpansAcrossIntervalChanges() {
+        let r = HeartRateSeriesRecorder()
+        r.beginInterval(kind: "warmup", workNumber: 0, targetLo: 0, targetHi: 0, at: 0)
+        r.beginInterval(kind: "work", workNumber: 1, targetLo: 150, targetHi: 170, at: 600)
+        r.beginInterval(kind: "recovery", workNumber: 0, targetLo: 110, targetHi: 130, at: 840)
+        let series = r.finish(at: 1020)
+        XCTAssertEqual(series.spans.map(\.kind), ["warmup", "work", "recovery"])
+        XCTAssertEqual(series.spans[1].start, 600)
+        XCTAssertEqual(series.spans[1].end, 840)
+        XCTAssertEqual(series.spans[1].workNumber, 1)
+        XCTAssertEqual(series.spans[2].end, 1020)
+    }
+
+    func testRecorderDropsZeroLengthSpans() {
+        let r = HeartRateSeriesRecorder()
+        r.beginInterval(kind: "warmup", workNumber: 0, targetLo: 0, targetHi: 0, at: 0)
+        // Double advance in the same instant (skip tapped twice).
+        r.beginInterval(kind: "work", workNumber: 1, targetLo: 150, targetHi: 170, at: 300)
+        r.beginInterval(kind: "recovery", workNumber: 0, targetLo: 110, targetHi: 130, at: 300.1)
+        let series = r.finish(at: 500)
+        XCTAssertEqual(series.spans.map(\.kind), ["warmup", "recovery"])
+    }
+
+    func testInZonePctCountsOnlyInZoneTime() {
+        // 10 samples 2 s apart: first 5 below target, last 5 inside.
+        let samples = (0..<10).map {
+            HeartRateSeries.Sample(t: Double($0 * 2), bpm: $0 < 5 ? 140 : 160)
+        }
+        let s = HeartRateSeries(
+            samples: samples,
+            spans: [span("work", 0, 18, work: 1, lo: 150, hi: 170)],
+            startedAt: Date(timeIntervalSince1970: 0))
+        // 9 gaps of 2 s; the first 4 lead from below-zone samples, gap 5 leads
+        // from sample index 4 (below), gaps 6-9 lead from in-zone samples.
+        XCTAssertEqual(HeartRateSeriesAnalytics.inZonePct(s, span: s.spans[0]), 44)
+    }
+
+    func testInZonePctNilWithoutTargetOrSamples() {
+        let s = HeartRateSeries(
+            samples: [.init(t: 0, bpm: 100), .init(t: 2, bpm: 100)],
+            spans: [span("warmup", 0, 10), span("work", 20, 30, work: 1, lo: 150, hi: 170)],
+            startedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertNil(HeartRateSeriesAnalytics.inZonePct(s, span: s.spans[0]), "no target")
+        XCTAssertNil(HeartRateSeriesAnalytics.inZonePct(s, span: s.spans[1]), "no samples in span")
+    }
+
+    func testTimeToZone() {
+        let samples = [
+            HeartRateSeries.Sample(t: 100, bpm: 120),
+            HeartRateSeries.Sample(t: 130, bpm: 149),
+            HeartRateSeries.Sample(t: 160, bpm: 151),
+        ]
+        let work = span("work", 100, 340, work: 1, lo: 150, hi: 170)
+        let s = HeartRateSeries(samples: samples, spans: [work],
+                                startedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(HeartRateSeriesAnalytics.timeToZone(s, span: work), 60)
+    }
+
+    func testTimeToZoneNilWhenNeverReached() {
+        let samples = [HeartRateSeries.Sample(t: 100, bpm: 120)]
+        let work = span("work", 100, 340, work: 1, lo: 150, hi: 170)
+        let s = HeartRateSeries(samples: samples, spans: [work],
+                                startedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertNil(HeartRateSeriesAnalytics.timeToZone(s, span: work))
+    }
+
+    func testSparklineDownsamples() {
+        let flat = HeartRateSeriesAnalytics.sparkline(from: Array(repeating: 150.0, count: 800), points: 40)
+        XCTAssertEqual(flat.count, 40)
+        XCTAssertTrue(flat.allSatisfy { $0 == 150 })
+
+        let short = HeartRateSeriesAnalytics.sparkline(from: [100, 110, 120], points: 40)
+        XCTAssertEqual(short, [100, 110, 120], "shorter than target passes through")
+    }
+
+    func testSummaryNilForTinySeries() {
+        let s = HeartRateSeries(samples: [.init(t: 0, bpm: 100)], spans: [],
+                                startedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertNil(HeartRateSeriesAnalytics.summary(for: s))
+    }
+
+    func testSummaryStats() {
+        let samples = (0..<100).map { HeartRateSeries.Sample(t: Double($0 * 2), bpm: 150) }
+        let s = HeartRateSeries(
+            samples: samples,
+            spans: [span("work", 0, 200, work: 1, lo: 140, hi: 160)],
+            startedAt: Date(timeIntervalSince1970: 0))
+        let summary = HeartRateSeriesAnalytics.summary(for: s)
+        XCTAssertEqual(summary?.avgBPM, 150)
+        XCTAssertEqual(summary?.maxBPM, 150)
+        XCTAssertEqual(summary?.workInZonePct, 100)
+        XCTAssertEqual(summary?.sparkline.count, 40)
+    }
+
+    func testStoreRoundTripAndDelete() {
+        let id = UUID()
+        let s = HeartRateSeries(
+            samples: [.init(t: 0, bpm: 100), .init(t: 2, bpm: 110)],
+            spans: [span("work", 0, 240, work: 1, lo: 150, hi: 170)],
+            startedAt: Date(timeIntervalSince1970: 1000))
+        HeartRateSeriesStore.save(s, for: id)
+        XCTAssertEqual(HeartRateSeriesStore.load(for: id), s)
+        HeartRateSeriesStore.delete(for: id)
+        XCTAssertNil(HeartRateSeriesStore.load(for: id))
+    }
+}
