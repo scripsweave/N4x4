@@ -9,6 +9,7 @@ struct SettingsView: View {
     /// dismiss-style "Done" button is omitted.
     var embedded: Bool = false
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.openURL) private var openURL
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showResetAlert = false
     @State private var showTips = false
@@ -33,6 +34,29 @@ struct SettingsView: View {
                         }
                     }
                     Text("Beginner and advanced techniques to train smarter.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                }
+
+                // Feedback
+                Section(header: Text("Feedback").font(.headline)) {
+                    Button {
+                        if let url = URL(string: "mailto:feedback@n4x4.app?subject=N4x4%20Feedback") {
+                            openURL(url)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "envelope.fill")
+                                .foregroundStyle(.blue)
+                            Text("Submit Feedback")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("Ideas, bugs, or a feature you're missing — it all goes straight to us.")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
