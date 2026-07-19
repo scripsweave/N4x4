@@ -18,9 +18,13 @@ The 6.7" set is a straight resize of the 6.9" set (same composition).
 | `02-zones.png` | Always in the right zone |
 | `03-watch.png` | Your Apple Watch, your coach |
 | `04-history.png` | Watch your fitness climb |
+| `05-summary.png` | Every interval, charted |
 
 `01`, `02`, `04` are composed from live app captures. `03` features an **Apple
-Watch Ultra** rather than a phone (see below).
+Watch Ultra** rather than a phone (see below). `05` is rendered from
+`make-summary-screenshot.html` (headless Chrome, see below) — a hand-built
+mockup of the real `PostWorkoutSummaryRedesignView`; keep the two visually
+identical when either changes, same rule as the watch face.
 
 ## `watch-screenshots/` — Apple Watch slot (required)
 
@@ -68,3 +72,18 @@ It composites `assets/watch-ultra-framed.png` onto the family background
 transparent background) — see the handoff doc.
 
 Requires Pillow (`pip install pillow`) and macOS Helvetica Neue.
+
+## Regenerating `05-summary.png`
+
+```
+cd AppStore
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --headless=new --screenshot=screenshots/05-summary.png \
+  --window-size=1290,2796 --hide-scrollbars --force-device-scale-factor=1 \
+  "file://$(pwd)/make-summary-screenshot.html"
+sips -z 2778 1284 screenshots/05-summary.png --out screenshots/6.7in/05-summary.png
+```
+
+The session/interval charts, stats, and palette hexes live in that HTML file.
+If `PostWorkoutSummaryRedesignView` (SessionDetailViews.swift) is restyled,
+restyle the mockup in the same change.

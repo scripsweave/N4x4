@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>N4x4 — 05-summary App Store card</title>
+<style>
+/* Renders the post-workout summary App Store card at exactly 1290×2796.
+   Screenshot with headless Chrome:
+   chrome --headless=new --screenshot=05-summary.png --window-size=1290,2796 \
+          --hide-scrollbars --force-device-scale-factor=1 file://.../make-summary-screenshot.html
+   The phone screen is a hand-built mockup of PostWorkoutSummaryRedesignView
+   (SessionDetailViews.swift) — keep the two visually identical, same rule as
+   the watch face (see memory/watch-ui-advertised-parity). Palette hexes match
+   HomeWorkoutRedesign.swift exactly. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0A0A0D;          /* Palette.background */
+  --surface: #171A1F;     /* Palette.surface */
+  --raised: #212429;      /* Palette.surfaceRaised */
+  --hairline: rgba(255,255,255,0.08);
+  --text: #FFFFFF;
+  --text2: rgba(255,255,255,0.6);
+  --text3: rgba(255,255,255,0.4);
+  --blue: #2E85FF;        /* electricBlue */
+  --amber: #FF9400;       /* amber */
+  --danger: #FF4545;      /* danger */
+  --recovery: #33C78C;    /* recovery */
+  --orange: #FF9500;      /* zone-low tint (system orange) */
+}
+html, body { width: 1290px; height: 2796px; overflow: hidden; }
+body {
+  background:
+    radial-gradient(900px 900px at 15% 42%, rgba(46,133,255,0.10), transparent 70%),
+    radial-gradient(820px 820px at 92% 88%, rgba(255,148,0,0.09), transparent 70%),
+    #0A0A0C;
+  font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Caption ── */
+.caption { text-align: center; padding-top: 118px; }
+.caption h1 {
+  font-size: 118px; font-weight: 800; line-height: 1.13; letter-spacing: -1px;
+}
+.caption p {
+  margin-top: 40px; font-size: 46px; font-weight: 400; line-height: 1.32;
+  color: rgba(255,255,255,0.72);
+}
+
+/* ── Phone frame ── */
+.phone {
+  position: absolute; left: 110px; right: 110px; top: 600px; bottom: -60px;
+  border: 3px solid rgba(255,255,255,0.85); border-bottom: none;
+  border-radius: 150px 150px 0 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+.statusbar {
+  display: flex; align-items: center; height: 118px; padding: 26px 84px 0;
+}
+.sb-time { font-size: 40px; font-weight: 700; width: 240px; }
+.island { width: 250px; height: 76px; background: #000; border-radius: 40px; margin: 0 auto; }
+.sb-icons { width: 240px; display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
+.sb-dots { display: flex; gap: 5px; }
+.sb-dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.55); }
+.wifi { width: 40px; height: 30px; position: relative; }
+.wifi i { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  border: 4px solid transparent; border-top: 4px solid #fff; border-radius: 50%; }
+.wifi i:nth-child(1) { width: 40px; height: 40px; bottom: -14px; }
+.wifi i:nth-child(2) { width: 26px; height: 26px; bottom: -8px; }
+.wifi i:nth-child(3) { width: 10px; height: 10px; bottom: -2px; border-top-width: 6px; }
+.battery { width: 62px; height: 30px; border: 3px solid rgba(255,255,255,0.5);
+  border-radius: 9px; padding: 3px; position: relative; }
+.battery::after { content: ""; position: absolute; right: -8px; top: 9px;
+  width: 4px; height: 10px; background: rgba(255,255,255,0.5); border-radius: 0 3px 3px 0; }
+.battery i { display: block; width: 100%; height: 100%; background: #fff; border-radius: 4px; }
+
+/* ── Nav bar ── */
+.nav { display: flex; align-items: center; padding: 22px 46px 8px; }
+.nav .discard { color: var(--danger); font-size: 36px; width: 260px; }
+.nav .title { flex: 1; text-align: center; font-size: 38px; font-weight: 700; }
+.nav .actions { width: 260px; display: flex; justify-content: flex-end; align-items: center; gap: 30px; }
+.nav .share { display: block; }
+.nav .done { color: var(--blue); font-size: 36px; font-weight: 800; }
+
+/* ── Screen content ── */
+.content { padding: 26px 40px 0; }
+.section-title {
+  font-size: 26px; font-weight: 700; letter-spacing: 2.5px; color: var(--text2);
+  margin: 34px 0 18px;
+}
+.hero { display: flex; align-items: center; gap: 20px; }
+.seal { width: 62px; height: 62px; border-radius: 50%; background: var(--recovery);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; color: #08130d; font-weight: 900; }
+.hero h2 { font-size: 42px; font-weight: 800; letter-spacing: -0.5px; }
+.hero .date { font-size: 27px; color: var(--text2); margin-top: 4px; }
+
+.chips { display: flex; gap: 18px; margin-top: 26px; }
+.chip { flex: 1; text-align: center; padding: 22px 0 18px;
+  background: var(--surface); border: 2px solid var(--hairline); border-radius: 26px; }
+.chip .icon { font-size: 26px; margin-bottom: 6px; }
+.chip .val { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.chip .lbl { font-size: 17px; font-weight: 700; letter-spacing: 1.5px; color: var(--text3); margin-top: 4px; }
+
+.card { background: var(--surface); border: 2px solid var(--hairline);
+  border-radius: 32px; padding: 26px; }
+
+.pill-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.pill-title { font-size: 26px; font-weight: 800; letter-spacing: 2px; color: var(--amber); }
+.pill-target { font-size: 21px; font-weight: 600; letter-spacing: 1px; color: var(--text3); }
+
+.iv-stats { display: flex; align-items: center; gap: 40px; margin-top: 22px; }
+.ring { position: relative; width: 108px; height: 108px; }
+.ring .txt { position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; }
+.ring .txt b { font-size: 29px; font-weight: 800; }
+.ring .txt s { font-size: 14px; font-weight: 700; color: var(--text3); text-decoration: none; letter-spacing: 1px; }
+.iv-stat { text-align: center; }
+.iv-stat b { display: block; font-size: 36px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.iv-stat s { font-size: 17px; font-weight: 700; color: var(--text3); letter-spacing: 1px; text-decoration: none; }
+.iv-stat.ghost b { color: var(--text3); }
+
+.editor { margin-top: 24px; background: var(--raised); border-radius: 22px; padding: 20px 24px; }
+.editor .row { display: flex; justify-content: space-between; align-items: baseline; }
+.editor .metric { font-size: 25px; font-weight: 600; color: var(--text2); }
+.editor .value { font-size: 27px; font-weight: 700; }
+.editor .unit { font-size: 21px; color: var(--text3); margin-left: 8px; }
+.editor .note { margin-top: 14px; font-size: 26px; color: var(--text); }
+
+.dots { display: flex; justify-content: center; gap: 14px; margin-top: 24px; }
+.dots i { width: 14px; height: 14px; border-radius: 50%; background: rgba(255,255,255,0.25); }
+.dots i.on { background: #fff; }
+
+svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="caption">
+  <h1>Every interval,<br>charted</h1>
+  <p>Heart rate against your target zone, round<br>by round — with notes on every interval.</p>
+</div>
+
+<div class="phone">
+  <div class="statusbar">
+    <div class="sb-time">09:14</div>
+    <div class="island"></div>
+    <div class="sb-icons">
+      <div class="sb-dots"><i></i><i></i><i></i><i></i></div>
+      <div class="wifi"><i></i><i></i><i></i></div>
+      <div class="battery"><i></i></div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="discard">Discard</div>
+    <div class="title">Workout Complete</div>
+    <div class="actions"><svg class="share" width="34" height="42" viewBox="0 0 34 42">
+      <g stroke="#2E85FF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 16 H5 V38 H29 V16 H26"/>
+        <path d="M17 26 V4"/>
+        <path d="M10 10 L17 3.5 L24 10"/>
+      </g>
+    </svg><div class="done">Done</div></div>
+  </div>
+
+  <div class="content">
+    <div class="hero">
+      <div class="seal">✓</div>
+      <div>
+        <h2>Norwegian 4×4 complete</h2>
+        <div class="date">July 19, 2026</div>
+      </div>
+    </div>
+
+    <div class="chips">
+      <div class="chip"><div class="icon" style="color:var(--blue)">&#x23F1;</div><div class="val">36:00</div><div class="lbl">TOTAL</div></div>
+      <div class="chip"><div class="icon" style="color:var(--recovery)">&#x2764;</div><div class="val">151</div><div class="lbl">AVG BPM</div></div>
+      <div class="chip"><div class="icon" style="color:var(--danger)">&#x1F525;</div><div class="val">176</div><div class="lbl">PEAK</div></div>
+      <div class="chip"><div class="icon" style="color:var(--amber)">&#x25CE;</div><div class="val">87%</div><div class="lbl">IN ZONE</div></div>
+    </div>
+
+    <div class="section-title">SESSION</div>
+    <div class="card">
+      <svg id="strip" width="930" height="380" viewBox="0 0 930 380"></svg>
+    </div>
+
+    <div class="section-title">INTERVALS — SWIPE, LOG YOUR SETTINGS</div>
+    <div class="card">
+      <div class="pill-row">
+        <div class="pill-title">WORK 2</div>
+        <div class="pill-target">TARGET 152–171</div>
+      </div>
+      <svg id="zoom" width="930" height="270" viewBox="0 0 930 270"></svg>
+      <div class="iv-stats">
+        <div class="ring">
+          <svg width="108" height="108" viewBox="0 0 108 108">
+            <circle cx="54" cy="54" r="47" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="10"/>
+            <circle cx="54" cy="54" r="47" fill="none" stroke="#33C78C" stroke-width="10"
+                    stroke-linecap="round" stroke-dasharray="295.3"
+                    stroke-dashoffset="32.5" transform="rotate(-90 54 54)"/>
+          </svg>
+          <div class="txt"><b>89%</b><s>ZONE</s></div>
+        </div>
+        <div class="iv-stat"><b>163</b><s>AVG</s></div>
+        <div class="iv-stat"><b>172</b><s>PEAK</s></div>
+        <div class="iv-stat"><b>0:38</b><s>TO ZONE</s></div>
+        <div class="iv-stat ghost"><b>last</b><s>GHOST</s></div>
+      </div>
+      <div class="editor">
+        <div class="row">
+          <div class="metric">Speed</div>
+          <div><span class="value">12.5</span><span class="unit">km/h</span></div>
+        </div>
+        <div class="note">Incline 4 — felt strong, held pace easily</div>
+      </div>
+      <div class="dots"><i></i><i></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+    </div>
+
+    <div class="section-title">LOG THIS SESSION</div>
+    <div class="card">
+      <div class="editor row" style="background:none;padding:6px 4px 22px;display:flex;justify-content:space-between;align-items:baseline;">
+        <div class="metric">Type</div>
+        <div style="font-size:27px;color:var(--blue);font-weight:600;">Treadmill &#x25BE;</div>
+      </div>
+      <div style="height:2px;background:var(--hairline);margin-bottom:20px;"></div>
+      <div style="font-size:27px;color:var(--text3);">Session notes (optional)</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Shared session model: warmup 6:00 · 4×(4:00 work + 3:00 recovery) · cooldown
+const spans = [];
+let t = 0;
+spans.push({kind:'warmup', start:t, end:t+=360, lo:0,  hi:0});
+for (let i = 1; i <= 4; i++) {
+  spans.push({kind:'work', n:i, start:t, end:t+=240, lo:152, hi:171});
+  if (i < 4) spans.push({kind:'recovery', start:t, end:t+=180, lo:114, hi:133});
+}
+spans.push({kind:'cooldown', start:t, end:t+=300, lo:0, hi:0});
+const TOTAL = t;
+
+// Plausible HR trace: climbs in work, falls in recovery, mild drift per round.
+function hrAt(s) {
+  const span = spans.find(sp => s >= sp.start && s <= sp.end) || spans[spans.length-1];
+  const local = (s - span.start) / (span.end - span.start);
+  const wobble = 2.6 * Math.sin(s / 19) + 1.6 * Math.sin(s / 7.3);
+  if (span.kind === 'warmup')   return 92 + 34 * local + wobble;
+  if (span.kind === 'cooldown') return 138 - 34 * local + wobble;
+  const drift = (span.n || 1) * 1.2;
+  if (span.kind === 'work') {
+    const rise = 128 + (160 - 128) * Math.min(1, local * 3.2);
+    const peakBump = (span.n >= 3 && local > 0.88) ? (local - 0.88) * 95 : 0;
+    return rise + drift + peakBump + wobble;
+  }
+  // recovery: exponential-ish fall into the recovery band (~121)
+  return 165 - (165 - 121) * Math.min(1, local * 1.6) + drift * 0.5 + wobble;
+}
+
+const COLORS = { work:'#FF9400', recovery:'#2E85FF' };
+function zoneColor(bpm, span) {
+  if (!span || !span.lo) return 'rgba(255,255,255,0.85)';
+  if (bpm < span.lo) return '#FF9500';
+  if (bpm > span.hi) return '#FF4545';
+  return '#33C78C';
+}
+
+function drawChart(svg, x0, x1, yLo, yHi, opts) {
+  const W = +svg.getAttribute('width'), H = +svg.getAttribute('height');
+  const padR = 64, padB = 40, padT = 8;
+  const X = s => (s - x0) / (x1 - x0) * (W - padR);
+  const Y = b => padT + (yHi - b) / (yHi - yLo) * (H - padB - padT);
+  let out = '';
+
+  // target bands
+  for (const sp of spans) {
+    if (!sp.lo || sp.end < x0 || sp.start > x1) continue;
+    const a = Math.max(sp.start, x0), b = Math.min(sp.end, x1);
+    out += `<rect x="${X(a)}" y="${Y(sp.hi)}" width="${X(b)-X(a)}" height="${Y(sp.lo)-Y(sp.hi)}"
+            fill="${COLORS[sp.kind]}" opacity="0.16"/>`;
+  }
+  // boundaries
+  for (const sp of spans) {
+    if (sp.start <= x0 || sp.start >= x1) continue;
+    out += `<line x1="${X(sp.start)}" y1="${padT}" x2="${X(sp.start)}" y2="${H-padB}"
+            stroke="rgba(255,255,255,0.08)" stroke-width="2"/>`;
+  }
+  // y grid + labels
+  for (const bpm of opts.yTicks) {
+    out += `<line x1="0" y1="${Y(bpm)}" x2="${W-padR}" y2="${Y(bpm)}" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
+            <text x="${W-padR+12}" y="${Y(bpm)+7}" fill="rgba(255,255,255,0.4)" font-size="20" font-weight="600">${bpm}</text>`;
+  }
+  // x labels
+  for (const s of opts.xTicks) {
+    const label = `${Math.floor((s - (opts.xLabelFrom ?? 0)) / 60)}:${String(Math.round(s - (opts.xLabelFrom ?? 0)) % 60).padStart(2,'0')}`;
+    out += `<text x="${X(s)}" y="${H-10}" fill="rgba(255,255,255,0.4)" font-size="20" font-weight="600" text-anchor="middle">${label}</text>`;
+  }
+  // ghost (zoom chart only)
+  if (opts.ghost) {
+    let d = '';
+    for (let s = x0; s <= x1; s += 4) {
+      const bpm = hrAt(s) - 4.5 - 2.2 * Math.sin(s / 23);
+      d += (d ? 'L' : 'M') + X(s).toFixed(1) + ' ' + Y(bpm).toFixed(1);
+    }
+    out += `<path d="${d}" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="3.5" stroke-dasharray="10 10"/>`;
+  }
+  // HR line, split into zone-coloured segments
+  let segColor = null, d = '';
+  for (let s = x0; s <= x1; s += 4) {
+    const span = spans.find(sp => s >= sp.start && s <= sp.end);
+    const bpm = hrAt(s);
+    const c = zoneColor(bpm, span);
+    if (c !== segColor) {
+      if (d) out += `<path d="${d}" fill="none" stroke="${segColor}" stroke-width="${opts.lw}" stroke-linecap="round"/>`;
+      d = `M${X(s).toFixed(1)} ${Y(bpm).toFixed(1)}`;
+      segColor = c;
+    } else {
+      d += `L${X(s).toFixed(1)} ${Y(bpm).toFixed(1)}`;
+    }
+  }
+  if (d) out += `<path d="${d}" fill="none" stroke="${segColor}" stroke-width="${opts.lw}" stroke-linecap="round"/>`;
+  svg.innerHTML = out;
+}
+
+drawChart(document.getElementById('strip'), 0, TOTAL, 80, 190,
+  { yTicks: [100, 130, 160, 190], xTicks: [300, 900, 1500, 2100], lw: 4 });
+
+const w2 = spans.find(sp => sp.kind === 'work' && sp.n === 2);
+drawChart(document.getElementById('zoom'), w2.start, w2.end, 108, 185,
+  { yTicks: [120, 150, 180], xTicks: [w2.start+60, w2.start+120, w2.start+180],
+    xLabelFrom: w2.start, lw: 5, ghost: true });
+</script>
+</body>
+</html>
