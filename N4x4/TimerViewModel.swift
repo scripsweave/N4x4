@@ -1360,6 +1360,9 @@ class TimerViewModel: ObservableObject {
 
         cancelRecoveryNudge()
         isRunning = true
+        // Keep the audio session (and the app) alive while the phone is
+        // locked so voice prompts fire on time. Idempotent across resumes.
+        SpeechManager.shared.beginWorkoutAudio()
         if workoutStartDate == nil {
             workoutStartDate = Date()
         }
@@ -1479,6 +1482,9 @@ class TimerViewModel: ObservableObject {
         clearHeartRateState()
         workoutCompletionDate = Date()
         speakWorkoutComplete()
+        // Safe while the completion phrase is speaking: teardown defers to
+        // the speech-finished callback.
+        SpeechManager.shared.endWorkoutAudio()
         intervalEndTime = nil
         timeRemaining = 0
         showCompletionMessage = false
@@ -1538,6 +1544,7 @@ class TimerViewModel: ObservableObject {
             SpeechManager.shared.stopSpeaking()
             timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
             stopTimer()
+            SpeechManager.shared.endWorkoutAudio()
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             updateLiveActivity(isRunning: false)
         } else {
@@ -1577,6 +1584,7 @@ class TimerViewModel: ObservableObject {
 
     func reset() {
         SpeechManager.shared.stopSpeaking()
+        SpeechManager.shared.endWorkoutAudio()
         resetPromptFlags()
         endLiveActivity()
         stopTimer()
