@@ -158,13 +158,16 @@ struct WatchTimerView: View {
 
     /// Ring centre: big live heart rate with a small BPM label (matches the
     /// advertised layout). Falls back to the countdown until HR is streaming.
+    /// The number itself is colour-coded to the zone — orange when too low,
+    /// red when too high, white in zone / no target (shared tint mapping).
     @ViewBuilder
     private func centerContent(remaining: TimeInterval) -> some View {
         if workoutManager.heartRate > 0 {
             VStack(spacing: 0) {
                 Text("\(Int(workoutManager.heartRate))")
                     .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(
+                        sessionManager.zoneStatus(bpm: workoutManager.heartRate).tint ?? .white)
                     .monospacedDigit()
                 Text("BPM")
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
@@ -202,11 +205,14 @@ struct WatchTimerView: View {
     private var hasTarget: Bool { state.hrLow > 0 && state.hrHigh > 0 }
 
     /// Coaching cue from live HR vs the target zone (matches the phone/website).
+    /// Colours come from the shared zone tint so all surfaces agree: orange =
+    /// speed up, red = slow down, green = in zone.
     private var zoneCue: (text: String, color: Color)? {
-        switch sessionManager.zoneStatus(bpm: workoutManager.heartRate) {
-        case .below:    return ("▲ SPEED UP", .orange)
-        case .above:    return ("▼ SLOW DOWN", .cyan)
-        case .inZone:   return ("✓ IN ZONE", .green)
+        let status = sessionManager.zoneStatus(bpm: workoutManager.heartRate)
+        switch status {
+        case .below:    return ("▲ SPEED UP", status.tint ?? .orange)
+        case .above:    return ("▼ SLOW DOWN", status.tint ?? .red)
+        case .inZone:   return ("✓ IN ZONE", status.tint ?? .green)
         case .noTarget: return nil
         }
     }

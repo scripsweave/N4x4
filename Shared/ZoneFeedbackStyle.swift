@@ -9,12 +9,13 @@
 import SwiftUI
 
 extension HRZoneStatus {
-    /// Semantic tint for colour-coding a heart-rate readout.
+    /// Semantic tint for colour-coding a heart-rate readout: orange = too low
+    /// (speed up), red = too high (slow down), green = in zone.
     /// `nil` means "no target" (warmup/cooldown) — callers supply a neutral
     /// default appropriate to their background.
     var tint: Color? {
         switch self {
-        case .below:    return .yellow
+        case .below:    return .orange
         case .above:    return .red
         case .inZone:   return .green
         case .noTarget: return nil

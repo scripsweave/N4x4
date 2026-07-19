@@ -816,7 +816,7 @@ struct WorkoutScreen: View {
     private func zoneCueStyle(_ status: HRZoneStatus) -> (text: String, icon: String, color: Color) {
         switch status {
         case .below:    return ("SPEED UP",  "arrow.up.circle.fill",   Palette.amber)
-        case .above:    return ("SLOW DOWN", "arrow.down.circle.fill", Palette.electricBlue)
+        case .above:    return ("SLOW DOWN", "arrow.down.circle.fill", Palette.danger)
         case .inZone:   return ("IN ZONE",   "checkmark.circle.fill",  Palette.recovery)
         case .noTarget: return ("", "", .clear)
         }
@@ -944,7 +944,9 @@ struct WorkoutRing: View {
                         .id(Int((hr / 4).rounded()))
                     Text("\(Int(hr))")
                         .font(.system(size: side * 0.095, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Palette.textPrimary)
+                        // Zone-coded: orange = too low, red = too high (shared tint).
+                        .foregroundStyle(
+                            viewModel.currentZoneStatus(for: hr).tint ?? Palette.textPrimary)
                         .monospacedDigit()
                 }
                 .padding(.top, side * 0.02)
@@ -1026,7 +1028,9 @@ struct HRZoneBar: View {
                             .id(Int((hr / 4).rounded()))
                         Text("\(Int(hr))")
                             .font(.system(size: 22, weight: .heavy, design: .rounded))
-                            .foregroundStyle(Palette.textPrimary)
+                            // Zone-coded: orange = too low, red = too high (shared tint).
+                            .foregroundStyle(
+                                viewModel.currentZoneStatus(for: hr).tint ?? Palette.textPrimary)
                             .monospacedDigit()
                         Text("BPM")
                             .font(.system(size: 10, weight: .bold))
