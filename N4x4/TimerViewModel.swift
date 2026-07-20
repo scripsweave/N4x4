@@ -442,7 +442,7 @@ class TimerViewModel: ObservableObject {
             reset()
         }
     }
-    @AppStorage("cooldownDuration") var cooldownDuration: TimeInterval = 5 * 60 {
+    @AppStorage("cooldownDuration") var cooldownDuration: TimeInterval = 3 * 60 {
         didSet {
             let sanitized = max(60, min(600, cooldownDuration))
             if sanitized != cooldownDuration {
