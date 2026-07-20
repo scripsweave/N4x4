@@ -9,62 +9,89 @@ VO2 max interval training
 
 ## Promotional text (170 chars max)
 
-Live heart rate from Apple Watch, Garmin, or WHOOP. Voice coaching that keeps
-you in the zone, even with your phone locked. Every interval charted when you
-finish.
+If you do one thing for your health this year, make it this. Four minutes
+hard, three easy, once a week. N4x4 coaches every rep and shows you it's
+working.
 
 ## Description (ready to paste)
 
-N4x4 is the Norwegian 4x4 protocol, done right: 33 minutes, once a week,
-built around the single best predictor of longevity there is: your VO2 max.
+If you're going to spend time on your health, spend it where it pays back the
+most. That's this.
 
-Four rounds of 4 minutes hard, 3 minutes easy. Decades of research behind the
-protocol. One app that coaches you through every second of it.
+Your VO2 max is the single number researchers tie most closely to how long,
+and how well, you'll live. The Norwegian 4x4 is the interval protocol from
+decades of studying it: four rounds of four minutes hard, three minutes easy.
+Thirty-three minutes. Once a week.
 
-REAL-TIME HEART RATE COACHING
-See your live heart rate and exactly where it needs to be:
+N4x4 makes those thirty-three minutes count, keeps you coming back, and shows
+you the payoff.
 
+PUSH EXACTLY HARD ENOUGH
+Too easy and it doesn't work. Too hard and you can't repeat it. N4x4 reads
+your heart rate live and holds you in the sweet spot: your target zones come
+from your own max heart rate, and the number on screen turns orange the moment
+you should speed up and red when you should ease off, on both iPhone and Apple
+Watch. No guessing whether it counted. You'll know.
+
+USE WHAT'S ALREADY ON YOUR WRIST
 • Apple Watch: install N4x4 on your wrist and heart rate streams
-  automatically. Get nudged back into the zone with a tap on the wrist, a
-  spoken cue, or colour.
+  automatically, with a tap, a spoken cue, or colour when you drift out of zone.
 • Garmin: turn on Broadcast Heart Rate and your watch becomes the sensor.
 • WHOOP: switch on HR Broadcast in the WHOOP app.
-• Chest straps and armbands: Polar, Garmin HRM, Wahoo TICKR, COROS, and any
-  standard Bluetooth heart rate monitor.
+• Polar, Wahoo, COROS, and any Bluetooth chest strap or armband.
+If a device doesn't show up, the built-in guide has exact, per-model steps.
 
-Target zones are calculated from your max heart rate: 85 to 95% for work
-intervals, 60 to 70% for recovery. The number on screen turns orange when you
-should speed up and red when you should ease off, on both iPhone and Apple
-Watch. If your monitor doesn't appear, the built-in device guide has
-model-specific setup steps for every major brand.
+EASY TO KEEP THE HABIT
+The hard part of any workout is doing it again next week. N4x4 removes the
+friction:
+• Voice coaching talks you through every interval — start, halfway, ten
+  seconds, and the heart rate to hold — with the phone locked in your pocket,
+  quietly lowering your music while it speaks.
+• A reminder on your training day, and a gentle nudge if you miss it.
+• A weekly streak that makes consistency feel good.
+• Live Activity on the Lock Screen and Dynamic Island so the timer's always
+  there.
 
-VOICE PROMPTS, PHONE LOCKED
-Start the workout, pocket the phone, run. Spoken cues tell you when each
-interval starts, when you're halfway, when 10 seconds remain, and what heart
-rate to hold. Prompts lower your music while they speak and keep working with
-the screen locked.
+FINISH WITH PROOF
+The moment you stop, see the whole session: your heart rate drawn against the
+target band for every interval, how long you held the zone, how fast you got
+there, and a ghost of last week's session laid over today's so progress is
+impossible to miss. Jot your treadmill speed, incline, or erg setting and a
+note per interval; next time it's already filled in.
 
-EVERY INTERVAL, CHARTED
-When you finish, see the whole session: your heart rate line drawn against
-the target band for every interval, time in zone, how fast you reached the
-zone, and a ghost overlay of your previous session so progress is visible
-round by round. Log your treadmill speed, incline, or erg setting plus a note
-for each interval; your next session pre-fills them.
+WATCH THE PAYOFF ARRIVE
+• Your VO2 max trend, pulled from Apple Health, climbing over the months
+• Weekly streaks, a training calendar, and milestones
+• Full history with the charts for every session you've saved
+• Share a session card when you want to
 
-TRACK THE NUMBER THAT MATTERS
-• VO2 max trend from Apple Health
-• Weekly streaks, training calendar, and milestones
-• Full history with charts for every saved session
-• Share a session card
+Works on the treadmill, rower, bike, stair climber, or the open road — any
+cardio that gets your heart into the zone.
 
-BUILT TO DISAPPEAR
-• Live Activity on the Lock Screen and Dynamic Island
-• Works on the treadmill, rowing machine, bike, stair climber, or the road
-• Optional weekly reminder on your training day
-• No account, no subscription. Your data stays on your device and in Apple
-  Health.
+No account. No subscription. No ads. Your data stays on your device and in
+Apple Health.
 
-One hard session a week. N4x4 makes sure it counts.
+One genuinely hard half-hour a week. Keep it, and the number that matters
+keeps climbing.
+
+## Screenshot captions (outcome-led, in display order)
+
+Cards read as a story: why → during → honest effort → proof → payoff.
+Suggested order and captions (headline / subline):
+
+1. 01-home    — "The one number worth training" / "Your VO2 max, and the 33
+                 minutes a week that raise it."
+2. 02-zones   — "Push exactly hard enough" / "Hard enough to count. Easy
+                 enough to do again next week."
+3. 03-watch   — "Eyes on the road, coach on your wrist" / "Live heart rate and
+                 speed-up / slow-down cues, from your Watch, Garmin, or WHOOP."
+4. 05-summary — "Finish knowing it counted" / "Every interval charted against
+                 its target zone."
+5. 04-history — "Watch the payoff arrive" / "Your VO2 max and your streak,
+                 climbing week after week."
+
+(Only the caption text changes; regenerate a card's PNG only if its headline
+changes — see AppStore/README.md.)
 
 ## What's New (short, ready to paste)
 
