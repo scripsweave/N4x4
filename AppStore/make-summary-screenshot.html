@@ -176,7 +176,7 @@ svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; }
     </div>
 
     <div class="chips">
-      <div class="chip"><div class="icon" style="color:var(--blue)">&#x23F1;</div><div class="val">36:00</div><div class="lbl">TOTAL</div></div>
+      <div class="chip"><div class="icon" style="color:var(--blue)">&#x23F1;</div><div class="val">33:00</div><div class="lbl">TOTAL</div></div>
       <div class="chip"><div class="icon" style="color:var(--recovery)">&#x2764;</div><div class="val">151</div><div class="lbl">AVG BPM</div></div>
       <div class="chip"><div class="icon" style="color:var(--danger)">&#x1F525;</div><div class="val">176</div><div class="lbl">PEAK</div></div>
       <div class="chip"><div class="icon" style="color:var(--amber)">&#x25CE;</div><div class="val">87%</div><div class="lbl">IN ZONE</div></div>
@@ -235,12 +235,12 @@ svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; }
 // ── Shared session model: warmup 6:00 · 4×(4:00 work + 3:00 recovery) · cooldown
 const spans = [];
 let t = 0;
-spans.push({kind:'warmup', start:t, end:t+=360, lo:0,  hi:0});
+spans.push({kind:'warmup', start:t, end:t+=300, lo:0,  hi:0});
 for (let i = 1; i <= 4; i++) {
   spans.push({kind:'work', n:i, start:t, end:t+=240, lo:152, hi:171});
   if (i < 4) spans.push({kind:'recovery', start:t, end:t+=180, lo:114, hi:133});
 }
-spans.push({kind:'cooldown', start:t, end:t+=300, lo:0, hi:0});
+spans.push({kind:'cooldown', start:t, end:t+=180, lo:0, hi:0});
 const TOTAL = t;
 
 // Plausible HR trace: climbs in work, falls in recovery, mild drift per round.
@@ -326,7 +326,7 @@ function drawChart(svg, x0, x1, yLo, yHi, opts) {
 }
 
 drawChart(document.getElementById('strip'), 0, TOTAL, 80, 190,
-  { yTicks: [100, 130, 160, 190], xTicks: [300, 900, 1500, 2100], lw: 4 });
+  { yTicks: [100, 130, 160, 190], xTicks: [300, 900, 1500], lw: 4 });
 
 const w2 = spans.find(sp => sp.kind === 'work' && sp.n === 2);
 drawChart(document.getElementById('zoom'), w2.start, w2.end, 108, 185,
