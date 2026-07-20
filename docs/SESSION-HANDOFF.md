@@ -1,10 +1,11 @@
 # N4x4 — Session Handoff
 
-> **Newer work:** the final quality review + bug fixes, App Store submission
-> fixes, and watch/App Store screenshots are documented in
-> [`SESSION-HANDOFF-2026-07-10.md`](SESSION-HANDOFF-2026-07-10.md) (which
-> supersedes the 2026-07-09 handoff). Read that first for current state; the
-> notes below are older context.
+> **Current state:** the real-time heart-rate release (Apple Watch + Garmin +
+> WHOOP + Bluetooth), the reimagined post-workout experience, the marketing
+> rewrite, and the release/versioning setup are documented in
+> [`SESSION-HANDOFF-2026-07-20.md`](SESSION-HANDOFF-2026-07-20.md). **Read that
+> first.** It supersedes the 2026-07-10 handoff, which supersedes 2026-07-09.
+> The notes below are older context.
 
 Authoritative status for resuming work. Last updated 2026-06-19.
 

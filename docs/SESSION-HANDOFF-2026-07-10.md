@@ -2,7 +2,11 @@
 
 _Last updated 2026-07-10._ Covers the final quality code review + bug fixes, the
 App Store submission fixes, and the watch/App Store screenshot work. Supersedes
-[`SESSION-HANDOFF-2026-07-09.md`](SESSION-HANDOFF-2026-07-09.md) for current state.
+[`SESSION-HANDOFF-2026-07-09.md`](SESSION-HANDOFF-2026-07-09.md).
+
+> **Superseded for current state** by
+> [`SESSION-HANDOFF-2026-07-20.md`](SESSION-HANDOFF-2026-07-20.md) (real-time
+> heart rate, post-workout redesign, marketing rewrite, releasing via Xcode Cloud).
 
 Everything here is committed and pushed to **`main`** (remote `origin`).
 

@@ -272,3 +272,67 @@ To verify:
   (`userInitiatedDisconnects: Set<UUID>`), consumed **before** the
   current-peripheral guard — a plain bool gets stranded when callbacks arrive
   out of order and silently kills auto-reconnect.
+
+---
+
+## Heart-rate session recording (post-workout charts)
+
+- All in `N4x4/HeartRateSeries.swift`: `HeartRateSeriesRecorder` (accumulates
+  2 s-bucketed samples + the interval timeline as it actually happened),
+  `HeartRateSeries` (the persisted document), `HeartRateSeriesAnalytics` (pure
+  in-zone %, time-to-zone, summary), and `HeartRateSeriesStore` (one JSON file
+  per workout under Application Support, keyed by the log-entry UUID).
+- **The full series is NOT in the UserDefaults log blob** — only a small
+  `HRSessionSummary` (avg/max, work in-zone %, 40-pt sparkline) lives inline on
+  `WorkoutLogEntry`. ~840 samples/session would balloon the blob and slow every
+  history render. Keep it that way.
+- Recorder lifecycle is wired in `TimerViewModel`: created on workout start,
+  `recorderBeginCurrentInterval()` on every interval advance (start +
+  `moveToNextInterval` + the multi-advance path in `reconcileTimerState`),
+  sealed into `completedSeries` in `finishWorkout`, saved in
+  `saveWorkoutLogEntryAndResetSession`, cleared in `reset`.
+- UI is `N4x4/SessionDetailViews.swift` (charts, interval pager, share card),
+  shared by `PostWorkoutSummaryRedesignView` and history's `SessionDetailSheet`.
+- Pure logic is unit-tested in `N4x4Tests` (`HeartRateSeriesTests`).
+
+## Zone colour is shared, and instant
+
+- The one source of truth for zone colour is `HRZoneStatus.tint` in
+  `Shared/ZoneFeedbackStyle.swift`: **orange = below zone, red = above, green =
+  in zone.** Phone (`HomeWorkoutRedesign.swift`), legacy `TimerView`, and watch
+  (`WatchTimerView.swift`) all read it, so they can't drift. Change the mapping
+  in one place only.
+- The **colour is instant** (computed from the current reading). The
+  spoken/haptic nudges are debounced/sustained-deviation — do not conflate them
+  in copy or code.
+
+## Background audio (voice prompts under lock)
+
+- `Info.plist` `UIBackgroundModes` includes `audio`. `SpeechManager` keeps the
+  app alive during a workout with a zero-volume in-memory silent loop
+  (`.mixWithOthers`), started/stopped from `TimerViewModel`
+  (start/resume → `beginWorkoutAudio`, pause/finish/reset → `endWorkoutAudio`).
+  Without this iOS suspends the app and cues never fire with the screen locked.
+  Teardown defers to the speech-finished callback so the final "workout
+  complete" phrase isn't cut off.
+
+## Releasing & versioning (Xcode Cloud)
+
+- **Xcode Cloud builds and delivers to App Store Connect on every push to the
+  branch it watches (`main`)** — configured in App Store Connect, not in the
+  repo. Assume every push to `main` attempts an App Store delivery.
+- Once a version is submitted/approved its train closes; re-uploading the same
+  `MARKETING_VERSION` is rejected (ITMS-90186 / ITMS-90062). Bump the version
+  **in all 6 shipping configs** (app, watch, Live Activity × Debug/Release) in
+  `project.pbxproj` for a release, and never reuse a number once uploaded.
+- Apple compares version components **numerically**: `4.21` > `4.9`. Avoid
+  leading zeros and decimal-style thinking.
+- Recommended: move the workflow trigger to tag-based (`v*`) so routine commits
+  (docs/website/assets) don't ship. Not yet done as of 2026-07-20.
+
+## App icon (case-sensitive CI)
+
+- The app-icon file must match `AppIcon.appiconset/Contents.json` **exactly by
+  case**. Local macOS is case-insensitive so a mismatch builds fine, but Xcode
+  Cloud checks out case-sensitively and the archive ships with no icon
+  (ITMS-90022 / ITMS-90713). Keep tracked asset filenames case-correct.
