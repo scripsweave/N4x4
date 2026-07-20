@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>N4x4 watch face (frameless, for compositing into the Ultra frame)</title>
+<style>
+/* Button-less watch face for the framed marketing shot (03-watch). Matches the
+   website watch mockup (parity rule) with the corrected below-zone reading
+   (148 in a 158-172 zone → orange number + Speed Up agree). Rendered on black
+   and composited into website/images/watch-ultra-frame.png's screen cutout. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100vw; height: 100vh; background: #000; overflow: hidden; }
+body {
+  font-family: -apple-system, "SF Pro Rounded", "SF Pro Display", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #fff;
+}
+.phase { color: #FF9400; font-weight: 800; font-size: 6.4vw; letter-spacing: 0.5px; }
+.interval { color: #8b8b90; font-weight: 600; font-size: 5.2vw; margin-top: 0.6vh; }
+.ring-wrap { position: relative; width: 58vw; height: 58vw; margin-top: 2.4vh; }
+.ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-center { position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; }
+.bpm-num { color: #FF9400; font-weight: 800; font-size: 23vw; line-height: 0.9; letter-spacing: -1.5px; }
+.bpm-lbl { color: #8b8b90; font-weight: 700; font-size: 5vw; letter-spacing: 3px; margin-top: 0.5vh; }
+.cue { color: #FF9400; font-weight: 800; font-size: 7.4vw; margin-top: 2.6vh; }
+.target { color: #6f6f74; font-weight: 600; font-size: 4.8vw; letter-spacing: 0.5px; margin-top: 0.8vh; }
+</style>
+</head>
+<body>
+  <div class="phase">HIGH INTENSITY</div>
+  <div class="interval">INTERVAL 3 / 4 · 4:00</div>
+  <div class="ring-wrap">
+    <svg viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#2b2b2e" stroke-width="8"/>
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#FF9400" stroke-width="8"
+              stroke-linecap="round" stroke-dasharray="263.9" stroke-dashoffset="92"/>
+    </svg>
+    <div class="ring-center">
+      <div class="bpm-num">148</div>
+      <div class="bpm-lbl">BPM</div>
+    </div>
+  </div>
+  <div class="cue">▲ SPEED UP</div>
+  <div class="target">TARGET 158–172</div>
+</body>
+</html>

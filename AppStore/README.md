@@ -34,6 +34,25 @@ rendered to match the real `WatchTimerView` UI. Upload one that matches an
 accepted size — **`watch-ultra3-422x514.png`** or `watch-ultra-410x502.png` are
 the safe defaults.
 
+Regenerate from `make-watch-screen.html` (headless Chrome, one render per size):
+
+```
+cd AppStore
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+for s in watch-44mm-368x448:368:448 watch-45mm-396x484:396:484 \
+         watch-series11-416x496:416:496 watch-ultra-410x502:410:502 \
+         watch-ultra3-422x514:422:514; do
+  IFS=: read name w h <<< "$s"
+  "$CHROME" --headless=new --screenshot="watch-screenshots/$name.png" \
+    --window-size=$w,$h --hide-scrollbars --force-device-scale-factor=1 \
+    "file://$(pwd)/make-watch-screen.html"
+done
+```
+
+The face shows a below-zone reading (148 in a 158–172 zone), so the orange
+number and the "Speed Up" cue agree with each other and with the app's live
+zone colouring. Keep it in sync with `WatchTimerView` and the website mockup.
+
 | File | Size | Device |
 |------|------|--------|
 | `watch-ultra3-422x514.png` | 422×514 | Ultra 3 |
@@ -67,9 +86,11 @@ python3 AppStore/make-watch-screenshot.py
 
 It composites `assets/watch-ultra-framed.png` onto the family background
 (near-black `#0A0A0C` + amber/blue glow) with the caption, and writes
-`screenshots/03-watch.png`. To change the watch face itself, re-render
-`assets/watch-ultra-framed.png` from the site's frame + face (headless Chrome,
-transparent background) — see the handoff doc.
+`screenshots/03-watch.png`. To change the watch face itself, rebuild
+`assets/watch-ultra-framed.png`: render `make-watch-face.html` (the button-less
+face) at 2× the cutout, then composite it into the transparent screen of
+`../website/images/watch-ultra-frame.png` at left 12.1%, top 21.7%, width 70.0%,
+height 59.3%, and re-run this script. The face must match `make-watch-screen.html`.
 
 Requires Pillow (`pip install pillow`) and macOS Helvetica Neue.
 
