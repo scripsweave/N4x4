@@ -6,6 +6,7 @@ import AVFoundation
 import UserNotifications
 import HealthKit
 import ActivityKit
+import StoreKit
 
 enum PermissionState: Equatable {
     case unknown
@@ -1850,7 +1851,30 @@ class TimerViewModel: ObservableObject {
         if !showMilestoneCelebration {
             showWeeklyStreaks = true
         }
+        maybeRequestAppReview()
         reset()
+    }
+
+    /// Flag so the App Store rating prompt is only ever requested once.
+    @AppStorage("hasRequestedAppReview") private var hasRequestedAppReview = false
+
+    /// Ask for an App Store rating after a few successful sessions, and only
+    /// once. Fired from a natural high point (a just-saved workout), never
+    /// mid-flow. The first eligible count (3) is not a milestone count, so it
+    /// never collides with the milestone celebration. Apple additionally
+    /// throttles how often the system prompt can appear.
+    private func maybeRequestAppReview() {
+        guard !hasRequestedAppReview, workoutLogEntries.count >= 3 else { return }
+        guard !showMilestoneCelebration else { return }
+        hasRequestedAppReview = true
+        Task { @MainActor in
+            // Let the summary dismiss and the streak view settle first.
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            guard let scene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene
+            else { return }
+            AppStore.requestReview(in: scene)
+        }
     }
 
     func closePostWorkoutSummaryWithoutSaving() {
