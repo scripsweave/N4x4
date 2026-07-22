@@ -108,6 +108,9 @@ private let advancedTips: [Tip] = [
 
 struct TipsView: View {
     @Environment(\.dismiss) private var dismiss
+    /// True when hosted in the root tab bar (Guide tab) rather than a sheet —
+    /// hides the Done button, since there is nothing to dismiss.
+    var embedded: Bool = false
     @AppStorage("preferredModalityRaw") private var preferredModalityRaw: String = ""
     @State private var selectedMode: TipsMode = .basics
     @State private var selectedModality: TrainingModality? = nil
@@ -172,12 +175,14 @@ struct TipsView: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
-                Button("Done") { dismiss() }
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 7)
-                    .background(.ultraThinMaterial, in: Capsule())
+                if !embedded {
+                    Button("Done") { dismiss() }
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
