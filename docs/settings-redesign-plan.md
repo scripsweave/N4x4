@@ -3,6 +3,10 @@
 2026-07-22 · Companion mockups: https://claude.ai/code/artifact/bbe60b82-cb34-476a-8609-2f2a0820ae61
 Follows commit `464ad20` (default workout setting, Kettlebells modality, haptics rework).
 
+**Status: IMPLEMENTED in v4.6** (same day). Jan's calls on the open questions:
+Training Tips → Home screen; reminder names confirmed; search shipped in v1.
+Detail pages live in `N4x4/SettingsSubpages.swift`, top level in `SettingsView.swift`.
+
 ## Problem
 
 `SettingsView.swift` is one flat `Form` with 20 sections (~35 controls). The two

@@ -263,6 +263,9 @@ struct HomeScreen: View {
     /// Dismisses the "connect your Watch" banner for this app session; it
     /// reappears next launch if the Watch app is still not installed.
     @State private var watchBannerDismissed = false
+    /// Training Tips moved here from Settings in 4.6 — it's learning content,
+    /// not configuration.
+    @State private var showTips = false
 
     private var hasVO2Data: Bool {
         viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2
@@ -333,6 +336,26 @@ struct HomeScreen: View {
             }
 
             Spacer()
+
+            Button {
+                showTips = true
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: "bolt.heart.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Palette.amber)
+                    Text("TIPS")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Palette.textSecondary)
+                        .tracking(0.5)
+                }
+                .frame(width: 48, height: 44)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Palette.surface))
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showTips) {
+                TipsView()
+            }
         }
     }
 

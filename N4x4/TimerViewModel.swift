@@ -672,6 +672,7 @@ class TimerViewModel: ObservableObject {
         didSet {
             guard oldValue != workoutRemindersEnabled else { return }
             if workoutRemindersEnabled {
+                raiseFamilyFlagsIfAllOff()
                 ensureNotificationPermissionForToggles()
                 ensureDefaultReminderSelection()
                 reminderActivationDate = Date()
@@ -683,6 +684,64 @@ class TimerViewModel: ObservableObject {
             }
         }
     }
+    // Per-family reminder toggles under the workoutRemindersEnabled master:
+    // night-before (8pm), morning-of (8am), comeback nudges (daily 10am after a
+    // missed day). The master follows the three — all off turns it off, any on
+    // turns it on — so existing master-gated logic (recovery nudge, onboarding)
+    // keeps working unchanged.
+    @AppStorage("nightBeforeReminderEnabled") var nightBeforeReminderEnabled: Bool = true {
+        didSet {
+            guard oldValue != nightBeforeReminderEnabled else { return }
+            reminderFamilyToggleChanged()
+        }
+    }
+    @AppStorage("morningOfReminderEnabled") var morningOfReminderEnabled: Bool = true {
+        didSet {
+            guard oldValue != morningOfReminderEnabled else { return }
+            reminderFamilyToggleChanged()
+        }
+    }
+    @AppStorage("comebackNudgesEnabled") var comebackNudgesEnabled: Bool = true {
+        didSet {
+            guard oldValue != comebackNudgesEnabled else { return }
+            reminderFamilyToggleChanged()
+        }
+    }
+
+    /// Suppresses the family didSets while code (master didSet, migration,
+    /// reset) writes the flags to keep the master == any-family-on invariant —
+    /// only direct user toggles may drive derivation.
+    private var isSyncingReminderFamilies = false
+
+    private func reminderFamilyToggleChanged() {
+        guard !isSyncingReminderFamilies else { return }
+        let anyOn = nightBeforeReminderEnabled || morningOfReminderEnabled || comebackNudgesEnabled
+        if anyOn != workoutRemindersEnabled {
+            // The master's didSet cancels everything or schedules the enabled
+            // families, so nothing more to do here.
+            workoutRemindersEnabled = anyOn
+        } else if workoutRemindersEnabled {
+            // Master unchanged but the family mix did — rebuild the pending set
+            // once the permission state is current (see AGENTS.md async rule).
+            refreshNotificationPermissionState { [weak self] in
+                self?.scheduleWorkoutReminder()
+            }
+        }
+    }
+
+    /// Invariant: workoutRemindersEnabled == (any family flag on). Called when
+    /// the master turns on through a path that bypasses the family toggles
+    /// (onboarding, old callers) while every family is off — enabling the
+    /// master must enable something.
+    private func raiseFamilyFlagsIfAllOff() {
+        guard !nightBeforeReminderEnabled, !morningOfReminderEnabled, !comebackNudgesEnabled else { return }
+        isSyncingReminderFamilies = true
+        nightBeforeReminderEnabled = true
+        morningOfReminderEnabled = true
+        comebackNudgesEnabled = true
+        isSyncingReminderFamilies = false
+    }
+
     @AppStorage("workoutReminderDays") var workoutReminderDays: Int = 7 {
         didSet {
             let sanitized = max(1, workoutReminderDays)
@@ -991,6 +1050,25 @@ class TimerViewModel: ObservableObject {
         (7, "Saturday"),
         (1, "Sunday")
     ]
+
+    // MARK: - Settings row summaries (top-level value previews)
+
+    /// "Tue · Thu" — days shown in display order; "Off" when reminders are
+    /// disabled or no day is selected.
+    var reminderDaysSummary: String {
+        guard workoutRemindersEnabled else { return "Off" }
+        let selected = selectedWeekdaysList
+        let names = Self.reminderWeekdayOptions
+            .filter { selected.contains($0.value) }
+            .map { String($0.title.prefix(3)) }
+        return names.isEmpty ? "Off" : names.joined(separator: " · ")
+    }
+
+    /// "4 × 4:00" — interval count × high-intensity duration.
+    var intervalPlanSummary: String {
+        let secs = Int(highIntensityDuration)
+        return "\(numberOfIntervals) × \(secs / 60):" + String(format: "%02d", secs % 60)
+    }
 
     // MARK: - Multi-day Reminder Helpers
 
@@ -1340,6 +1418,19 @@ class TimerViewModel: ObservableObject {
         // Only users who explicitly disabled alarm stay on Silent.
         if UserDefaults.standard.object(forKey: "audioModeRaw") == nil {
             audioMode = alarmEnabled ? .voice : .silent
+        }
+
+        // One-time 4.6 migration: sync the per-family reminder flags to the
+        // master so the invariant (master == any family on) holds from day one.
+        // Without this, an install with reminders OFF would show three ON
+        // family toggles that do nothing.
+        if !UserDefaults.standard.bool(forKey: "reminderFamilyFlagsSynced") {
+            isSyncingReminderFamilies = true
+            nightBeforeReminderEnabled = workoutRemindersEnabled
+            morningOfReminderEnabled = workoutRemindersEnabled
+            comebackNudgesEnabled = workoutRemindersEnabled
+            isSyncingReminderFamilies = false
+            UserDefaults.standard.set(true, forKey: "reminderFamilyFlagsSynced")
         }
 
         setupIntervals()
@@ -1849,6 +1940,7 @@ class TimerViewModel: ObservableObject {
 
     private func scheduleWeeklyWorkoutReminder(weekday: Int) {
         guard (1...7).contains(weekday) else { return }
+        guard nightBeforeReminderEnabled else { return }
         guard notificationPermissionState == .granted else { return }
 
         let content = UNMutableNotificationContent()
@@ -2144,6 +2236,11 @@ class TimerViewModel: ObservableObject {
 
     private func scheduleMissedWorkoutFollowUpReminder(forScheduledWeekday weekday: Int) {
         guard notificationPermissionState == .granted else { return }
+        guard morningOfReminderEnabled else {
+            // Comeback nudges are independent of the morning-of family.
+            scheduleRecurringFollowUp(for: weekday)
+            return
+        }
 
         // N4 fix: use a weekly repeating calendar trigger instead of a one-shot date trigger.
         // The old approach only fired once; since rescheduleRemindersOnAppLaunch was broken (N1),
@@ -2187,6 +2284,7 @@ class TimerViewModel: ObservableObject {
     }
     
     private func scheduleRecurringFollowUp(for weekday: Int) {
+        guard comebackNudgesEnabled else { return }
         guard notificationPermissionState == .granted else { return }
 
         let calendar = Calendar.current
@@ -2309,6 +2407,13 @@ class TimerViewModel: ObservableObject {
 
         notificationsEnabled = false
         workoutRemindersEnabled = false
+        // Families follow the master (off) — they come back on together when
+        // reminders are re-enabled (raiseFamilyFlagsIfAllOff).
+        isSyncingReminderFamilies = true
+        nightBeforeReminderEnabled = false
+        morningOfReminderEnabled = false
+        comebackNudgesEnabled = false
+        isSyncingReminderFamilies = false
         workoutReminderDays = 7
         workoutReminderMode = .weeklyWeekday
         workoutReminderWeekdays = ""

@@ -25,7 +25,12 @@ final class N4x4Tests: XCTestCase {
             "workoutLogEntriesData",
             "unitPreference",
             "preferredModalityRaw",
-            "defaultWorkoutTypeRaw"
+            "defaultWorkoutTypeRaw",
+            "nightBeforeReminderEnabled",
+            "morningOfReminderEnabled",
+            "comebackNudgesEnabled",
+            "reminderFamilyFlagsSynced",
+            "workoutReminderWeekdays"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -359,6 +364,76 @@ final class N4x4Tests: XCTestCase {
 
         XCTAssertEqual(vm.selectedWeekdaysList.sorted(), [3, 7])
         XCTAssertEqual(vm.workoutReminderMode, .weeklyWeekday)
+    }
+
+    // MARK: - Reminder family toggles (4.6)
+
+    func testFamilyFlagsSyncToMasterOnFirstLaunch() {
+        // Reminders off + factory-default family flags (true) would show three
+        // ON toggles that do nothing — the migration must pull them down.
+        let vm = TimerViewModel()
+
+        XCTAssertFalse(vm.workoutRemindersEnabled)
+        XCTAssertFalse(vm.nightBeforeReminderEnabled)
+        XCTAssertFalse(vm.morningOfReminderEnabled)
+        XCTAssertFalse(vm.comebackNudgesEnabled)
+    }
+
+    func testEnablingOneFamilyTurnsMasterOn() {
+        let vm = TimerViewModel()
+
+        vm.morningOfReminderEnabled = true
+
+        XCTAssertTrue(vm.workoutRemindersEnabled)
+        XCTAssertFalse(vm.nightBeforeReminderEnabled)
+        XCTAssertFalse(vm.comebackNudgesEnabled)
+    }
+
+    func testDisablingLastFamilyTurnsMasterOff() {
+        let vm = TimerViewModel()
+        vm.nightBeforeReminderEnabled = true
+        XCTAssertTrue(vm.workoutRemindersEnabled)
+
+        vm.nightBeforeReminderEnabled = false
+
+        XCTAssertFalse(vm.workoutRemindersEnabled)
+    }
+
+    func testEnablingMasterDirectlyRaisesAllFamilies() {
+        // Onboarding sets the master straight to true — with every family off
+        // that must raise all three, or nothing would ever be scheduled.
+        let vm = TimerViewModel()
+
+        vm.workoutRemindersEnabled = true
+
+        XCTAssertTrue(vm.nightBeforeReminderEnabled)
+        XCTAssertTrue(vm.morningOfReminderEnabled)
+        XCTAssertTrue(vm.comebackNudgesEnabled)
+    }
+
+    // MARK: - Settings row summaries (4.6)
+
+    func testReminderDaysSummaryFormatsSelectedDays() {
+        let vm = TimerViewModel()
+        XCTAssertEqual(vm.reminderDaysSummary, "Off")
+
+        vm.workoutReminderWeekdays = "3,5"   // Tuesday, Thursday
+        vm.nightBeforeReminderEnabled = true // master follows
+
+        XCTAssertEqual(vm.reminderDaysSummary, "Tue · Thu")
+    }
+
+    func testIntervalPlanSummaryFormatsCountAndDuration() {
+        let vm = TimerViewModel()
+        vm.numberOfIntervals = 4
+        vm.highIntensityDuration = 240
+
+        XCTAssertEqual(vm.intervalPlanSummary, "4 × 4:00")
+
+        vm.numberOfIntervals = 3
+        vm.highIntensityDuration = 90
+
+        XCTAssertEqual(vm.intervalPlanSummary, "3 × 1:30")
     }
 
     func testReminderModeAndDayTransitionsDoNotOscillate() {

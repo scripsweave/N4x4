@@ -1,7 +1,10 @@
 // SettingsView
+// Top level of the restructured Settings (v4.6): grouped, icon-tiled rows with
+// current-value previews, iOS Settings style. Detail pages live in
+// SettingsSubpages.swift; most-used settings (default workout, training days)
+// are pinned at the top. Searchable.
 
 import SwiftUI
-import WatchConnectivity
 
 struct SettingsView: View {
     @ObservedObject var viewModel: TimerViewModel
@@ -11,7 +14,347 @@ struct SettingsView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.openURL) private var openURL
 
-    /// mailto: link for Submit Feedback, with app/OS/device details prefilled
+    // Local mirrors of the keys behind the value previews. @AppStorage on the
+    // view observes UserDefaults directly, so rows refresh when a subpage (or
+    // onboarding, or the watch) writes the underlying key — @AppStorage on the
+    // ObservableObject alone doesn't publish to SwiftUI.
+    @AppStorage("defaultWorkoutTypeRaw") private var defaultWorkoutTypeRaw: String = ""
+    @AppStorage("workoutRemindersEnabled") private var remindersEnabledMirror = false
+    @AppStorage("workoutReminderWeekdays") private var reminderWeekdaysMirror = ""
+    @AppStorage("numberOfIntervals") private var numberOfIntervalsMirror = 4
+    @AppStorage("highIntensityDuration") private var highIntensityDurationMirror: Double = 4 * 60
+    @AppStorage("audioModeRaw") private var audioModeMirror = AudioMode.voice.rawValue
+    @AppStorage("hapticsEnabled") private var hapticsEnabledMirror = true
+    @AppStorage("userAge") private var userAgeMirror = 40
+    @AppStorage("useCustomMaxHR") private var useCustomMaxHRMirror = false
+    @AppStorage("customMaxHR") private var customMaxHRMirror = 0
+    @AppStorage("vo2TargetTierRaw") private var vo2TierMirror = ""
+    @AppStorage("healthKitEnabled") private var healthKitEnabledMirror = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
+    @State private var showResetAlert = false
+    @State private var searchText = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if trimmedSearch.isEmpty {
+                    pinnedSection
+                    workoutSection
+                    coachingSection
+                    devicesSection
+                    progressSection
+                    generalSection
+                    resetSection
+                } else {
+                    searchResultsSection
+                }
+            }
+            .navigationTitle("Settings")
+            .searchable(text: $searchText, prompt: "Search settings")
+            .toolbar {
+                if !embedded {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { presentationMode.wrappedValue.dismiss() }
+                    }
+                }
+            }
+            .alert(isPresented: $showResetAlert) {
+                Alert(
+                    title: Text("Reset to Defaults"),
+                    message: Text("Are you sure you want to reset all settings to their default values?"),
+                    primaryButton: .destructive(Text("Reset")) {
+                        viewModel.resetSettingsToDefaults()
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+            .onAppear {
+                viewModel.refreshNotificationPermissionState()
+                viewModel.refreshHealthKitAuthorizationState()
+                if viewModel.healthKitEnabled {
+                    viewModel.fetchVO2MaxSamples()
+                }
+            }
+        }
+    }
+
+    // MARK: - Sections
+
+    /// Most-used settings, unlabeled and first — like iOS pins Wi-Fi.
+    private var pinnedSection: some View {
+        Section(
+            footer: Text("The default workout is pre-selected when you save a completed session; exercise tips follow it.")
+        ) {
+            defaultWorkoutRow
+            trainingDaysRow
+        }
+    }
+
+    private var workoutSection: some View {
+        Section(header: Text("Workout")) {
+            intervalsRow
+        }
+    }
+
+    private var coachingSection: some View {
+        Section(header: Text("Coaching")) {
+            audioRow
+            hapticsRow
+            zonesRow
+        }
+    }
+
+    private var devicesSection: some View {
+        Section(header: Text("Devices & Health")) {
+            watchRow
+            monitorRow
+            healthRow
+        }
+    }
+
+    private var progressSection: some View {
+        Section(header: Text("Progress")) {
+            vo2Row
+            unitsRow
+        }
+    }
+
+    private var generalSection: some View {
+        Section(header: Text("General")) {
+            displayRow
+            replayOnboardingRow
+            feedbackRow
+        }
+    }
+
+    private var resetSection: some View {
+        Section {
+            resetRow
+        }
+    }
+
+    private var resetRow: some View {
+        Button(action: { showResetAlert = true }) {
+            Text("Reset All Settings")
+                .frame(maxWidth: .infinity)
+                .foregroundColor(.red)
+        }
+    }
+
+    // MARK: - Rows
+
+    /// Reads through to the resolved default; writes route through the view
+    /// model so the exercise-guidance modality follows the chosen type.
+    private var defaultWorkoutBinding: Binding<WorkoutType> {
+        Binding(
+            get: { WorkoutType(rawValue: defaultWorkoutTypeRaw) ?? viewModel.resolvedDefaultWorkoutType },
+            set: { viewModel.setDefaultWorkoutType($0) }
+        )
+    }
+
+    private var defaultWorkoutRow: some View {
+        HStack(spacing: 12) {
+            SettingsIconTile(systemName: "figure.run", tint: .orange)
+            Picker("Default Workout", selection: defaultWorkoutBinding) {
+                ForEach(WorkoutType.selectableCases) { type in
+                    Text(type.rawValue).tag(type)
+                }
+            }
+        }
+    }
+
+    private var trainingDaysRow: some View {
+        SettingsRow(icon: "calendar", tint: .red, title: "Training Days & Reminders",
+                    value: viewModel.reminderDaysSummary) {
+            TrainingDaysSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var intervalsRow: some View {
+        SettingsRow(icon: "timer", tint: .green, title: "Intervals & Durations",
+                    value: viewModel.intervalPlanSummary) {
+            IntervalSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var audioRow: some View {
+        SettingsRow(icon: "speaker.wave.2.fill", tint: .blue, title: "Audio",
+                    value: audioValue) {
+            AudioSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var hapticsRow: some View {
+        SettingsRow(icon: "iphone.radiowaves.left.and.right", tint: .purple, title: "Haptics",
+                    value: hapticsEnabledMirror ? "On" : "Off") {
+            HapticsSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var zonesRow: some View {
+        SettingsRow(icon: "heart.fill", tint: .pink, title: "Heart-Rate Zones & Alerts",
+                    value: "Max \(viewModel.maximumHeartRate)") {
+            ZoneSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var watchRow: some View {
+        SettingsRow(icon: "applewatch", tint: Color(uiColor: .darkGray), title: "Apple Watch",
+                    value: watchValue) {
+            AppleWatchSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var monitorRow: some View {
+        MonitorSettingsRowLink(viewModel: viewModel, manager: viewModel.bleHeartRateManager)
+    }
+
+    private var healthRow: some View {
+        SettingsRow(icon: "heart.text.square.fill", tint: .red, title: "Apple Health",
+                    value: healthKitEnabledMirror ? "On" : "Off") {
+            AppleHealthSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var vo2Row: some View {
+        SettingsRow(icon: "chart.line.uptrend.xyaxis", tint: .blue, title: "VO₂ Max Goal",
+                    value: VO2TargetTier(rawValue: vo2TierMirror)?.rawValue ?? "None") {
+            VO2GoalSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var unitsRow: some View {
+        HStack(spacing: 12) {
+            SettingsIconTile(systemName: "ruler", tint: .gray)
+            Picker("Units", selection: $viewModel.unitPreference) {
+                ForEach(UnitPreference.allCases) { pref in
+                    Text(pref.label).tag(pref)
+                }
+            }
+        }
+    }
+
+    private var displayRow: some View {
+        SettingsRow(icon: "iphone", tint: .indigo, title: "Display") {
+            DisplaySettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var replayOnboardingRow: some View {
+        Button {
+            hasCompletedOnboarding = false
+            presentationMode.wrappedValue.dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                SettingsIconTile(systemName: "arrow.counterclockwise", tint: .gray)
+                Text("Replay Onboarding")
+                    .foregroundStyle(.primary)
+            }
+        }
+    }
+
+    private var feedbackRow: some View {
+        Button {
+            if let url = feedbackMailURL {
+                openURL(url)
+            }
+        } label: {
+            HStack(spacing: 12) {
+                SettingsIconTile(systemName: "envelope.fill", tint: .blue)
+                Text("Send Feedback")
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: - Value previews
+
+    private var audioValue: String {
+        switch AudioMode(rawValue: audioModeMirror) ?? .voice {
+        case .voice:  return "Voice"
+        case .alarm:  return "Beep"
+        case .silent: return "Silent"
+        }
+    }
+
+    private var watchValue: String {
+        switch viewModel.watchConnectionStatus {
+        case .noWatchPaired:   return "Not paired"
+        case .appNotInstalled: return "App missing"
+        case .notReachable:    return "Installed"
+        case .connected:       return "Connected"
+        }
+    }
+
+    // MARK: - Search
+
+    private var trimmedSearch: String {
+        searchText.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// One entry per destination; keywords cover the controls that live there
+    /// so "cooldown" finds Intervals and "strap" finds the monitor.
+    private var searchEntries: [(title: String, keywords: String, row: AnyView)] {
+        [
+            ("Default Workout", "default workout type kettlebells cycle run exercise",
+             AnyView(defaultWorkoutRow)),
+            ("Training Days & Reminders", "training days reminders schedule week notifications night morning comeback nudge interval change",
+             AnyView(trainingDaysRow)),
+            ("Intervals & Durations", "intervals durations warmup warm-up high intensity recovery rest cooldown cool-down skip confirm structure minutes",
+             AnyView(intervalsRow)),
+            ("Audio", "audio voice prompts beep alarm silent halfway ten second sound cues music",
+             AnyView(audioRow)),
+            ("Haptics", "haptics vibration vibrate taps buzz countdown",
+             AnyView(hapticsRow)),
+            ("Heart-Rate Zones & Alerts", "heart rate zones alerts max age custom bpm target haptic voice visual tanaka",
+             AnyView(zonesRow)),
+            ("Apple Watch", "apple watch wrist pairing troubleshooting",
+             AnyView(watchRow)),
+            ("Heart Rate Monitor", "heart rate monitor bluetooth chest strap armband garmin polar whoop pairing",
+             AnyView(monitorRow)),
+            ("Apple Health", "apple health healthkit sync log workouts vo2 refresh",
+             AnyView(healthRow)),
+            ("VO₂ Max Goal", "vo2 max goal target tier good amazing elite biological sex",
+             AnyView(vo2Row)),
+            ("Units", "units metric imperial system measurement km miles",
+             AnyView(unitsRow)),
+            ("Display", "display screen awake sleep live activity dynamic island lock",
+             AnyView(displayRow)),
+            ("Replay Onboarding", "replay onboarding first run guide intro tutorial",
+             AnyView(replayOnboardingRow)),
+            ("Send Feedback", "send feedback email bug idea feature support",
+             AnyView(feedbackRow)),
+            ("Reset All Settings", "reset defaults clear",
+             AnyView(resetRow)),
+        ]
+    }
+
+    @ViewBuilder
+    private var searchResultsSection: some View {
+        let needle = trimmedSearch.lowercased()
+        let matches = searchEntries.filter {
+            $0.title.lowercased().contains(needle) || $0.keywords.contains(needle)
+        }
+        if matches.isEmpty {
+            Section {
+                Text("No settings match “\(trimmedSearch)”.")
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Section {
+                ForEach(matches, id: \.title) { match in
+                    match.row
+                }
+            }
+        }
+    }
+
+    /// mailto: link for Send Feedback, with app/OS/device details prefilled
     /// below a divider so triage never needs a follow-up email. The body opens
     /// with blank lines for the user's own text.
     private var feedbackMailURL: URL? {
@@ -38,477 +381,18 @@ struct SettingsView: View {
         ]
         return components.url
     }
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    /// Mirrors the view model's storage so the picker refreshes on change —
-    /// @AppStorage on the ObservableObject alone doesn't publish to SwiftUI.
-    @AppStorage("defaultWorkoutTypeRaw") private var defaultWorkoutTypeRaw: String = ""
-    @State private var showResetAlert = false
-    @State private var showTips = false
-    @State private var showWatchHelp = false
-    @State private var showMonitorSheet = false
+}
 
-    /// Reads through to the resolved default; writes route through the view
-    /// model so the exercise-guidance modality follows the chosen type.
-    private var defaultWorkoutBinding: Binding<WorkoutType> {
-        Binding(
-            get: { WorkoutType(rawValue: defaultWorkoutTypeRaw) ?? viewModel.resolvedDefaultWorkoutType },
-            set: { viewModel.setDefaultWorkoutType($0) }
-        )
-    }
+/// Observes the Bluetooth manager so the "Paired"/"Not paired" preview stays
+/// live while the settings screen is visible.
+private struct MonitorSettingsRowLink: View {
+    @ObservedObject var viewModel: TimerViewModel
+    @ObservedObject var manager: BluetoothHeartRateManager
 
     var body: some View {
-        NavigationView {
-            Form {
-                // Default workout
-                Section(
-                    header: Text("Default Workout").font(.headline),
-                    footer: Text("Pre-selected as the workout type when you save a completed session. Exercise tips follow this choice.")
-                ) {
-                    Picker("Workout Type", selection: defaultWorkoutBinding) {
-                        ForEach(WorkoutType.selectableCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-                }
-
-                // Tips
-                Section(header: Text("Training Tips").font(.headline)) {
-                    Button(action: { showTips = true }) {
-                        HStack {
-                            Image(systemName: "bolt.heart.fill")
-                                .foregroundStyle(.orange)
-                            Text("4×4 Training Tips")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text("Beginner and advanced techniques to train smarter.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-
-                // Feedback
-                Section(header: Text("Feedback").font(.headline)) {
-                    Button {
-                        if let url = feedbackMailURL {
-                            openURL(url)
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "envelope.fill")
-                                .foregroundStyle(.blue)
-                            Text("Submit Feedback")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text("Ideas, bugs, or a feature you're missing — it all goes straight to us.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-
-                // Intervals
-                Section(header: Text("Intervals").font(.headline)) {
-                    Stepper(value: $viewModel.numberOfIntervals, in: 1...10) {
-                        Text("Number of Intervals: \(viewModel.numberOfIntervals)")
-                            .font(.body)
-                    }
-                }
-
-                // Durations (part of Intervals)
-                Section(header: Text("Durations (Minutes)").font(.headline)) {
-                    Stepper(value: $viewModel.warmupDuration, in: 0...600, step: 60) {
-                        Text("Warmup Duration: \(Int(viewModel.warmupDuration / 60)) min")
-                            .font(.body)
-                    }
-
-                    Stepper(value: $viewModel.highIntensityDuration, in: 60...600, step: 60) {
-                        Text("High Intensity Duration: \(Int(viewModel.highIntensityDuration / 60)) min")
-                            .font(.body)
-                    }
-
-                    Stepper(value: $viewModel.restDuration, in: 60...600, step: 60) {
-                        Text("Recovery Duration: \(Int(viewModel.restDuration / 60)) min")
-                            .font(.body)
-                    }
-
-                    Toggle("Enable Cooldown", isOn: $viewModel.cooldownEnabled)
-                        .font(.body)
-
-                    if viewModel.cooldownEnabled {
-                        Stepper(value: $viewModel.cooldownDuration, in: 60...600, step: 60) {
-                            Text("Cooldown Duration: \(Int(viewModel.cooldownDuration / 60)) min")
-                                .font(.body)
-                        }
-                    }
-                }
-
-                // Audio Alerts
-                Section(header: Text("Audio Alerts").font(.headline)) {
-                    Picker("Audio Alerts", selection: $viewModel.audioMode) {
-                        ForEach(AudioMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Group {
-                        switch viewModel.audioMode {
-                        case .alarm:
-                            Text("A beep plays at each interval change (foreground only).")
-                        case .voice:
-                            Text("Voice cues at start, halfway, and 10 seconds to go. Music softens while speaking.")
-                        case .silent:
-                            Text("No audio alerts. Watch the screen for interval changes.")
-                        }
-                    }
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-
-                    if viewModel.audioMode == .voice {
-                        Toggle("Halfway voice prompts", isOn: $viewModel.halfwayVoicePromptsEnabled)
-                        Toggle("10-second warning prompts", isOn: $viewModel.tenSecondVoicePromptsEnabled)
-                    }
-                }
-
-                // Haptics
-                Section(
-                    header: Text("Haptics").font(.headline),
-                    footer: Text("Vibrates on both iPhone and Apple Watch, regardless of the audio mode. Countdown into every interval change: two short taps at 3 and 2 seconds out, then one long buzz as the new interval starts. The end of the final interval gets just the two short taps.")
-                ) {
-                    Toggle("Interval Haptics", isOn: $viewModel.hapticsEnabled)
-                        .font(.body)
-                }
-
-                // Workout Controls
-                Section(header: Text("Workout Controls").font(.headline)) {
-                    Toggle("Confirm cooldown skip", isOn: $viewModel.confirmSkipCooldown)
-                    Toggle("Confirm other interval skips", isOn: $viewModel.confirmSkipOtherIntervals)
-                }
-
-                // Display
-                Section(header: Text("Display").font(.headline)) {
-                    Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
-                        .font(.body)
-                    Toggle("Live Activity / Dynamic Island", isOn: $viewModel.liveActivitiesEnabled)
-                        .font(.body)
-                    Text("Shows interval countdown on the Lock Screen and Dynamic Island during a workout.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-
-                // Apple Watch
-                Section(header: Text("Apple Watch").font(.headline)) {
-                    if WCSession.isSupported() {
-                        Button {
-                            showWatchHelp = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: watchStatusIcon)
-                                    .foregroundColor(watchStatusTint)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(watchStatusTitle)
-                                        .font(.body)
-                                        .foregroundColor(.primary)
-                                    Text("Tap for setup & troubleshooting")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    Text("Wear your Apple Watch and start the workout from either device to stream live heart rate.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-
-                // Bluetooth heart rate monitor
-                Section(header: Text("Heart Rate Monitor").font(.headline)) {
-                    Button {
-                        showMonitorSheet = true
-                    } label: {
-                        HeartRateMonitorSettingsRow(manager: viewModel.bleHeartRateManager)
-                    }
-                    Text("Connect a Bluetooth chest strap or armband for accurate live heart rate — with or without an Apple Watch. When both are connected, N4x4 uses the monitor.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
-
-                // Units
-                Section(
-                    header: Text("Units").font(.headline),
-                    footer: Text("Used for logged speeds and paces. System follows your device region.")
-                ) {
-                    Picker("Measurement", selection: $viewModel.unitPreference) {
-                        ForEach(UnitPreference.allCases) { pref in
-                            Text(pref.label).tag(pref)
-                        }
-                    }
-                }
-
-                // Heart-Rate Zone Alerts
-                Section(
-                    header: Text("Heart-Rate Zone Alerts").font(.headline),
-                    footer: Text("When your heart rate drifts outside the target zone for the current interval, N4x4 nudges you back. Alerts wait for your heart rate to settle after each interval and never fire more than once a minute. Requires live heart rate from an Apple Watch or a Bluetooth monitor.")
-                ) {
-                    Toggle("Haptic (Apple Watch)", isOn: $viewModel.zoneHapticAlertsEnabled)
-                        .font(.body)
-                    Toggle("Voice (iPhone)", isOn: $viewModel.zoneVoiceAlertsEnabled)
-                        .font(.body)
-                    Toggle("Visual (colour the heart rate)", isOn: $viewModel.zoneVisualAlertsEnabled)
-                        .font(.body)
-                }
-
-                // Interval Notifications
-                Section(header: Text("Interval Notifications").font(.headline)) {
-                    Toggle("Notification at Start of Interval", isOn: $viewModel.notificationsEnabled)
-                        .font(.body)
-
-                    if viewModel.notificationPermissionState == .denied {
-                        permissionDeniedView(
-                            "Notifications are denied for N4x4. Enable them in Settings to receive interval and reminder alerts.",
-                            viewModel: viewModel
-                        )
-                    }
-                }
-
-                // Reminder Notifications
-                Section(header: Text("Reminder Notifications").font(.headline)) {
-                    Toggle("Reminder Notifications", isOn: $viewModel.workoutRemindersEnabled)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Select workout days")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            ForEach(TimerViewModel.reminderWeekdayOptions, id: \.value) { option in
-                                Button(action: {
-                                    viewModel.toggleWeekday(option.value)
-                                }) {
-                                    Text(String(option.title.prefix(3)))
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(viewModel.isWeekdaySelected(option.value) ? .white : .primary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(viewModel.isWeekdaySelected(option.value) ? Color.accentColor : Color.gray.opacity(0.2))
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            
-                            if !viewModel.selectedWeekdays.isEmpty {
-                                Text("\(viewModel.selectedWeekdays.count) day\(viewModel.selectedWeekdays.count == 1 ? "" : "s") selected per week")
-                                    .font(.footnote)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-
-                    if hasConsecutiveDays(viewModel.selectedWeekdays) {
-                        Label(
-                            "Consecutive days aren't recommended — allow 48–72 hours of recovery between sessions.",
-                            systemImage: "exclamationmark.triangle.fill"
-                        )
-                        .font(.footnote)
-                        .foregroundColor(.orange)
-                    }
-
-                    Text("Pick the style that feels easiest to keep.")
-                        .font(.footnote)
-                        .foregroundColor(.gray)
-
-                    if viewModel.notificationPermissionState == .denied {
-                        permissionDeniedView(
-                            "Reminder notifications are denied for N4x4. You can still choose a schedule and enable alerts later in Settings.",
-                            viewModel: viewModel
-                        )
-                    }
-                }
-
-                // Heart Rate Guide
-                Section(header: Text("Heart Rate Guide").font(.headline)) {
-                    HeartRateGuidanceCard(viewModel: viewModel, showInstructions: false)
-                        .listRowInsets(EdgeInsets())
-                }
-
-                // VO₂ max goal
-                Section(header: Text("VO₂ Max Goal").font(.headline)) {
-                    Picker("Biological Sex", selection: $viewModel.userBiologicalSexRaw) {
-                        ForEach(BiologicalSex.allCases, id: \.rawValue) { sex in
-                            Text(sex.rawValue).tag(sex.rawValue)
-                        }
-                    }
-
-                    Picker("Goal", selection: $viewModel.vo2TargetTierRaw) {
-                        Text("None").tag("")
-                        ForEach(VO2TargetTier.allCases, id: \.rawValue) { tier in
-                            let value = TimerViewModel.vo2TargetValue(
-                                age: viewModel.userAge,
-                                sex: viewModel.userBiologicalSex,
-                                tier: tier
-                            )
-                            Text("\(tier.rawValue) — \(Int(value)) mL/kg/min").tag(tier.rawValue)
-                        }
-                    }
-
-                    if let target = viewModel.vo2MaxTarget, let tier = viewModel.vo2TargetTier {
-                        Text("Target: \(Int(target)) mL/kg/min (\(tier.description))")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                // Apple Health
-                Section(header: Text("Apple Health").font(.headline)) {
-                    Toggle("Enable Apple Health", isOn: $viewModel.healthKitEnabled)
-                        .onChange(of: viewModel.healthKitEnabled) { _, enabled in
-                            if enabled {
-                                viewModel.requestHealthKitAuthorizationIfNeeded()
-                            }
-                        }
-
-                    if viewModel.healthKitEnabled {
-                        Toggle("Log Workouts to Apple Health", isOn: $viewModel.logWorkoutsToHealthKit)
-                    }
-
-                    if viewModel.healthKitPermissionState == .denied {
-                        permissionDeniedView(
-                            "Apple Health access is denied. Enable workout and VO₂ permissions in Settings to sync completed sessions.",
-                            viewModel: viewModel
-                        )
-                    }
-
-                    Button("Refresh VO₂ max Data") {
-                        viewModel.fetchVO2MaxSamples()
-                    }
-                    .disabled(!viewModel.healthKitEnabled)
-
-                    Text(viewModel.healthAuthorizationGranted ? "Connected" : "Not connected")
-                        .font(.footnote)
-                        .foregroundColor(viewModel.healthAuthorizationGranted ? .green : .secondary)
-                }
-
-                // Onboarding
-                Section(header: Text("Onboarding").font(.headline)) {
-                    Text("You can replay the first-run guide any time.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-
-                    Button("Replay Onboarding") {
-                        hasCompletedOnboarding = false
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-
-                // Reset
-                Section(header: Text("Reset").font(.headline)) {
-                    Button(action: {
-                        showResetAlert = true
-                    }) {
-                        Text("Reset to Defaults")
-                            .foregroundColor(.red)
-                    }
-                }
-            }
-            .navigationTitle("Settings")
-            .navigationBarItems(trailing: Group {
-                if !embedded {
-                    Button("Done") { presentationMode.wrappedValue.dismiss() }
-                }
-            })
-            .alert(isPresented: $showResetAlert) {
-                Alert(
-                    title: Text("Reset to Defaults"),
-                    message: Text("Are you sure you want to reset all settings to their default values?"),
-                    primaryButton: .destructive(Text("Reset")) {
-                        viewModel.resetSettingsToDefaults()
-                    },
-                    secondaryButton: .cancel()
-                )
-            }
-            .onAppear {
-                viewModel.refreshNotificationPermissionState()
-                viewModel.refreshHealthKitAuthorizationState()
-                if viewModel.healthKitEnabled {
-                    viewModel.fetchVO2MaxSamples()
-                }
-            }
-            .sheet(isPresented: $showTips) {
-                TipsView()
-            }
-            .sheet(isPresented: $showWatchHelp) {
-                WatchTroubleshootingView(viewModel: viewModel)
-            }
-            .sheet(isPresented: $showMonitorSheet) {
-                HeartRateMonitorSheet(manager: viewModel.bleHeartRateManager)
-            }
+        SettingsRow(icon: "dot.radiowaves.left.and.right", tint: .teal, title: "Heart Rate Monitor",
+                    value: manager.hasRememberedMonitor ? "Paired" : "Not paired") {
+            HeartRateMonitorSettingsView(viewModel: viewModel)
         }
-    }
-
-    // MARK: - Apple Watch status row
-
-    private var watchStatusIcon: String {
-        switch viewModel.watchConnectionStatus {
-        case .noWatchPaired, .appNotInstalled: return "applewatch.slash"
-        case .notReachable:                    return "applewatch"
-        case .connected:
-            return viewModel.currentHeartRate == nil ? "applewatch" : "applewatch.radiowaves.left.and.right"
-        }
-    }
-
-    private var watchStatusTint: Color {
-        switch viewModel.watchConnectionStatus {
-        case .noWatchPaired:   return .secondary
-        case .appNotInstalled: return .orange
-        case .notReachable:    return .secondary
-        case .connected:       return viewModel.currentHeartRate == nil ? .secondary : .green
-        }
-    }
-
-    private var watchStatusTitle: String {
-        switch viewModel.watchConnectionStatus {
-        case .noWatchPaired:   return "No Apple Watch paired"
-        case .appNotInstalled: return "Watch app not installed"
-        case .notReachable:    return "Watch app installed"
-        case .connected:
-            return viewModel.currentHeartRate == nil ? "Connected" : "Connected · HR streaming"
-        }
-    }
-
-    private func hasConsecutiveDays(_ days: [Int]) -> Bool {
-        guard days.count >= 2 else { return false }
-        let sorted = days.sorted()
-        for i in 0..<(sorted.count - 1) {
-            if sorted[i + 1] - sorted[i] == 1 { return true }
-        }
-        return sorted.contains(7) && sorted.contains(1)
-    }
-
-    @ViewBuilder
-    private func permissionDeniedView(_ message: String, viewModel: TimerViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(message)
-                .font(.footnote)
-                .foregroundColor(.secondary)
-
-            Button("Open Settings") {
-                viewModel.openAppSettings()
-            }
-            .font(.footnote)
-        }
-        .padding(.vertical, 4)
     }
 }

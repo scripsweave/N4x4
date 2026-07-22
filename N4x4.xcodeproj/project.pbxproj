@@ -10,6 +10,7 @@
 		3D5014002FFC30D100AB87B8 /* N4x4Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 3D5013F62FFC30CF00AB87B8 /* N4x4Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3D516A652CAB347F001279C0 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D516A642CAB347F001279C0 /* HelpView.swift */; };
 		3DD9A5BE2F4CB5C70022AC16 /* StreakCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */; };
+		5E52000000000000000000C1 /* SettingsSubpages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E52000000000000000000C2 /* SettingsSubpages.swift */; };
 		3DF13A452C9389C100DD18E7 /* N4x4App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A442C9389C100DD18E7 /* N4x4App.swift */; };
 		3DF13A472C9389C100DD18E7 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A462C9389C100DD18E7 /* ContentView.swift */; };
 		3DF13A492C9389C200DD18E7 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A482C9389C200DD18E7 /* Assets.xcassets */; };
@@ -112,6 +113,7 @@
 		3D516A642CAB347F001279C0 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		3D53FCC72CA0667200E4A09A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakCard.swift; sourceTree = "<group>"; };
+		5E52000000000000000000C2 /* SettingsSubpages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSubpages.swift; sourceTree = "<group>"; };
 		3DF13A412C9389C100DD18E7 /* N4x4.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = N4x4.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3DF13A442C9389C100DD18E7 /* N4x4App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4App.swift; sourceTree = "<group>"; };
 		3DF13A462C9389C100DD18E7 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -223,6 +225,7 @@
 			isa = PBXGroup;
 			children = (
 				3DD9A5BD2F4CB5C70022AC16 /* StreakCard.swift */,
+				5E52000000000000000000C2 /* SettingsSubpages.swift */,
 				3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */,
 				3D53FCC72CA0667200E4A09A /* Info.plist */,
 				3DF13A7E2C94D25F00DD18E7 /* Sounds */,
@@ -531,6 +534,7 @@
 				3DFEED000000000000000A01 /* HomeWorkoutRedesign.swift in Sources */,
 				3D516A652CAB347F001279C0 /* HelpView.swift in Sources */,
 				3DF13A752C938A9E00DD18E7 /* SettingsView.swift in Sources */,
+				5E52000000000000000000C1 /* SettingsSubpages.swift in Sources */,
 				3DF13A452C9389C100DD18E7 /* N4x4App.swift in Sources */,
 				3DF13A6F2C938A4F00DD18E7 /* Interval.swift in Sources */,
 				3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */,
@@ -625,7 +629,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.5;
+				MARKETING_VERSION = 4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -662,7 +666,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.5;
+				MARKETING_VERSION = 4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -826,7 +830,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.5;
+				MARKETING_VERSION = 4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -868,7 +872,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.5;
+				MARKETING_VERSION = 4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -967,7 +971,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.5;
+				MARKETING_VERSION = 4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -993,7 +997,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.5;
+				MARKETING_VERSION = 4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

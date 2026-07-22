@@ -1,8 +1,17 @@
 What's New in N4x4
 
-New Advanced Training Tips
-- "Keep Your Zone 2 Base" — don't drop steady-state cardio when doing 4x4s. Zone 2 builds the aerobic foundation that supports your high-intensity gains.
-- "Sleep Is Where You Improve" — cardiac remodelling happens during recovery, not during the workout. Poor sleep can stall your VO2 max progress.
+Redesigned Settings
+- Settings is now organised like the iOS Settings app: grouped, searchable, and two taps to anything.
+- Your most-used settings — default workout and training days — sit right at the top and show their current value at a glance.
+- Reminders are now individually controllable: night-before, morning-of, and comeback nudges.
 
-Updated Website
-- Two new science cards: Stroke Volume and Oxygen Extraction, with research on how the protocol can reverse age-related cardiac decline.
+Choose Your Default Workout
+- Pick the workout you actually do — Cycle, Run, Kettlebells, and more — and it's pre-selected every time you log a session.
+- Kettlebells is now a fully supported exercise, with setup guidance and per-interval rep logging.
+
+Better Interval Haptics
+- A haptic countdown before every interval change: two short taps, then a long buzz as the new interval starts — on both iPhone and Apple Watch, whatever your audio setting.
+
+Plus
+- Training Tips now lives on the Home screen.
+- The post-workout summary shows the workout type right at the top.
