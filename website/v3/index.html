@@ -175,9 +175,7 @@
                     <li class="reveal d3"><strong>Controls under your thumb</strong><span>Start, pause and skip mid-stride. The whole workout lives on the wrist.</span></li>
                 </ul>
                 <p class="watch-note reveal d3">
-                    No Apple Watch? N4x4 takes live heart rate from AirPods Pro 3, Garmin,
-                    WHOOP, Polar, and any Bluetooth strap or armband — with an in-app guide
-                    for every model.
+                    No Apple Watch? Any of the heart-rate sources below works just as well.
                 </p>
             </div>
             <div class="watch-stage reveal d1">
@@ -208,6 +206,101 @@
                 </div>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- ───────────────── SENSORS ───────────────── -->
+<section class="section" id="sensors">
+    <div class="rail"><span class="rail-label">The Sensors</span></div>
+    <div class="section-inner sensors-inner">
+        <p class="label reveal">Bring your own heart rate</p>
+        <h2 class="display sensors-head reveal d1">Works with what's already<br>on your wrist. Or in your ears.</h2>
+        <p class="sensors-sub reveal d2">
+            If it can broadcast heart rate over Bluetooth, N4x4 can coach from it.
+            Pair once; your live BPM drives every interval.
+        </p>
+
+        <div class="sensors-featured">
+            <div class="sensor-tile reveal">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <rect x="24" y="3"  width="16" height="9" rx="3"/>
+                    <rect x="24" y="52" width="16" height="9" rx="3"/>
+                    <rect x="18" y="14" width="28" height="36" rx="9"/>
+                    <rect x="22" y="19" width="20" height="26" rx="5" class="soft"/>
+                    <rect x="46" y="22" width="4" height="8" rx="2"/>
+                    <path class="heart" d="M32 40c-3.4-2.6-6-5-6-7.6a3.4 3.4 0 0 1 6-2.1 3.4 3.4 0 0 1 6 2.1c0 2.6-2.6 5-6 7.6z"/>
+                </svg>
+                <strong>Apple Watch</strong>
+                <span>Series 4 or later. Install the watch app and heart rate streams automatically — nothing to pair.</span>
+            </div>
+            <div class="sensor-tile reveal d1">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <path d="M22 15a8 8 0 0 1 8 8c0 3-1.5 5-4 6.5"/>
+                    <circle cx="22" cy="23" r="8"/>
+                    <rect x="19" y="29" width="7" height="18" rx="3.5"/>
+                    <path d="M42 15a8 8 0 0 0-8 8c0 3 1.5 5 4 6.5"/>
+                    <circle cx="42" cy="23" r="8"/>
+                    <rect x="38" y="29" width="7" height="18" rx="3.5"/>
+                    <path class="accent" d="M28 56h2l2-4 3 7 2.5-5 1.5 2h3" fill="none"/>
+                </svg>
+                <strong>AirPods Pro 3</strong>
+                <span>The earbuds you already wear double as your monitor. Enable once in Settings (iOS 26).</span>
+            </div>
+            <div class="sensor-tile reveal d2">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <rect x="26" y="2"  width="12" height="8" rx="3"/>
+                    <rect x="26" y="54" width="12" height="8" rx="3"/>
+                    <circle cx="32" cy="32" r="17"/>
+                    <circle cx="32" cy="32" r="12.5" class="soft"/>
+                    <rect x="50" y="25" width="4" height="6" rx="2"/>
+                    <path class="accent" d="M25 32h4l2-5 3 9 2-4h4" fill="none"/>
+                </svg>
+                <strong>Garmin</strong>
+                <span>Forerunner, fēnix, epix, Instinct, Venu, vívoactive — switch on Broadcast Heart Rate.</span>
+            </div>
+            <div class="sensor-tile reveal d3">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                    <rect x="14" y="20" width="36" height="24" rx="12"/>
+                    <rect x="24" y="14" width="16" height="10" rx="3"/>
+                    <path d="M28 18h8" class="soft"/>
+                    <path class="accent" d="M24 32h4l2-4 3 8 2.5-6 1.5 2h4" fill="none"/>
+                </svg>
+                <strong>WHOOP</strong>
+                <span>WHOOP 4.0, 5.0 and MG. Turn on HR Broadcast in the WHOOP app and you're connected.</span>
+            </div>
+        </div>
+
+        <div class="sensor-ledger reveal">
+            <div class="ledger-group">
+                <p class="label">Polar</p>
+                <p>H10 · H9 · Verity Sense · OH1 · Vantage · Grit X · Pacer · Ignite (heart-rate sharing on)</p>
+            </div>
+            <div class="ledger-group">
+                <p class="label">Wahoo</p>
+                <p>TICKR · TICKR X · TICKR Fit</p>
+            </div>
+            <div class="ledger-group">
+                <p class="label">COROS</p>
+                <p>Heart Rate Monitor armband · PACE · APEX · VERTIX (broadcast mode)</p>
+            </div>
+            <div class="ledger-group">
+                <p class="label">Suunto</p>
+                <p>Race · Vertical · 9 Peak (broadcast mode) · Smart Sensor</p>
+            </div>
+            <div class="ledger-group">
+                <p class="label">Straps &amp; armbands</p>
+                <p>Garmin HRM-Dual · HRM-Pro · Scosche Rhythm24 · Rhythm+ · Powerbeats Pro 2</p>
+            </div>
+            <div class="ledger-group">
+                <p class="label">Everything else</p>
+                <p>Any monitor speaking the standard Bluetooth heart-rate profile connects the same way.</p>
+            </div>
+        </div>
+
+        <p class="sensors-note reveal">
+            The in-app device guide has exact, per-model setup steps — and flags older
+            watches that only broadcast over ANT+, which iPhones can't receive.
+        </p>
     </div>
 </section>
 
@@ -328,10 +421,9 @@
                 you when the week starts slipping.</p>
             </div>
             <div class="reveal d1">
-                <span class="label">Sensors</span>
-                <p>Apple Watch, AirPods Pro 3, Garmin, WHOOP, Polar, Wahoo, COROS — if it
-                broadcasts heart rate over Bluetooth, N4x4 can coach from it. An in-app
-                guide covers setup per model.</p>
+                <span class="label">Milestones</span>
+                <p>A weekly streak that keeps you honest, and milestone celebrations at 1, 5,
+                10, 25, 50 and 100 sessions. Consistency, made visible.</p>
             </div>
             <div class="reveal">
                 <span class="label">Any cardio</span>

@@ -475,6 +475,62 @@ a { color: inherit; }
     font-family: var(--rounded);
 }
 
+/* ── Sensors ────────────────────────────────────────────────── */
+
+.sensors-inner { max-width: 1200px; }
+.sensors-head { font-size: clamp(34px, 4.2vw, 58px); margin: 24px 0 12px; }
+.sensors-sub { font-size: 15px; color: var(--bone-dim); max-width: 520px; }
+
+.sensors-featured {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(20px, 3vw, 44px);
+    margin-top: clamp(48px, 8vh, 84px);
+}
+.sensor-tile {
+    border-top: 1px solid var(--hairline);
+    padding-top: 26px;
+}
+.sensor-tile svg {
+    width: 64px;
+    height: 64px;
+    fill: none;
+    stroke: var(--bone);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    margin-bottom: 18px;
+}
+.sensor-tile svg .soft { stroke: var(--bone-faint); }
+.sensor-tile svg .accent { stroke: var(--accent); }
+.sensor-tile svg .heart { fill: var(--accent); stroke: none; }
+.sensor-tile strong {
+    display: block;
+    font-weight: 500;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+.sensor-tile span { font-size: 13.5px; color: var(--bone-dim); line-height: 1.6; display: block; }
+
+.sensor-ledger {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: clamp(24px, 3vw, 48px);
+    margin-top: clamp(48px, 8vh, 84px);
+    border-top: 1px solid var(--hairline);
+    padding-top: 34px;
+}
+.ledger-group .label { margin-bottom: 8px; }
+.ledger-group p:not(.label) { font-size: 14px; color: var(--bone-dim); line-height: 1.7; max-width: 30em; }
+
+.sensors-note {
+    margin-top: clamp(36px, 6vh, 60px);
+    font-size: 13px;
+    color: var(--bone-faint);
+    max-width: 560px;
+    line-height: 1.6;
+}
+
 /* ── Evidence (light) ───────────────────────────────────────── */
 
 .on-grey {
@@ -685,6 +741,10 @@ a { color: inherit; }
     .chapter.flip .chapter-body { order: 1; }
 
     .origin-grid, .watch-grid, .studies, .app-facts { grid-template-columns: 1fr; }
+    .sensors-featured { grid-template-columns: 1fr 1fr; }
+    .sensor-ledger { grid-template-columns: 1fr; gap: 24px; }
+    .sensors-head br { display: none; }
+    .sensors-head { font-size: clamp(30px, 7.5vw, 58px); }
     .screens { grid-template-columns: 1fr; max-width: 340px; }
     .watch-stage { order: -1; }
     .hero-scroll { display: none; }
