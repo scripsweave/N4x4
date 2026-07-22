@@ -4,9 +4,10 @@
 // into the app. AirPods deliberately do not broadcast the standard Bluetooth
 // heart-rate profile, so this Apple-sanctioned path is the only way in.
 //
-// Mirrors the watch WorkoutManager: the session is ended WITHOUT finishing
-// the builder, so no workout is saved from here — the app's manual HealthKit
-// save (saveCompletedWorkoutToHealthKit) remains the single workout record.
+// Mirrors the watch WorkoutManager: on end the builder is explicitly
+// DISCARDED (ending alone is not enough — the system finalizes collected
+// data as a workout), so no workout is saved from here — the app's manual
+// HealthKit save (saveCompletedWorkoutToHealthKit) is the single workout record.
 
 import Foundation
 import HealthKit

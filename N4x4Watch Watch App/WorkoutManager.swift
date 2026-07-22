@@ -38,6 +38,20 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     // MARK: - Session lifecycle
 
+    /// Cold-launch cleanup: if a previous run left a workout session behind
+    /// (crash, force-quit mid-workout), watchOS offers it back for recovery —
+    /// and would otherwise finalize it as a workout in Health. We never save
+    /// from the watch, so end and discard it. Call once at app launch, before
+    /// any session starts.
+    func discardAbandonedSession() {
+        healthStore.recoverActiveWorkoutSession { [weak self] recovered, _ in
+            guard self != nil, let recovered else { return }
+            let builder = recovered.associatedWorkoutBuilder()
+            recovered.end()
+            builder.discardWorkout()
+        }
+    }
+
     func startWorkout() {
         guard !isSessionActive else { return }
 
@@ -104,14 +118,28 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                         date: Date) {
         DispatchQueue.main.async {
             self.isSessionActive = (toState == .running)
-            if toState == .ended { self.heartRate = 0 }
+            if toState == .ended {
+                self.heartRate = 0
+                // Never save from here — merely ending the session is NOT
+                // enough, watchOS finalizes the collected data as a workout,
+                // duplicating the phone's manual HealthKit save (the single
+                // workout record). Discard explicitly, like the phone manager.
+                self.builder?.discardWorkout()
+                self.builder = nil
+                self.session = nil
+            }
         }
     }
 
     func workoutSession(_ workoutSession: HKWorkoutSession,
                         didFailWithError error: Error) {
         print("[WorkoutManager] session error: \(error)")
-        DispatchQueue.main.async { self.isSessionActive = false }
+        DispatchQueue.main.async {
+            self.isSessionActive = false
+            self.builder?.discardWorkout()
+            self.builder = nil
+            self.session = nil
+        }
     }
 }
 

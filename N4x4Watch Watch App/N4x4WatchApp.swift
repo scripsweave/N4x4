@@ -20,6 +20,7 @@ struct N4x4WatchApp: App {
                 .onAppear {
                     sessionManager.activate()
                     workoutManager.requestAuthorization { _ in }
+                    workoutManager.discardAbandonedSession()
                 }
         }
     }

@@ -20,3 +20,4 @@ Better Interval Haptics
 Plus
 - Training Tips now lives on the Home screen.
 - The post-workout summary shows the workout type right at the top.
+- Fixed: sessions tracked with the Apple Watch app no longer log a duplicate workout in Apple Health — every session is exactly one workout.

@@ -61,7 +61,10 @@ rendered to match the real `WatchTimerView` UI. Upload one that matches an
 accepted size — **`watch-ultra3-422x514.png`** or `watch-ultra-410x502.png` are
 the safe defaults.
 
-Regenerate from `make-watch-screen.html` (headless Chrome, one render per size):
+Regenerate from `make-watch-screen.html` (headless Chrome, one render per size).
+**Render at 2× and downsample** — Chrome's new headless mode clamps the window
+to ~500×500 minimum, so a 1× render at these sizes lays out for a 500px
+viewport and crops it, pushing everything off-centre:
 
 ```
 cd AppStore
@@ -71,8 +74,9 @@ for s in watch-44mm-368x448:368:448 watch-45mm-396x484:396:484 \
          watch-ultra3-422x514:422:514; do
   IFS=: read name w h <<< "$s"
   "$CHROME" --headless=new --screenshot="watch-screenshots/$name.png" \
-    --window-size=$w,$h --hide-scrollbars --force-device-scale-factor=1 \
+    --window-size=$((w*2)),$((h*2)) --hide-scrollbars --force-device-scale-factor=2 \
     "file://$(pwd)/make-watch-screen.html"
+  sips -z $h $w "watch-screenshots/$name.png" --out "watch-screenshots/$name.png"
 done
 ```
 
@@ -103,21 +107,25 @@ live face is the same one rendered on the site, so **the advertised watch and
 the real app UI match** — keep them in sync (see
 `docs/SESSION-HANDOFF-2026-07-09.md`).
 
-Screen cutout in that frame: left 12.1 %, top 21.7 %, width 70.0 %, height 59.3 %.
-
 ## Regenerating `03-watch.png`
 
 ```
+python3 AppStore/make-framed-watch.py    # only if the face changed
 python3 AppStore/make-watch-screenshot.py
+sips -z 2778 1284 AppStore/screenshots/03-watch.png \
+  --out AppStore/screenshots/6.7in/03-watch.png
 ```
 
-It composites `assets/watch-ultra-framed.png` onto the family background
-(near-black `#0A0A0C` + amber/blue glow) with the caption, and writes
-`screenshots/03-watch.png`. To change the watch face itself, rebuild
-`assets/watch-ultra-framed.png`: render `make-watch-face.html` (the button-less
-face) at 2× the cutout, then composite it into the transparent screen of
-`../website/images/watch-ultra-frame.png` at left 12.1%, top 21.7%, width 70.0%,
-height 59.3%, and re-run this script. The face must match `make-watch-screen.html`.
+`make-watch-screenshot.py` composites `assets/watch-ultra-framed.png` onto the
+family background (near-black `#0A0A0C` + amber/blue glow) with the caption.
+`make-framed-watch.py` rebuilds that asset: it flood-fills the transparent
+screen opening of `../website/images/watch-ultra-frame.png` to get an exact
+mask, renders `make-watch-face.html` (the button-less face) at 2× (see the
+headless-Chrome clamp note above), clips the face to the mask, and composites
+the frame on top — so the face can never poke past the bezel and needs no
+hand-measured cutout percentages. The face must match `make-watch-screen.html`.
+`06-heart-rate.png` embeds the same framed asset, so re-render it too after a
+face change.
 
 Requires Pillow (`pip install pillow`) and macOS Helvetica Neue.
 
