@@ -30,6 +30,7 @@ enum WatchMessageKey {
     static let hrHigh               = "hrHigh"              // Int (BPM) — current phase target ceiling
     static let workoutComplete      = "workoutComplete"     // Bool
     static let zoneHapticEnabled    = "zoneHapticEnabled"   // Bool — phone-owned setting, mirrored to Watch
+    static let intervalHapticsEnabled = "intervalHapticsEnabled" // Bool — phone-owned setting, mirrored to Watch
 
     // ── Heart rate: Watch → Phone ─────────────────────────────
     static let heartRate            = "hr_update"

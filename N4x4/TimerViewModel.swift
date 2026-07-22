@@ -3,6 +3,7 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import CoreHaptics
 import UserNotifications
 import HealthKit
 import ActivityKit
@@ -41,6 +42,7 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
     case norwegian4x4 = "Norwegian 4x4"
     case run = "Run"
     case cycle = "Cycle"
+    case kettlebell = "Kettlebells"
     case rowing = "Rowing"
     case treadmill = "Treadmill"
     case hillSprints = "Hill sprints"
@@ -52,6 +54,13 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    /// The list offered in pickers (post-workout Type and Settings default).
+    /// `norwegian4x4` names the protocol, not an exercise — it stays in the
+    /// enum only so logs saved before 4.5 still decode and display.
+    static var selectableCases: [WorkoutType] {
+        allCases.filter { $0 != .norwegian4x4 }
+    }
+
     /// Modality used to choose the performance metric (speed vs cadence vs level).
     /// Every type maps to one so the performance section is always available;
     /// abstract types fall back to `.other` (speed).
@@ -60,6 +69,7 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
         case .treadmill:               return .treadmill
         case .run, .hillSprints:       return .outdoorRun
         case .cycle:                   return .bike
+        case .kettlebell:              return .kettlebell
         case .rowing:                  return .rowing
         case .stairs:                  return .stairClimber
         case .norwegian4x4, .jumpRope, .circuit, .sports, .other:
@@ -191,6 +201,7 @@ enum TrainingModality: String, CaseIterable, Codable {
     case rowing       = "Rowing Machine"
     case bike         = "Stationary Bike"
     case stairClimber = "Stair Climber"
+    case kettlebell   = "Kettlebells"
     case other        = "Other"
 
     var icon: String {
@@ -200,6 +211,7 @@ enum TrainingModality: String, CaseIterable, Codable {
         case .rowing:       return "drop.fill"
         case .bike:         return "bicycle"
         case .stairClimber: return "arrow.up.circle.fill"
+        case .kettlebell:   return "figure.strengthtraining.traditional"
         case .other:        return "ellipsis.circle.fill"
         }
     }
@@ -211,6 +223,7 @@ enum TrainingModality: String, CaseIterable, Codable {
         case .rowing:       return "Full body power"
         case .bike:         return "Low impact"
         case .stairClimber: return "Vertical power"
+        case .kettlebell:   return "Strength meets cardio"
         case .other:        return "Any cardio works"
         }
     }
@@ -227,6 +240,8 @@ enum TrainingModality: String, CaseIterable, Codable {
             return "Adjust the seat so your leg is almost fully extended at the bottom of the pedal stroke."
         case .stairClimber:
             return "Stand upright. Do not lean your weight onto the side handles — this reduces the load and defeats the purpose."
+        case .kettlebell:
+            return "Pick a bell you can swing continuously for 4 minutes with solid form — lighter than you think (12–16 kg is a common start). Clear space around you and keep your spine neutral."
         case .other:
             return "Choose any continuous cardio activity — elliptical, swimming, jump rope, cross-trainer. Warm up for 5 minutes at moderate effort before starting intervals."
         }
@@ -244,6 +259,8 @@ enum TrainingModality: String, CaseIterable, Codable {
             return "Maintain a high, consistent RPM — 80+ on a road bike or 60+ on an Air/Assault bike. Use your arms on an Air Bike to share the load."
         case .stairClimber:
             return "Increase speed until you can't breathe through your nose. Take full, consistent steps — not short choppy ones."
+        case .kettlebell:
+            return "Swing (or clean, or snatch) at a steady, continuous rhythm — hips drive, arms guide. If your grip or lower back fails before your lungs do, the bell is too heavy."
         case .other:
             return "Push to 85–95% of your max heart rate. Speaking more than a few words should feel impossible. Maintain this intensity for the full 4 minutes."
         }
@@ -261,6 +278,8 @@ enum TrainingModality: String, CaseIterable, Codable {
             return "Pedal very slowly with zero resistance. Do not stop moving your legs."
         case .stairClimber:
             return "Drop the machine to Level 1 or 2. Focus on standing tall to open up your lungs."
+        case .kettlebell:
+            return "Park the bell and keep walking — march in place, shake out your arms and grip, breathe deeply. Don't sit down."
         case .other:
             return "Drop to 60–70% max heart rate — a pace where you can speak in short sentences. Keep moving; don't stop completely."
         }
@@ -273,6 +292,7 @@ enum TrainingModality: String, CaseIterable, Codable {
         case .rowing:       return .rowing
         case .bike:         return .cycle
         case .stairClimber: return .stairs
+        case .kettlebell:   return .kettlebell
         case .other:        return .other
         }
     }
@@ -294,6 +314,9 @@ enum TrainingModality: String, CaseIterable, Codable {
                                   imperialUnit: nil, imperialStep: nil, imperialRange: nil)
         case .stairClimber:
             return ModalityMetric(label: "Level", unit: "level", step: 1, range: 1...20,
+                                  imperialUnit: nil, imperialStep: nil, imperialRange: nil)
+        case .kettlebell:
+            return ModalityMetric(label: "Reps", unit: "reps", step: 5, range: 10...250,
                                   imperialUnit: nil, imperialStep: nil, imperialRange: nil)
         }
     }
@@ -467,7 +490,11 @@ class TimerViewModel: ObservableObject {
     }
 
     @AppStorage("preventSleep") var preventSleep: Bool = true
-    @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true
+    // Interval haptics run on BOTH iPhone and Apple Watch and are independent
+    // of the audio mode. Mirrored to the Watch like the zone-haptic setting.
+    @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true {
+        didSet { broadcastStateToWatch() }
+    }
     @AppStorage("liveActivitiesEnabled") var liveActivitiesEnabled: Bool = true
 
     // Heart-rate zone alerts (require a paired Apple Watch streaming HR).
@@ -581,6 +608,42 @@ class TimerViewModel: ObservableObject {
     var preferredModality: TrainingModality? {
         get { TrainingModality(rawValue: preferredModalityRaw) }
         set { preferredModalityRaw = newValue?.rawValue ?? "" }
+    }
+
+    /// The workout type pre-selected when logging a completed session,
+    /// changeable in Settings. Empty for users who onboarded before this
+    /// existed — `resolvedDefaultWorkoutType` then falls back to their
+    /// onboarding modality choice.
+    @AppStorage("defaultWorkoutTypeRaw") var defaultWorkoutTypeRaw: String = ""
+
+    var defaultWorkoutType: WorkoutType? {
+        get { WorkoutType(rawValue: defaultWorkoutTypeRaw) }
+        set { defaultWorkoutTypeRaw = newValue?.rawValue ?? "" }
+    }
+
+    var resolvedDefaultWorkoutType: WorkoutType {
+        defaultWorkoutType ?? preferredModality?.workoutType ?? .other
+    }
+
+    /// Single entry point for choosing how the user trains (onboarding and
+    /// Settings both funnel through here) so the modality-driven guidance and
+    /// the default log type never disagree.
+    func setPreferredModality(_ modality: TrainingModality?) {
+        preferredModality = modality
+        defaultWorkoutType = modality?.workoutType
+        if !isRunning && !showPostWorkoutSummary {
+            selectedWorkoutType = resolvedDefaultWorkoutType
+        }
+    }
+
+    /// Settings counterpart: picking a default workout type also retargets the
+    /// modality so exercise guidance (Tips, onboarding) follows along.
+    func setDefaultWorkoutType(_ type: WorkoutType) {
+        defaultWorkoutType = type
+        preferredModality = type.trainingModality
+        if !isRunning && !showPostWorkoutSummary {
+            selectedWorkoutType = type
+        }
     }
 
     // Interval notifications
@@ -698,7 +761,7 @@ class TimerViewModel: ObservableObject {
     @AppStorage("workoutLogEntriesData") private var workoutLogEntriesData: String = "[]"
     @AppStorage("shownMilestonesData") private var shownMilestonesData: String = "[]"
     @Published var workoutLogEntries: [WorkoutLogEntry] = []
-    @Published var selectedWorkoutType: WorkoutType = .norwegian4x4
+    @Published var selectedWorkoutType: WorkoutType = .other
     @Published var workoutNotesDraft: String = ""
 
     // Performance logging draft (post-workout summary, Phase 2). Values are in
@@ -1126,6 +1189,9 @@ class TimerViewModel: ObservableObject {
     var intervals: [Interval] = []
     var timer: AnyCancellable?
     var player: AVAudioPlayer?
+    /// Lazily created for the long interval-change buzz; kept so repeated
+    /// buzzes don't rebuild the engine. Nil on devices without haptics.
+    private var hapticEngine: CHHapticEngine?
     var intervalEndTime: Date?
     var workoutStartDate: Date?
     var workoutCompletionDate: Date?
@@ -1138,6 +1204,10 @@ class TimerViewModel: ObservableObject {
     // Voice prompt state — reset on every interval change, reset, and skip
     private var halfwayPromptFired = false
     private var tenSecondPromptFired = false
+    // Pre-interval countdown haptics: one flag per tap so each fires once per
+    // interval (reset alongside the voice-prompt flags).
+    private var countdownTap1Fired = false
+    private var countdownTap2Fired = false
 
     var maximumHeartRate: Int {
         if useCustomMaxHR && customMaxHR > 0 {
@@ -1274,6 +1344,7 @@ class TimerViewModel: ObservableObject {
 
         setupIntervals()
         loadWorkoutLogEntries()
+        selectedWorkoutType = resolvedDefaultWorkoutType
 
         // Apple Watch connectivity: the phone is the source of truth and
         // broadcasts timer state; the Watch sends commands and streamed HR back.
@@ -1468,6 +1539,12 @@ class TimerViewModel: ObservableObject {
                 speakTenSeconds()
             }
 
+            // Countdown haptics: two short taps as the interval boundary
+            // approaches. The long buzz plays at the transition itself; after
+            // the final interval nothing follows, so the taps stand alone.
+            if timeRemaining <= 3 { playCountdownTapIfNeeded(&countdownTap1Fired) }
+            if timeRemaining <= 2 { playCountdownTapIfNeeded(&countdownTap2Fired) }
+
             return
         }
 
@@ -1507,6 +1584,11 @@ class TimerViewModel: ObservableObject {
         timeRemaining = max(0, intervalEndCursor.timeIntervalSince(now))
 
         if advanced {
+            // Haptics are their own channel: the long buzz closes the countdown
+            // taps on every natural transition, independent of the audio mode
+            // (previously only manual skips buzzed).
+            resetPromptFlags()
+            triggerIntervalHaptic()
             recorderBeginCurrentInterval()
             if playAlarm {
                 playAlarmIfNeeded()
@@ -1537,7 +1619,7 @@ class TimerViewModel: ObservableObject {
         showCompletionMessage = false
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
 
-        selectedWorkoutType = preferredModality?.workoutType ?? .norwegian4x4
+        selectedWorkoutType = resolvedDefaultWorkoutType
         workoutNotesDraft = ""
 
         let finishedOnCooldown = intervals.indices.contains(currentIntervalIndex) && intervals[currentIntervalIndex].type == .cooldown
@@ -1564,8 +1646,13 @@ class TimerViewModel: ObservableObject {
     }
 
     func moveToNextInterval() {
+        // The long buzz belongs to a NEW interval starting — skipping the last
+        // interval goes straight to completion, which has its own (taps-only)
+        // haptic in finishWorkout.
+        if currentIntervalIndex + 1 < intervals.count {
+            triggerIntervalHaptic()
+        }
         resetPromptFlags()
-        triggerIntervalHaptic()
         if currentIntervalIndex + 1 < intervals.count {
             currentIntervalIndex += 1
             timeRemaining = intervals[currentIntervalIndex].duration
@@ -2218,6 +2305,7 @@ class TimerViewModel: ObservableObject {
         userBiologicalSexRaw = BiologicalSex.male.rawValue
         vo2TargetTierRaw = ""
         preferredModalityRaw = ""
+        defaultWorkoutTypeRaw = ""
 
         notificationsEnabled = false
         workoutRemindersEnabled = false
@@ -2474,14 +2562,59 @@ class TimerViewModel: ObservableObject {
         }
     }
 
+    /// Long buzz at the moment a new interval starts — the close of the
+    /// two-short-taps countdown played in the final 3 seconds.
     private func triggerIntervalHaptic() {
         guard hapticsEnabled else { return }
-        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        playLongHaptic()
     }
 
+    /// The workout's end is signalled by the two countdown taps alone — no
+    /// long buzz, since no new interval starts. If the last interval was
+    /// skipped the taps never fired, so play them back-to-back now.
     private func triggerCompletionHaptic() {
+        guard hapticsEnabled, !countdownTap1Fired else { return }
+        let generator = UIImpactFeedbackGenerator(style: .rigid)
+        generator.impactOccurred()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            generator.impactOccurred()
+        }
+    }
+
+    private func playCountdownTapIfNeeded(_ fired: inout Bool) {
+        guard !fired else { return }
+        fired = true
         guard hapticsEnabled else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+    }
+
+    /// A genuinely long (~0.6 s) vibration needs CoreHaptics; the transient
+    /// UIKit generators can only tap. Falls back to a heavy tap on devices
+    /// without a haptic engine (or if the engine fails to start).
+    private func playLongHaptic() {
+        if CHHapticEngine.capabilitiesForHardware().supportsHaptics {
+            if hapticEngine == nil { hapticEngine = try? CHHapticEngine() }
+            if let engine = hapticEngine {
+                do {
+                    try engine.start()
+                    let event = CHHapticEvent(
+                        eventType: .hapticContinuous,
+                        parameters: [
+                            CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                            CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
+                        ],
+                        relativeTime: 0,
+                        duration: 0.6
+                    )
+                    let pattern = try CHHapticPattern(events: [event], parameters: [])
+                    try engine.makePlayer(with: pattern).start(atTime: 0)
+                    return
+                } catch {
+                    // fall through to the transient tap
+                }
+            }
+        }
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
     }
 
     func playAlarmIfNeeded() {
@@ -2511,6 +2644,8 @@ class TimerViewModel: ObservableObject {
     private func resetPromptFlags() {
         halfwayPromptFired = false
         tenSecondPromptFired = false
+        countdownTap1Fired = false
+        countdownTap2Fired = false
     }
 
     /// Returns a natural-language string for a duration in seconds, e.g. "2 minutes", "1 minute and 30 seconds".

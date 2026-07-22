@@ -24,6 +24,7 @@ struct WatchTimerState: Equatable {
     var workoutComplete: Bool
     var currentIntervalIndex: Int
     var zoneHapticEnabled: Bool
+    var intervalHapticsEnabled: Bool
 
     /// While running, derive the countdown live from the absolute end-time so no
     /// per-second messages are needed. While paused, the end-time is a stale
@@ -69,7 +70,8 @@ struct WatchTimerState: Equatable {
         hrHigh: 0,
         workoutComplete: false,
         currentIntervalIndex: 0,
-        zoneHapticEnabled: true
+        zoneHapticEnabled: true,
+        intervalHapticsEnabled: true
     )
 }
 
@@ -194,7 +196,8 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             hrHigh:               p[WatchMessageKey.hrHigh]               as? Int    ?? 0,
             workoutComplete:      p[WatchMessageKey.workoutComplete]      as? Bool   ?? false,
             currentIntervalIndex: p[WatchMessageKey.currentIntervalIndex] as? Int    ?? 0,
-            zoneHapticEnabled:    p[WatchMessageKey.zoneHapticEnabled]    as? Bool   ?? true
+            zoneHapticEnabled:    p[WatchMessageKey.zoneHapticEnabled]    as? Bool   ?? true,
+            intervalHapticsEnabled: p[WatchMessageKey.intervalHapticsEnabled] as? Bool ?? true
         )
 
         // Clear any lingering zone-alert state when the workout stops/resets.

@@ -636,6 +636,8 @@ struct PostWorkoutSummaryRedesignView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     hero
 
+                    workoutTypeSection
+
                     if let series {
                         sectionTitle("SESSION")
                         SessionStripChart(series: series)
@@ -738,31 +740,37 @@ struct PostWorkoutSummaryRedesignView: View {
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surface))
     }
 
-    private var logSection: some View {
+    private var workoutTypeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("LOG THIS SESSION")
-            VStack(spacing: 10) {
-                HStack {
-                    Text("Type")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Palette.textSecondary)
-                    Spacer()
-                    Picker("Type", selection: $viewModel.selectedWorkoutType) {
-                        ForEach(WorkoutType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
+            sectionTitle("WORKOUT TYPE")
+            HStack {
+                Text("Type")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Palette.textSecondary)
+                Spacer()
+                Picker("Type", selection: $viewModel.selectedWorkoutType) {
+                    ForEach(WorkoutType.selectableCases) { type in
+                        Text(type.rawValue).tag(type)
                     }
-                    .tint(Palette.electricBlue)
                 }
-                Divider().overlay(Palette.hairline)
-                TextField("Session notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
-                    .lineLimit(2...4)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Palette.textPrimary)
+                .tint(Palette.electricBlue)
             }
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+        }
+    }
+
+    private var logSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("NOTES")
+            TextField("Session notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
+                .lineLimit(2...4)
+                .font(.system(size: 14))
+                .foregroundStyle(Palette.textPrimary)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.surface))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
         }
     }
 

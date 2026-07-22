@@ -39,14 +39,38 @@ struct SettingsView: View {
         return components.url
     }
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    /// Mirrors the view model's storage so the picker refreshes on change —
+    /// @AppStorage on the ObservableObject alone doesn't publish to SwiftUI.
+    @AppStorage("defaultWorkoutTypeRaw") private var defaultWorkoutTypeRaw: String = ""
     @State private var showResetAlert = false
     @State private var showTips = false
     @State private var showWatchHelp = false
     @State private var showMonitorSheet = false
 
+    /// Reads through to the resolved default; writes route through the view
+    /// model so the exercise-guidance modality follows the chosen type.
+    private var defaultWorkoutBinding: Binding<WorkoutType> {
+        Binding(
+            get: { WorkoutType(rawValue: defaultWorkoutTypeRaw) ?? viewModel.resolvedDefaultWorkoutType },
+            set: { viewModel.setDefaultWorkoutType($0) }
+        )
+    }
+
     var body: some View {
         NavigationView {
             Form {
+                // Default workout
+                Section(
+                    header: Text("Default Workout").font(.headline),
+                    footer: Text("Pre-selected as the workout type when you save a completed session. Exercise tips follow this choice.")
+                ) {
+                    Picker("Workout Type", selection: defaultWorkoutBinding) {
+                        ForEach(WorkoutType.selectableCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                }
+
                 // Tips
                 Section(header: Text("Training Tips").font(.headline)) {
                     Button(action: { showTips = true }) {
@@ -153,6 +177,15 @@ struct SettingsView: View {
                     }
                 }
 
+                // Haptics
+                Section(
+                    header: Text("Haptics").font(.headline),
+                    footer: Text("Vibrates on both iPhone and Apple Watch, regardless of the audio mode. Countdown into every interval change: two short taps at 3 and 2 seconds out, then one long buzz as the new interval starts. The end of the final interval gets just the two short taps.")
+                ) {
+                    Toggle("Interval Haptics", isOn: $viewModel.hapticsEnabled)
+                        .font(.body)
+                }
+
                 // Workout Controls
                 Section(header: Text("Workout Controls").font(.headline)) {
                     Toggle("Confirm cooldown skip", isOn: $viewModel.confirmSkipCooldown)
@@ -162,8 +195,6 @@ struct SettingsView: View {
                 // Display
                 Section(header: Text("Display").font(.headline)) {
                     Toggle("Prevent Phone from Sleeping when Active", isOn: $viewModel.preventSleep)
-                        .font(.body)
-                    Toggle("Haptic Feedback at Interval Changes", isOn: $viewModel.hapticsEnabled)
                         .font(.body)
                     Toggle("Live Activity / Dynamic Island", isOn: $viewModel.liveActivitiesEnabled)
                         .font(.body)

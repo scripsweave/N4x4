@@ -587,7 +587,9 @@ private struct OnboardingView: View {
                 }
                 .buttonStyle(OnboardingPrimaryButtonStyle())
 
-                Button(action: { flow.go(to: .age) }) {
+                // Skips only the educational cards — the modality question must
+                // always be asked (it sets the user's default workout type).
+                Button(action: { flow.go(to: .modality) }) {
                     Text("Skip intro, get started →")
                 }
                 .buttonStyle(OnboardingSecondaryButtonStyle())
@@ -648,8 +650,6 @@ private struct OnboardingView: View {
             VStack(spacing: 12) {
                 Button("Choose Your Exercise →") { flow.next() }
                     .buttonStyle(OnboardingPrimaryButtonStyle())
-                Button("Skip") { flow.go(to: .age) }
-                    .buttonStyle(OnboardingSecondaryButtonStyle())
             }
             .padding(.top, 4)
         }
@@ -709,7 +709,7 @@ private struct OnboardingView: View {
                 VStack(spacing: 8) {
                     ForEach(TrainingModality.allCases, id: \.rawValue) { modality in
                         let isSelected = timerViewModel.preferredModality == modality
-                        Button { timerViewModel.preferredModality = isSelected ? nil : modality } label: {
+                        Button { timerViewModel.setPreferredModality(isSelected ? nil : modality) } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: modality.icon)
                                     .font(.system(size: 16, weight: .semibold))

@@ -14,6 +14,9 @@ struct WatchTimerView: View {
     @EnvironmentObject var workoutManager: WorkoutManager
 
     @State private var lastIntervalIndex = 0
+    /// Pending countdown-tap haptics for the current interval; cancelled and
+    /// rebuilt whenever fresh state arrives from the phone.
+    @State private var countdownTaps: [DispatchWorkItem] = []
     @Environment(\.scenePhase) private var scenePhase
 
     private var state: WatchTimerState { sessionManager.timerState }
@@ -131,26 +134,53 @@ struct WatchTimerView: View {
             } else if !shouldRun, workoutManager.isSessionActive {
                 workoutManager.stopWorkout()
             }
+            scheduleCountdownTaps(for: s)
         }
 
-        // Crown-click haptic on interval change — only while actively running, so
-        // the reset-to-idle index change doesn't fire a spurious tap.
+        // Long buzz as the new interval starts — closes the two-short-taps
+        // countdown. Only while actively running, so the reset-to-idle index
+        // change doesn't fire a spurious buzz.
         .onChange(of: state.currentIntervalIndex) { _, newIndex in
             let advanced = newIndex != lastIntervalIndex
             lastIntervalIndex = newIndex
-            if advanced, state.isRunning {
+            if advanced, state.isRunning, state.intervalHapticsEnabled {
                 WKInterfaceDevice.current().play(.notification)
             }
         }
 
-        // Success haptic on completion.
+        // The workout's end is signalled by the two countdown taps alone —
+        // no closing buzz, since no new interval starts.
         .onChange(of: state.workoutComplete) { _, complete in
-            if complete { WKInterfaceDevice.current().play(.success) }
+            if complete {
+                countdownTaps.forEach { $0.cancel() }
+                countdownTaps = []
+            }
         }
 
         // Re-sync when the Watch app returns to the foreground.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { sessionManager.requestStateFromPhone() }
+        }
+    }
+
+    // MARK: - Countdown haptics
+
+    /// Two short wrist taps at ~3 s and ~2 s before the interval boundary,
+    /// mirroring the phone. The interval boundary itself gets the long buzz
+    /// (interval-change handler above); after the final interval nothing
+    /// follows, so the taps stand alone. Scheduled off the absolute end time
+    /// because watchOS timers tied to view updates are throttled.
+    private func scheduleCountdownTaps(for s: WatchTimerState) {
+        countdownTaps.forEach { $0.cancel() }
+        countdownTaps = []
+        guard s.isRunning, s.intervalHapticsEnabled, !s.workoutComplete else { return }
+
+        for lead in [3.0, 2.0] {
+            let delay = s.intervalEndTime.timeIntervalSinceNow - lead
+            guard delay > 0 else { continue }
+            let tap = DispatchWorkItem { WKInterfaceDevice.current().play(.click) }
+            countdownTaps.append(tap)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: tap)
         }
     }
 

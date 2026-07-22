@@ -23,7 +23,9 @@ final class N4x4Tests: XCTestCase {
             "healthKitEnabled",
             "hasCompletedOnboarding",
             "workoutLogEntriesData",
-            "unitPreference"
+            "unitPreference",
+            "preferredModalityRaw",
+            "defaultWorkoutTypeRaw"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -264,7 +266,54 @@ final class N4x4Tests: XCTestCase {
 
     func testWorkoutTypeIncludesOtherOption() {
         XCTAssertTrue(WorkoutType.allCases.contains(.other))
-        XCTAssertEqual(WorkoutType.allCases.count, 11)
+        XCTAssertTrue(WorkoutType.allCases.contains(.kettlebell))
+        XCTAssertEqual(WorkoutType.allCases.count, 12)
+    }
+
+    func testSelectableWorkoutTypesExcludeProtocolName() {
+        // "Norwegian 4x4" is the protocol, not an exercise — it must never be
+        // offered in pickers, but stays in the enum so old logs decode.
+        XCTAssertFalse(WorkoutType.selectableCases.contains(.norwegian4x4))
+        XCTAssertEqual(WorkoutType.selectableCases.count, WorkoutType.allCases.count - 1)
+        XCTAssertNotNil(WorkoutType(rawValue: "Norwegian 4x4"))
+    }
+
+    func testDefaultWorkoutTypeDrivesSelectedTypeOnLaunch() {
+        UserDefaults.standard.set(WorkoutType.kettlebell.rawValue, forKey: "defaultWorkoutTypeRaw")
+
+        let vm = TimerViewModel()
+
+        XCTAssertEqual(vm.selectedWorkoutType, .kettlebell)
+    }
+
+    func testResolvedDefaultFallsBackToPreferredModality() {
+        // Users who onboarded before the explicit default existed only have a
+        // modality stored — it must keep working as the default.
+        UserDefaults.standard.set(TrainingModality.bike.rawValue, forKey: "preferredModalityRaw")
+
+        let vm = TimerViewModel()
+
+        XCTAssertEqual(vm.resolvedDefaultWorkoutType, .cycle)
+        XCTAssertEqual(vm.selectedWorkoutType, .cycle)
+    }
+
+    func testSetDefaultWorkoutTypeSyncsModality() {
+        let vm = TimerViewModel()
+
+        vm.setDefaultWorkoutType(.kettlebell)
+
+        XCTAssertEqual(vm.defaultWorkoutType, .kettlebell)
+        XCTAssertEqual(vm.preferredModality, .kettlebell)
+        XCTAssertEqual(vm.selectedWorkoutType, .kettlebell)
+    }
+
+    func testSetPreferredModalitySyncsDefaultWorkoutType() {
+        let vm = TimerViewModel()
+
+        vm.setPreferredModality(.rowing)
+
+        XCTAssertEqual(vm.defaultWorkoutType, .rowing)
+        XCTAssertEqual(vm.resolvedDefaultWorkoutType, .rowing)
     }
 
     func testWorkoutLogMigrationFromLegacySchemaPreservesEntry() {

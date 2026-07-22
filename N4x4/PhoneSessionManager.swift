@@ -61,6 +61,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.hrHigh:                 hrHigh,
             WatchMessageKey.workoutComplete:        vm.showPostWorkoutSummary,
             WatchMessageKey.zoneHapticEnabled:      vm.zoneHapticAlertsEnabled,
+            WatchMessageKey.intervalHapticsEnabled: vm.hapticsEnabled,
         ]
 
         if WCSession.default.isReachable {

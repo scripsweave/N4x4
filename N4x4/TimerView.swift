@@ -386,6 +386,17 @@ struct PostWorkoutSummaryView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section(header: Text("Log this session")) {
+                    Picker("Type", selection: $viewModel.selectedWorkoutType) {
+                        ForEach(WorkoutType.selectableCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+
+                    TextField("Notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+
                 // Science card — rotates per session
                 Section {
                     ScienceCardView(fact: currentFact)
@@ -408,17 +419,6 @@ struct PostWorkoutSummaryView: View {
                             }
                         }
                     }
-                }
-
-                Section(header: Text("Log this session")) {
-                    Picker("Type", selection: $viewModel.selectedWorkoutType) {
-                        ForEach(WorkoutType.allCases) { type in
-                            Text(type.rawValue).tag(type)
-                        }
-                    }
-
-                    TextField("Notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
-                        .lineLimit(2...4)
                 }
 
                 Section {
