@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>N4x4 — 06-heart-rate App Store card</title>
+<style>
+/* Renders the "Any heart rate monitor" App Store card at exactly 1290×2796.
+   Screenshot with headless Chrome:
+   chrome --headless=new --screenshot=06-heart-rate.png --window-size=1290,2796 \
+          --hide-scrollbars --force-device-scale-factor=1 file://.../make-hr-sources-screenshot.html
+   Device art: assets/watch-ultra-framed.png (our own composited live face),
+   assets/airpods-pro-3.png (Apple store CDN, alpha), and
+   assets/garmin-forerunner-965.png (Garmin product image, white keyed out).
+   Palette + background match the rest of the screenshot family. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue: #2E85FF;
+  --amber: #FF9400;
+  --recovery: #33C78C;
+  --surface: #171A1F;
+  --hairline: rgba(255,255,255,0.08);
+}
+html, body { width: 1290px; height: 2796px; overflow: hidden; }
+body {
+  background:
+    radial-gradient(900px 900px at 15% 38%, rgba(46,133,255,0.12), transparent 70%),
+    radial-gradient(820px 820px at 92% 80%, rgba(255,148,0,0.10), transparent 70%),
+    #0A0A0C;
+  font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Caption (family style) ── */
+.caption { text-align: center; padding-top: 118px; position: relative; z-index: 5; }
+.caption h1 { font-size: 118px; font-weight: 800; line-height: 1.13; letter-spacing: -1px; }
+.caption p {
+  margin-top: 40px; font-size: 46px; font-weight: 400; line-height: 1.32;
+  color: rgba(255,255,255,0.72);
+}
+
+/* ── ECG waveform threading behind the devices ── */
+.ecg { position: absolute; left: 0; top: 640px; z-index: 1; }
+
+/* ── Devices ── */
+.device { position: absolute; }
+.device img { display: block; width: 100%; }
+.watch {
+  left: 64px; top: 760px; width: 640px; z-index: 3;
+  filter: drop-shadow(0 60px 90px rgba(0,0,0,0.65))
+          drop-shadow(0 0 90px rgba(46,133,255,0.18));
+}
+.garmin {
+  right: 44px; top: 940px; width: 560px; z-index: 2;
+  filter: drop-shadow(0 55px 85px rgba(0,0,0,0.65))
+          drop-shadow(0 0 80px rgba(255,148,0,0.15));
+}
+.airpods {
+  left: 50%; transform: translateX(-50%); top: 1690px; width: 560px; z-index: 4;
+  filter: drop-shadow(0 55px 90px rgba(0,0,0,0.7))
+          drop-shadow(0 0 70px rgba(51,199,140,0.14));
+}
+
+/* ── Device labels ── */
+.tag {
+  position: absolute; z-index: 5;
+  font-size: 34px; font-weight: 700; letter-spacing: 0.5px;
+  background: rgba(23,26,31,0.92); border: 2px solid var(--hairline);
+  border-radius: 22px; padding: 18px 34px;
+  color: rgba(255,255,255,0.92);
+  white-space: nowrap;
+}
+.tag small { display: block; font-size: 24px; font-weight: 600; color: rgba(255,255,255,0.5); margin-top: 4px; letter-spacing: 1px; }
+.tag-watch  { left: 150px; top: 1660px; }
+.tag-garmin { right: 96px; top: 1590px; }
+.tag-airpods{ left: 50%; transform: translateX(-50%); top: 2430px; }
+
+/* ── Bottom live-BPM pill (ties the devices to the app) ── */
+.bpm {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 2600px; z-index: 5;
+  display: flex; align-items: center; gap: 26px;
+  background: var(--surface); border: 2px solid var(--hairline); border-radius: 60px;
+  padding: 28px 56px;
+}
+.bpm .heart { color: var(--recovery); font-size: 52px; line-height: 1; }
+.bpm b { font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bpm s { font-size: 30px; font-weight: 700; letter-spacing: 3px; color: var(--recovery); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="caption">
+  <h1>Any heart rate<br>monitor</h1>
+  <p>Apple Watch, AirPods Pro 3, Garmin, Polar or<br>WHOOP — whatever you wear, N4x4 coaches with it.</p>
+</div>
+
+<svg class="ecg" width="1290" height="1900" viewBox="0 0 1290 1900"></svg>
+
+<div class="device watch"><img src="assets/watch-ultra-framed.png" alt=""></div>
+<div class="device garmin"><img src="assets/garmin-forerunner-965.png" alt=""></div>
+<div class="device airpods"><img src="assets/airpods-pro-3.png" alt=""></div>
+
+<div class="tag tag-watch">Apple Watch</div>
+<div class="tag tag-garmin">Garmin · Polar · WHOOP<small>BLUETOOTH MONITORS</small></div>
+<div class="tag tag-airpods">AirPods Pro 3<small>NEW · iOS 26</small></div>
+
+<div class="bpm"><span class="heart">&#x2764;</span><b>152 BPM</b><s>IN ZONE</s></div>
+
+<script>
+// One continuous ECG trace weaving through the composition — the "one line,
+// many sensors" idea. Brand gradient stroke with a soft glow.
+const svg = document.querySelector('.ecg');
+function ecgPath(y0, amp) {
+  // heartbeat motif repeated across the width
+  let d = `M -20 ${y0}`;
+  const beat = 430;                      // px per beat
+  for (let x = -20; x < 1400; x += beat) {
+    d += ` L ${x + 90} ${y0}`;
+    d += ` L ${x + 120} ${y0 - amp * 0.22}`;
+    d += ` L ${x + 150} ${y0 + amp * 0.10}`;
+    d += ` L ${x + 185} ${y0 - amp}`;         // R spike
+    d += ` L ${x + 220} ${y0 + amp * 0.42}`;  // S dip
+    d += ` L ${x + 255} ${y0}`;
+    d += ` L ${x + 320} ${y0 - amp * 0.14}`;  // T bump
+    d += ` L ${x + 370} ${y0}`;
+  }
+  return d;
+}
+svg.innerHTML = `
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"   stop-color="#2E85FF"/>
+      <stop offset="0.5" stop-color="#33C78C"/>
+      <stop offset="1"   stop-color="#FF9400"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <path d="${ecgPath(560, 190)}" fill="none" stroke="url(#g)" stroke-width="7"
+        stroke-linejoin="round" stroke-linecap="round" filter="url(#glow)" opacity="0.9"/>
+  <path d="${ecgPath(1660, 130)}" fill="none" stroke="url(#g)" stroke-width="5"
+        stroke-linejoin="round" stroke-linecap="round" filter="url(#glow)" opacity="0.35"/>
+`;
+</script>
+</body>
+</html>

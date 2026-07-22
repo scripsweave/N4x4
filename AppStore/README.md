@@ -19,12 +19,39 @@ The 6.7" set is a straight resize of the 6.9" set (same composition).
 | `03-watch.png` | Your Apple Watch, your coach |
 | `04-history.png` | Watch your fitness climb |
 | `05-summary.png` | Every interval, charted |
+| `06-heart-rate.png` | Any heart rate monitor |
 
 `01`, `02`, `04` are composed from live app captures. `03` features an **Apple
 Watch Ultra** rather than a phone (see below). `05` is rendered from
 `make-summary-screenshot.html` (headless Chrome, see below) — a hand-built
 mockup of the real `PostWorkoutSummaryRedesignView`; keep the two visually
-identical when either changes, same rule as the watch face.
+identical when either changes, same rule as the watch face. `06` is rendered
+from `make-hr-sources-screenshot.html` (same Chrome invocation, output
+`06-heart-rate.png`) — Apple Watch (our own framed asset with the live face),
+AirPods Pro 3, and a Garmin Forerunner 965 on the family background.
+
+## Phone frame (v4.7)
+
+Every phone card wears an **iPhone 16 Pro-style frame**: titanium rim
+(vertical gradient), black bezel, Dynamic Island, side buttons. The old thin
+white outline read as a generic Android. The frame lives in CSS in
+`make-summary-screenshot.html` (bottom-cropped variant); the composed cards
+`01/02/04` get the full-body variant painted on by `make-iphone-frame.py`
+(Pillow) — run it after refreshing any of those captures; it also writes the
+6.7" resizes. Keep the two geometries visually identical.
+
+## Device-image provenance (`assets/`, added for `06`)
+
+- `airpods-pro-3.png` — Apple's own store product image
+  (`store.storeimages.cdn-apple.com` … `airpods-pro-3-hero-select-202509`,
+  `fmt=png-alpha`), trimmed. Showing Apple products to indicate compatibility
+  is standard App Store practice.
+- `garmin-forerunner-965.png` — Garmin's product image
+  (`res.garmin.com/en/products/010-02809-10/v/cf-xl.png`), white background
+  keyed to alpha. Third-party product depiction for compatibility claims —
+  if Garmin ever objects, swap for a generic strap render.
+- `watch-ultra-framed.png` — ours (see frame provenance below); its composited
+  screen corners were rounded in 4.7 to follow the case curve.
 
 ## `watch-screenshots/` — Apple Watch slot (required)
 

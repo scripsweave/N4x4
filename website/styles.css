@@ -518,12 +518,15 @@ body {
     z-index: 1;
     width: 300px;
     max-width: 82vw;
-    border-radius: 44px;
-    border: 1px solid rgba(255,255,255,0.10);
+    /* iPhone 16-style frame: black bezel + titanium rim (matches the App
+       Store screenshot frames) — the old thin hairline read as a generic
+       Android silhouette. */
+    border-radius: 38px;
     box-shadow:
-        0 40px 90px rgba(0,0,0,0.6),
-        0 0 0 6px rgba(20,22,27,0.9),
-        0 0 0 7px rgba(255,255,255,0.05);
+        0 0 0 11px #000,
+        0 0 0 14px #3c3d42,
+        0 0 0 15px rgba(255,255,255,0.08),
+        0 40px 90px rgba(0,0,0,0.6);
 }
 .device.glow-amber { --dev-glow: var(--glow-amber); }
 .device.glow-blue  { --dev-glow: var(--glow-blue); }

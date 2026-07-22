@@ -1,26 +1,39 @@
-N4x4 - Norwegian 4x4 HIIT Trainer
+Train the Norwegian 4x4 without watching the clock or guessing your effort.
 
-Ready to transform your fitness? N4x4 brings you the scientifically-backed Norwegian 4x4 HIIT protocol—the most efficient way to boost your VO2 Max and build a bulletproof cardiovascular system.
+N4x4 reads your live heart rate — from Apple Watch, AirPods Pro 3, Garmin, WHOOP, Polar, or any Bluetooth monitor — and turns it into clear push, hold, and ease-off cues through every interval. When you finish, you see exactly how long you held the target zone, and how today compared with last time.
 
-WHY N4x4?
-- It's set and forget: Press start, then just train. No fiddling with timers.
-- Visual and audio cues guide you through every interval
-- Perfect for beginners and advanced athletes alike
+Four 4-minute efforts, three easy recoveries. 33 minutes, warm-up and cooldown included. It trains VO2 max, the fitness marker most closely tied to how well you age, and it's one of the most studied ways to raise it. If you're going to invest time in your health, this is a strong place to start.
 
-WHAT YOU GET:
-- 5-minute warm-up to prepare your body
-- 4 rounds of 4-minute high-intensity intervals
-- 3-minute recovery periods between rounds
-- Real-time heart rate zone display based on your age
+HIT THE RIGHT ZONE
+- Target zones calculated from your own max heart rate
+- The number turns orange when you're below the zone and red when you're above, on both iPhone and Apple Watch
+- Spoken and haptic nudges when you drift out and stay out
+- A haptic countdown into every interval change: two taps, then the buzz
 
-WHY VO2 MAX MATTERS:
-Your VO2 Max is the single greatest predictor of lifespan. Studies confirm high-intensity interval training like Norwegian 4x4 is the most efficient way to improve it. Top longevity experts (like Dr. Peter Attia) swear by it.
+USE THE SENSOR YOU ALREADY OWN
+- Apple Watch: install N4x4 on your wrist and heart rate streams automatically
+- AirPods Pro 3: the earbuds you're already wearing double as your heart rate monitor (iPhone on iOS 26)
+- Garmin (Broadcast Heart Rate), WHOOP (HR Broadcast), Polar, Wahoo, COROS, Powerbeats Pro 2, and any standard Bluetooth chest strap or armband
+- Wearing more than one? You choose which source wins
+- A built-in guide with exact, per-model setup steps
 
-NO STRINGS ATTACHED:
-- 100% free
-- No sign-ups
-- No ads
-- No in-app purchases
-- Just you and your workout
+EASY TO KEEP THE HABIT
+- Voice coaching through every interval, with the phone locked and your music ducked
+- Night-before, morning-of, and comeback reminders — each on its own switch
+- Weekly streaks, and a Live Activity on the Lock Screen and Dynamic Island
 
-Download N4x4 now and start building a stronger, healthier heart today. Your future self will thank you.
+FINISH WITH PROOF
+- Every interval charted against its target zone
+- Time in zone, time to zone, and a note per interval for your settings
+- Last session laid over today's, so progress is easy to see
+- Your usual workout — Cycle, Run, Kettlebells, and more — pre-selected when you save
+
+SEE THE PAYOFF
+- Your VO2 max trend from Apple Health
+- Training calendar, milestones, and full session history
+
+Works on the treadmill, rower, bike, stair climber, with kettlebells, or on the open road — any cardio that gets your heart into the zone.
+
+No account. No subscription. No ads. Your data stays on your device and in Apple Health.
+
+Start with one hard session a week. Add a second when you're ready.

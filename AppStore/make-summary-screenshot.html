@@ -48,19 +48,35 @@ body {
   color: rgba(255,255,255,0.72);
 }
 
-/* ── Phone frame ── */
+/* ── Phone frame — iPhone 16 Pro-style: titanium rim, black bezel, island,
+      side buttons. The old thin-outline frame read as a generic Android;
+      this geometry is the canonical look for every phone screenshot. ── */
 .phone {
-  position: absolute; left: 110px; right: 110px; top: 600px; bottom: -60px;
-  border: 3px solid rgba(255,255,255,0.85); border-bottom: none;
-  border-radius: 150px 150px 0 0;
-  background: var(--bg);
-  overflow: hidden;
+  position: absolute; left: 96px; right: 96px; top: 586px; bottom: -80px;
+  border-radius: 176px 176px 0 0;
+  background: linear-gradient(180deg, #5b5c62, #37383d 22%, #26272b 58%, #1d1e22);
+  box-shadow: 0 60px 140px rgba(0,0,0,0.6);
+}
+.sidebtn { position: absolute; width: 10px; border-radius: 5px;
+  background: linear-gradient(180deg, #4c4d52, #2c2d31); }
+.sidebtn.action { left: -9px; top: 380px; height: 92px; }
+.sidebtn.volup  { left: -9px; top: 545px; height: 152px; }
+.sidebtn.voldn  { left: -9px; top: 730px; height: 152px; }
+.sidebtn.power  { right: -9px; top: 590px; height: 250px; }
+.bezel {
+  position: absolute; left: 10px; right: 10px; top: 10px; bottom: 0;
+  border-radius: 167px 167px 0 0; background: #000;
+}
+.screen {
+  position: absolute; left: 30px; right: 30px; top: 30px; bottom: 0;
+  border-radius: 148px 148px 0 0; background: var(--bg); overflow: hidden;
 }
 .statusbar {
-  display: flex; align-items: center; height: 118px; padding: 26px 84px 0;
+  display: flex; align-items: center; height: 112px; padding: 30px 76px 0;
+  position: relative;
 }
 .sb-time { font-size: 40px; font-weight: 700; width: 240px; }
-.island { width: 250px; height: 76px; background: #000; border-radius: 40px; margin: 0 auto; }
+.island { width: 300px; height: 84px; background: #000; border-radius: 44px; margin: 0 auto; }
 .sb-icons { width: 240px; display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
 .sb-dots { display: flex; gap: 5px; }
 .sb-dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,0.55); }
@@ -144,6 +160,9 @@ svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; }
 </div>
 
 <div class="phone">
+  <i class="sidebtn action"></i><i class="sidebtn volup"></i><i class="sidebtn voldn"></i><i class="sidebtn power"></i>
+  <div class="bezel"></div>
+  <div class="screen">
   <div class="statusbar">
     <div class="sb-time">09:14</div>
     <div class="island"></div>
@@ -180,6 +199,14 @@ svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; }
       <div class="chip"><div class="icon" style="color:var(--recovery)">&#x2764;</div><div class="val">151</div><div class="lbl">AVG BPM</div></div>
       <div class="chip"><div class="icon" style="color:var(--danger)">&#x1F525;</div><div class="val">176</div><div class="lbl">PEAK</div></div>
       <div class="chip"><div class="icon" style="color:var(--amber)">&#x25CE;</div><div class="val">87%</div><div class="lbl">IN ZONE</div></div>
+    </div>
+
+    <!-- Workout type moved to the top in 4.6 (parity with
+         PostWorkoutSummaryRedesignView) — notes stay at the bottom. -->
+    <div class="section-title">WORKOUT TYPE</div>
+    <div class="card" style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 30px;">
+      <div class="metric" style="font-size:27px;color:var(--text2);font-weight:600;">Type</div>
+      <div style="font-size:27px;color:var(--blue);font-weight:600;">Treadmill &#x25BE;</div>
     </div>
 
     <div class="section-title">SESSION</div>
@@ -219,15 +246,11 @@ svg text { font-family: -apple-system, "Helvetica Neue", sans-serif; }
       <div class="dots"><i></i><i></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
     </div>
 
-    <div class="section-title">LOG THIS SESSION</div>
+    <div class="section-title">NOTES</div>
     <div class="card">
-      <div class="editor row" style="background:none;padding:6px 4px 22px;display:flex;justify-content:space-between;align-items:baseline;">
-        <div class="metric">Type</div>
-        <div style="font-size:27px;color:var(--blue);font-weight:600;">Treadmill &#x25BE;</div>
-      </div>
-      <div style="height:2px;background:var(--hairline);margin-bottom:20px;"></div>
       <div style="font-size:27px;color:var(--text3);">Session notes (optional)</div>
     </div>
+  </div>
   </div>
 </div>
 
