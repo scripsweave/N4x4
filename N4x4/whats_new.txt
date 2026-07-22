@@ -1,5 +1,10 @@
 What's New in N4x4
 
+AirPods Pro 3 Heart Rate
+- Wear AirPods Pro 3 and see your live heart rate during workouts — no watch or strap needed (iOS 26 required). Enable it under Settings → Heart Rate Sources.
+- Using more than one sensor? Choose which wins: reorder Bluetooth monitor, Apple Watch, and AirPods in Settings.
+- Powerbeats Pro 2 also work — pair them as a Bluetooth heart rate monitor.
+
 Redesigned Settings
 - Settings is now organised like the iOS Settings app: grouped, searchable, and two taps to anything.
 - Your most-used settings — default workout and training days — sit right at the top and show their current value at a glance.

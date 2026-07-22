@@ -198,4 +198,55 @@ final class HeartRateAggregatorTests: XCTestCase {
         XCTAssertNil(agg.currentValue(now: t0))
         XCTAssertNil(agg.liveSource(now: t0))
     }
+
+    // MARK: - Configurable source priority (4.7)
+
+    func testDefaultPriorityIsMonitorWatchAirPods() {
+        XCTAssertEqual(HeartRateAggregator.defaultPriority, [.bluetooth, .watch, .appleSensor])
+    }
+
+    func testAppleSensorIsLowestByDefault() {
+        var agg = HeartRateAggregator()
+        _ = agg.ingest(bpm: 130, from: .appleSensor, at: t0)
+        XCTAssertEqual(agg.currentValue(now: t0), 130)   // alone: AirPods supply the value
+        _ = agg.ingest(bpm: 142, from: .watch, at: t0)
+        XCTAssertEqual(agg.currentValue(now: t0), 142)   // Watch outranks AirPods
+        _ = agg.ingest(bpm: 150, from: .bluetooth, at: t0)
+        XCTAssertEqual(agg.currentValue(now: t0), 150)   // monitor outranks all
+    }
+
+    func testCustomPriorityReordersArbitration() {
+        var agg = HeartRateAggregator(priority: [.appleSensor, .watch, .bluetooth])
+        _ = agg.ingest(bpm: 150, from: .bluetooth, at: t0)
+        _ = agg.ingest(bpm: 130, from: .appleSensor, at: t0)
+        XCTAssertEqual(agg.currentValue(now: t0), 130)
+        XCTAssertEqual(agg.liveSource(now: t0), .appleSensor)
+    }
+
+    func testFallsBackDownCustomPriorityWhenTopGoesStale() {
+        var agg = HeartRateAggregator(priority: [.appleSensor, .bluetooth, .watch])
+        _ = agg.ingest(bpm: 130, from: .appleSensor, at: t0)
+        _ = agg.ingest(bpm: 150, from: .bluetooth, at: t0.addingTimeInterval(8))
+        XCTAssertEqual(agg.currentValue(now: t0.addingTimeInterval(11)), 150)
+    }
+
+    func testPriorityRawRoundTrip() {
+        let order: [HeartRateAggregator.Source] = [.watch, .appleSensor, .bluetooth]
+        let raw = HeartRateAggregator.rawValue(for: order)
+        XCTAssertEqual(raw, "watch,airpods,monitor")
+        XCTAssertEqual(HeartRateAggregator.priority(fromRaw: raw), order)
+    }
+
+    func testPriorityParsingIsDefensive() {
+        // Empty and garbage fall back to the default order.
+        XCTAssertEqual(HeartRateAggregator.priority(fromRaw: ""), HeartRateAggregator.defaultPriority)
+        XCTAssertEqual(HeartRateAggregator.priority(fromRaw: "garbage, ,,"), HeartRateAggregator.defaultPriority)
+        // Partial list: named source first, missing ones appended in default
+        // order — a future source can never become unreachable.
+        XCTAssertEqual(HeartRateAggregator.priority(fromRaw: "airpods"), [.appleSensor, .bluetooth, .watch])
+        // Duplicates keep their first position.
+        XCTAssertEqual(HeartRateAggregator.priority(fromRaw: "watch,monitor,watch"), [.watch, .bluetooth, .appleSensor])
+        // Whitespace tolerated (hand-edited defaults, future sync sources).
+        XCTAssertEqual(HeartRateAggregator.priority(fromRaw: " watch , monitor , airpods "), [.watch, .bluetooth, .appleSensor])
+    }
 }

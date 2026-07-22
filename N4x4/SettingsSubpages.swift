@@ -426,6 +426,76 @@ struct HeartRateMonitorSettingsView: View {
     }
 }
 
+// MARK: - Heart Rate Sources
+
+/// AirPods opt-in plus the arbitration order between simultaneous sources.
+struct HeartRateSourcesSettingsView: View {
+    @ObservedObject var viewModel: TimerViewModel
+    /// Mirror of the view model's storage so the reordered list re-renders —
+    /// writes still go through the view model (its didSet re-arbitrates).
+    @AppStorage("hrSourcePriorityRaw") private var hrSourcePriorityRawMirror = ""
+
+    var body: some View {
+        Form {
+            Section(
+                header: Text("AirPods Pro 3"),
+                footer: Text(airPodsFooter)
+            ) {
+                if #available(iOS 26.0, *) {
+                    Toggle("AirPods Heart Rate", isOn: $viewModel.appleSensorHREnabled)
+                } else {
+                    LabeledContent("AirPods Heart Rate") {
+                        Text("Requires iOS 26")
+                    }
+                }
+            }
+
+            Section(
+                header: Text("Source Priority"),
+                footer: Text("When several sources send heart rate at once, the highest in this list wins. Lower sources take over automatically when a higher one goes quiet. Drag to reorder.")
+            ) {
+                ForEach(viewModel.heartRateSourcePriority, id: \.rawValue) { source in
+                    HStack(spacing: 12) {
+                        SettingsIconTile(systemName: icon(for: source), tint: tint(for: source))
+                        Text(source.displayName)
+                    }
+                }
+                .onMove { from, to in
+                    var order = viewModel.heartRateSourcePriority
+                    order.move(fromOffsets: from, toOffset: to)
+                    viewModel.heartRateSourcePriority = order
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+        }
+        .navigationTitle("Heart Rate Sources")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var airPodsFooter: String {
+        if #available(iOS 26.0, *) {
+            return "Streams live heart rate from AirPods Pro 3 during workouts through an Apple Health workout session (AirPods don't broadcast standard Bluetooth heart rate). Powerbeats Pro 2 connect as a regular Bluetooth monitor instead. Enabling this asks for Health access to your heart rate."
+        }
+        return "AirPods Pro 3 heart rate needs an iPhone on iOS 26 or later. Powerbeats Pro 2 work today — pair them as a Bluetooth monitor."
+    }
+
+    private func icon(for source: HeartRateAggregator.Source) -> String {
+        switch source {
+        case .bluetooth:   return "dot.radiowaves.left.and.right"
+        case .watch:       return "applewatch"
+        case .appleSensor: return "airpods"
+        }
+    }
+
+    private func tint(for source: HeartRateAggregator.Source) -> Color {
+        switch source {
+        case .bluetooth:   return .teal
+        case .watch:       return Color(uiColor: .darkGray)
+        case .appleSensor: return .orange
+        }
+    }
+}
+
 // MARK: - Apple Health
 
 struct AppleHealthSettingsView: View {

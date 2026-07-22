@@ -30,7 +30,9 @@ final class N4x4Tests: XCTestCase {
             "morningOfReminderEnabled",
             "comebackNudgesEnabled",
             "reminderFamilyFlagsSynced",
-            "workoutReminderWeekdays"
+            "workoutReminderWeekdays",
+            "appleSensorHREnabled",
+            "hrSourcePriorityRaw"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 

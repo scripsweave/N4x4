@@ -507,6 +507,45 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("zoneVoiceAlertsEnabled") var zoneVoiceAlertsEnabled: Bool = false
 
+    // AirPods Pro 3 (and future Apple sensors) stream heart rate only through
+    // an iOS 26 HKWorkoutSession on the iPhone — they don't broadcast the
+    // standard Bluetooth HR profile. Opt-in because enabling it runs a system
+    // workout session and prompts for HealthKit heart-rate access.
+    @AppStorage("appleSensorHREnabled") var appleSensorHREnabled: Bool = false {
+        didSet {
+            guard oldValue != appleSensorHREnabled else { return }
+            if appleSensorHREnabled {
+                if #available(iOS 26.0, *) {
+                    phoneWorkoutSession.requestAuthorization { [weak self] granted in
+                        guard let self, granted else { return }
+                        // Enabled mid-workout: attach right away.
+                        if self.workoutStartDate != nil {
+                            self.startPhoneWorkoutSessionIfNeeded()
+                        }
+                    }
+                }
+            } else {
+                stopPhoneWorkoutSessionIfActive()
+            }
+        }
+    }
+
+    /// Heart-rate source priority as stored raw ("monitor,watch,airpods").
+    /// Empty = default order. See HeartRateAggregator.priority(fromRaw:).
+    @AppStorage("hrSourcePriorityRaw") var hrSourcePriorityRaw: String = "" {
+        didSet {
+            guard oldValue != hrSourcePriorityRaw else { return }
+            heartRateAggregator.priority = HeartRateAggregator.priority(fromRaw: hrSourcePriorityRaw)
+            // Re-arbitrate immediately so the displayed value follows the new order.
+            currentHeartRate = heartRateAggregator.currentValue(now: Date())
+        }
+    }
+
+    var heartRateSourcePriority: [HeartRateAggregator.Source] {
+        get { HeartRateAggregator.priority(fromRaw: hrSourcePriorityRaw) }
+        set { hrSourcePriorityRaw = HeartRateAggregator.rawValue(for: newValue) }
+    }
+
     // Units for displayed/entered performance values. `system` follows the
     // device locale; metric/imperial force a choice.
     @AppStorage("unitPreference") private var unitPreferenceRaw: String = UnitPreference.system.rawValue
@@ -853,6 +892,41 @@ class TimerViewModel: ObservableObject {
     /// Arbitrates between sources: Bluetooth wins when live, Watch fills in,
     /// stale sources age out (see HeartRateAggregator for the policy).
     private var heartRateAggregator = HeartRateAggregator()
+
+    // MARK: - Phone workout session (AirPods HR, iOS 26+)
+
+    /// Backing store because a stored property can't carry an @available
+    /// constraint; created lazily on first use through `phoneWorkoutSession`.
+    private var phoneWorkoutSessionStore: AnyObject?
+
+    @available(iOS 26.0, *)
+    private var phoneWorkoutSession: PhoneWorkoutSessionManager {
+        if let existing = phoneWorkoutSessionStore as? PhoneWorkoutSessionManager {
+            return existing
+        }
+        let manager = PhoneWorkoutSessionManager()
+        manager.onReading = { [weak self] bpm in
+            self?.ingestHeartRate(bpm, from: .appleSensor)
+        }
+        phoneWorkoutSessionStore = manager
+        return manager
+    }
+
+    /// Start the iPhone workout session so AirPods (etc.) stream heart rate.
+    /// No-op below iOS 26 or when the user hasn't opted in.
+    private func startPhoneWorkoutSessionIfNeeded() {
+        guard appleSensorHREnabled else { return }
+        if #available(iOS 26.0, *) {
+            phoneWorkoutSession.startWorkout()
+        }
+    }
+
+    private func stopPhoneWorkoutSessionIfActive() {
+        guard phoneWorkoutSessionStore != nil else { return }
+        if #available(iOS 26.0, *) {
+            phoneWorkoutSession.stopWorkout()
+        }
+    }
     private var heartRateStalenessWork: DispatchWorkItem?
 
     // Live WatchConnectivity state, mirrored from PhoneSessionManager's delegate
@@ -938,9 +1012,10 @@ class TimerViewModel: ObservableObject {
     /// the number comes from. nil when no source is live.
     var heartRateSourceSymbol: String? {
         switch heartRateAggregator.liveSource(now: Date()) {
-        case .bluetooth: return "sensor.tag.radiowaves.forward"
-        case .watch:     return "applewatch"
-        case nil:        return nil
+        case .bluetooth:   return "sensor.tag.radiowaves.forward"
+        case .watch:       return "applewatch"
+        case .appleSensor: return "airpods"
+        case nil:          return nil
         }
     }
 
@@ -948,9 +1023,10 @@ class TimerViewModel: ObservableObject {
     /// monitor's name). nil when no source is live.
     var heartRateSourceLabel: String? {
         switch heartRateAggregator.liveSource(now: Date()) {
-        case .bluetooth: return bleHeartRateManager.rememberedName ?? "Heart Rate Monitor"
-        case .watch:     return "Apple Watch"
-        case nil:        return nil
+        case .bluetooth:   return bleHeartRateManager.rememberedName ?? "Heart Rate Monitor"
+        case .watch:       return "Apple Watch"
+        case .appleSensor: return "AirPods"
+        case nil:          return nil
         }
     }
 
@@ -1436,6 +1512,7 @@ class TimerViewModel: ObservableObject {
         setupIntervals()
         loadWorkoutLogEntries()
         selectedWorkoutType = resolvedDefaultWorkoutType
+        heartRateAggregator.priority = HeartRateAggregator.priority(fromRaw: hrSourcePriorityRaw)
 
         // Apple Watch connectivity: the phone is the source of truth and
         // broadcasts timer state; the Watch sends commands and streamed HR back.
@@ -1567,6 +1644,8 @@ class TimerViewModel: ObservableObject {
             hrRecorder = HeartRateSeriesRecorder()
             completedSeries = nil
             recorderBeginCurrentInterval()
+            // AirPods et al. stream via an iPhone workout session (iOS 26+).
+            startPhoneWorkoutSessionIfNeeded()
         }
         startLiveActivity()
         if intervalEndTime == nil {
@@ -1693,6 +1772,7 @@ class TimerViewModel: ObservableObject {
         triggerCompletionHaptic()
         endLiveActivity()
         stopTimer()
+        stopPhoneWorkoutSessionIfActive()
         // Seal the HR recording before HR state is cleared; the post-workout
         // summary charts render from completedSeries.
         if let recorder = hrRecorder, let offset = recorderOffset {
@@ -1811,6 +1891,7 @@ class TimerViewModel: ObservableObject {
     func reset() {
         SpeechManager.shared.stopSpeaking()
         SpeechManager.shared.endWorkoutAudio()
+        stopPhoneWorkoutSessionIfActive()
         hrRecorder = nil
         completedSeries = nil
         resetPromptFlags()
@@ -2433,6 +2514,8 @@ class TimerViewModel: ObservableObject {
         zoneVisualAlertsEnabled = true
         zoneHapticAlertsEnabled = true
         zoneVoiceAlertsEnabled = false
+        appleSensorHREnabled = false
+        hrSourcePriorityRaw = ""
         unitPreference = .system
         clearHeartRateState()
         bleHeartRateManager.forgetMonitor()

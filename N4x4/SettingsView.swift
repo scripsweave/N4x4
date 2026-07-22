@@ -30,6 +30,7 @@ struct SettingsView: View {
     @AppStorage("customMaxHR") private var customMaxHRMirror = 0
     @AppStorage("vo2TargetTierRaw") private var vo2TierMirror = ""
     @AppStorage("healthKitEnabled") private var healthKitEnabledMirror = false
+    @AppStorage("appleSensorHREnabled") private var appleSensorEnabledMirror = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     @State private var showResetAlert = false
@@ -109,6 +110,7 @@ struct SettingsView: View {
         Section(header: Text("Devices & Health")) {
             watchRow
             monitorRow
+            hrSourcesRow
             healthRow
         }
     }
@@ -208,6 +210,13 @@ struct SettingsView: View {
 
     private var monitorRow: some View {
         MonitorSettingsRowLink(viewModel: viewModel, manager: viewModel.bleHeartRateManager)
+    }
+
+    private var hrSourcesRow: some View {
+        SettingsRow(icon: "waveform.path.ecg", tint: .orange, title: "Heart Rate Sources",
+                    value: appleSensorEnabledMirror ? "AirPods On" : "") {
+            HeartRateSourcesSettingsView(viewModel: viewModel)
+        }
     }
 
     private var healthRow: some View {
@@ -317,6 +326,8 @@ struct SettingsView: View {
              AnyView(watchRow)),
             ("Heart Rate Monitor", "heart rate monitor bluetooth chest strap armband garmin polar whoop pairing",
              AnyView(monitorRow)),
+            ("Heart Rate Sources", "heart rate sources airpods powerbeats priority order arbitration apple sensors earbuds",
+             AnyView(hrSourcesRow)),
             ("Apple Health", "apple health healthkit sync log workouts vo2 refresh",
              AnyView(healthRow)),
             ("VO₂ Max Goal", "vo2 max goal target tier good amazing elite biological sex",

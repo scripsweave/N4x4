@@ -359,6 +359,41 @@ private struct OnboardingView: View {
                               ? Color.white.opacity(0.22) : Color.white.opacity(0.08))
                 )
 
+                // AirPods Pro 3 stream heart rate through an iOS 26 workout
+                // session — a one-tap opt-in here (triggers the Health prompt).
+                if #available(iOS 26.0, *) {
+                    Button {
+                        timerViewModel.appleSensorHREnabled.toggle()
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "airpods")
+                                .font(.title3)
+                                .frame(width: 28)
+                                .foregroundStyle(.white)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("AirPods Pro 3")
+                                    .font(.headline)
+                                    .foregroundStyle(.white)
+                                Text(timerViewModel.appleSensorHREnabled
+                                     ? "Heart rate enabled — wear them during workouts."
+                                     : "Stream heart rate from your AirPods.")
+                                    .font(.caption)
+                                    .foregroundStyle(.white.opacity(0.75))
+                            }
+                            Spacer()
+                            Image(systemName: timerViewModel.appleSensorHREnabled
+                                  ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(timerViewModel.appleSensorHREnabled ? .green : .white)
+                        }
+                        .padding(14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(timerViewModel.appleSensorHREnabled
+                                      ? Color.white.opacity(0.22) : Color.white.opacity(0.08))
+                        )
+                    }
+                }
+
                 MonitorPairingCompact(manager: timerViewModel.bleHeartRateManager)
             }
 
