@@ -336,3 +336,63 @@ To verify:
   case**. Local macOS is case-insensitive so a mismatch builds fine, but Xcode
   Cloud checks out case-sensitively and the archive ships with no icon
   (ITMS-90022 / ITMS-90713). Keep tracked asset filenames case-correct.
+
+## Workout types vs the protocol name (4.6+)
+
+- **"Norwegian 4x4" is the protocol, never a workout type.** The
+  `WorkoutType.norwegian4x4` case exists only so pre-4.6 logs decode; every
+  picker must use `WorkoutType.selectableCases`, not `allCases`.
+- The default workout type (`defaultWorkoutTypeRaw`) and the guidance modality
+  (`preferredModalityRaw`) must stay in sync — always change them through
+  `setDefaultWorkoutType(_:)` / `setPreferredModality(_:)`, never raw.
+
+## Reminder family toggles (4.6+)
+
+- Three per-family flags (night-before / morning-of / comeback nudges) sit
+  under the `workoutRemindersEnabled` master. **Invariant: master == any
+  family on.** It's maintained by a one-time migration
+  (`reminderFamilyFlagsSynced`), `raiseFamilyFlagsIfAllOff()` in the master's
+  didSet, and explicit alignment in `resetSettingsToDefaults`. If you add a
+  path that sets the master directly, keep the invariant or the Settings
+  toggles will lie.
+- Each scheduler family guards on its own flag (`scheduleWeeklyWorkoutReminder`,
+  the morning-of block in `scheduleMissedWorkoutFollowUpReminder`,
+  `scheduleRecurringFollowUp`). Rescheduling always cancels the full
+  identifier family first (see the notification table above).
+
+## Haptics are their own channel (4.6+)
+
+- Interval haptics are independent of `audioMode` and fire on BOTH iPhone and
+  Watch (`hapticsEnabled`, mirrored to the Watch as `intervalHapticsEnabled`).
+- Pattern: two short taps at T-3s/T-2s (tick path in `reconcileTimerState`),
+  one long CoreHaptics buzz when a NEW interval starts, taps only at workout
+  end (no completion buzz). Don't reintroduce a buzz at completion without
+  Jan's say-so — the taps-only ending is deliberate spec.
+
+## Heart-rate source arbitration (4.7+)
+
+- `HeartRateAggregator` owns ALL source arbitration; its `priority` array is
+  user-configurable (Settings → Heart Rate Sources, stored raw
+  `hrSourcePriorityRaw`). Never hardcode "bluetooth wins" outside it.
+- AirPods Pro 3 stream ONLY via the iOS 26 iPhone `HKWorkoutSession`
+  (`PhoneWorkoutSessionManager`, @available(iOS 26)) — they do not broadcast
+  standard Bluetooth HR (Powerbeats Pro 2 do). The phone session must end
+  WITHOUT finishing its builder; `saveCompletedWorkoutToHealthKit()` is the
+  single workout record.
+
+## Editing project.pbxproj by hand
+
+- Only the Watch app folder is a synchronized group; **iOS-target files need
+  explicit pbxproj entries** (PBXBuildFile, PBXFileReference, group child,
+  Sources build phase). The repo already uses hand-made synthetic UUIDs
+  (`C4E0…`, `5EA1…`, `3DFEED…`, `5E52…`) — follow that pattern and keep the
+  four entries consistent.
+
+## Marketing screenshot system (4.7+)
+
+- Every phone card wears the iPhone 16 Pro-style frame. Cropped-at-bottom
+  cards get it in CSS (`make-summary-screenshot.html`,
+  `make-hr-sources-screenshot.html`); the full-body composed cards (01/02/04)
+  get it painted by `AppStore/make-iphone-frame.py`. Change the geometry in
+  both places together, and keep mockups matching the real UI (05 ↔
+  `PostWorkoutSummaryRedesignView`).
