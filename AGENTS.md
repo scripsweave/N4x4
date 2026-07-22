@@ -376,9 +376,21 @@ To verify:
   `hrSourcePriorityRaw`). Never hardcode "bluetooth wins" outside it.
 - AirPods Pro 3 stream ONLY via the iOS 26 iPhone `HKWorkoutSession`
   (`PhoneWorkoutSessionManager`, @available(iOS 26)) — they do not broadcast
-  standard Bluetooth HR (Powerbeats Pro 2 do). The phone session must end
-  WITHOUT finishing its builder; `saveCompletedWorkoutToHealthKit()` is the
-  single workout record.
+  standard Bluetooth HR (Powerbeats Pro 2 do).
+
+## One workout per session in Apple Health (4.8+)
+
+- `saveCompletedWorkoutToHealthKit()` (phone, in `finishWorkout`) is the ONLY
+  place a workout is saved. Both live `HKWorkoutSession`s (watch
+  `WorkoutManager`, phone `PhoneWorkoutSessionManager`) exist purely to stream
+  heart rate.
+- **Ending a session is NOT enough to prevent a save** — on-device, watchOS
+  finalizes an ended-but-unfinished live builder as a workout (found 2026-07-22
+  as duplicate watch+phone entries in Health). Every live builder must be
+  explicitly `discardWorkout()`ed on `.ended` AND on `didFailWithError`.
+- The watch also discards crash-abandoned sessions at launch
+  (`discardAbandonedSession()` via `recoverActiveWorkoutSession`) so they can't
+  resurface as stray workouts. Keep that call in `N4x4WatchApp.onAppear`.
 
 ## Editing project.pbxproj by hand
 
@@ -396,3 +408,13 @@ To verify:
   get it painted by `AppStore/make-iphone-frame.py`. Change the geometry in
   both places together, and keep mockups matching the real UI (05 ↔
   `PostWorkoutSummaryRedesignView`).
+- **Headless Chrome clamps its window to ~500×500 minimum.** Any render
+  smaller than that (all watch sizes) lays out for a 500px viewport and gets
+  cropped — content lands off-centre/clipped. Always render at 2× with
+  `--force-device-scale-factor=2` and `sips` down (commands in
+  `AppStore/README.md`).
+- `assets/watch-ultra-framed.png` is built ONLY by `AppStore/make-framed-watch.py`
+  (flood-fill mask of the frame's screen opening; face can't poke past the
+  bezel). Never hand-composite with cutout percentages. After a face change,
+  re-run it, then `make-watch-screenshot.py` (03) and the 06 render + 6.7in
+  resizes.

@@ -12,6 +12,12 @@ Two sizes are provided; upload the set that matches the App Store Connect slot:
 
 The 6.7" set is a straight resize of the 6.9" set (same composition).
 
+**Alpha-channel caveat:** Apple's spec forbids alpha channels in screenshots,
+and the composed cards `01/02/04` currently carry one (both sizes; the Chrome-
+rendered cards and all watch shots are clean). These renders haven't been
+through an upload yet — if ASC rejects with a transparency error, flatten with
+`magick in.png -alpha off out.png` (or Pillow `convert("RGB")`).
+
 | File | Caption |
 |------|---------|
 | `01-home.png` | Built for your VO₂ max |
@@ -57,9 +63,11 @@ white outline read as a generic Android. The frame lives in CSS in
 
 Because the binary includes a watchOS app, App Store Connect requires at least
 one Apple Watch screenshot. These are the raw watch screen (no device frame),
-rendered to match the real `WatchTimerView` UI. Upload one that matches an
-accepted size — **`watch-ultra3-422x514.png`** or `watch-ultra-410x502.png` are
-the safe defaults.
+rendered to match the real `WatchTimerView` UI. Upload
+**`watch-ultra-410x502.png`** — per Apple's screenshot specifications
+(checked 2026-07-22), 410×502 is the accepted size for Ultra 1/2/**and 3**
+(the Ultra 3's physical 422×514 resolution is NOT an accepted upload size;
+`watch-ultra3-422x514.png` is kept only in case ASC adds the slot).
 
 Regenerate from `make-watch-screen.html` (headless Chrome, one render per size).
 **Render at 2× and downsample** — Chrome's new headless mode clamps the window
@@ -84,13 +92,13 @@ The face shows a below-zone reading (148 in a 158–172 zone), so the orange
 number and the "Speed Up" cue agree with each other and with the app's live
 zone colouring. Keep it in sync with `WatchTimerView` and the website mockup.
 
-| File | Size | Device |
-|------|------|--------|
-| `watch-ultra3-422x514.png` | 422×514 | Ultra 3 |
-| `watch-ultra-410x502.png` | 410×502 | Ultra / Ultra 2 |
-| `watch-series11-416x496.png` | 416×496 | Series 11 (46mm) |
-| `watch-45mm-396x484.png` | 396×484 | Series 9 (45mm) |
-| `watch-44mm-368x448.png` | 368×448 | Series 6 (44mm) |
+| File | Size | ASC slot |
+|------|------|----------|
+| `watch-ultra-410x502.png` | 410×502 | Ultra / Ultra 2 / Ultra 3 — **upload this one** |
+| `watch-series11-416x496.png` | 416×496 | Series 10 / 11 |
+| `watch-45mm-396x484.png` | 396×484 | Series 7–9 |
+| `watch-44mm-368x448.png` | 368×448 | Series 4–6 / SE |
+| `watch-ultra3-422x514.png` | 422×514 | ⚠ no ASC slot accepts this size (kept speculatively) |
 
 ## `assets/` — reusable source
 
