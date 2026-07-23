@@ -62,7 +62,14 @@ gone (same rollback philosophy as `HomeWorkoutRedesign.swift`).
     halo + faint streak on the brightest; **no star shapes**).
   - `FireworkEngine` — plain class mutated inside the Canvas draw closure
     (nothing observes it). Peony / ring / willow / crackle bursts, spark cap
-    2600, rocket trails, `finale(startingIn:)` scheduling.
+    2600, rocket trails, `finale(startingIn:)` scheduling. Each explosion
+    also records a `Flash` (position + colour, 1.3 s life, max 5 live) that
+    the ball reads as a light source: facets catch the burst through the same
+    mirror-reflection test as the room lights, but with a wider cone (a burst
+    is an extended source) and lerped toward the burst's COLOUR half-lifted
+    to white — white-lifting made them indistinguishable from the ordinary
+    room-light glints. Plus a colored wash (gain 0.30) on the side facing
+    the burst.
   - `BirthdayShowController` — `ObservableObject`; owns the engine, the
     message choreography (`beginShow()`), the session `epoch` (so Canvas trig
     runs on small numbers) and the ball's frame for the sky layer.

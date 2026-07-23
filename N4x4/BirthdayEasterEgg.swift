@@ -135,8 +135,18 @@ final class FireworkEngine {
         var color: RGB
     }
 
+    /// A burst as a light source, so the ball can reflect it (screen position
+    /// in the sky canvas's space, which is also the ballFrame's space).
+    fileprivate struct Flash {
+        var x: Double, y: Double
+        var color: RGB
+        var birth: Double              // engine time of the explosion
+    }
+    static let flashLife = 1.3         // seconds a burst stays "lit"
+
     fileprivate private(set) var rockets: [Rocket] = []
     fileprivate private(set) var sparks: [Spark] = []
+    fileprivate private(set) var flashes: [Flash] = []
     private var pendingLaunches: [Double] = []     // seconds until lift-off
     private var autoTimer: Double = 0
     private var lastTime: Double?
@@ -149,7 +159,9 @@ final class FireworkEngine {
         guard w > 0, h > 0 else { return }
         let s = h / 780
         let x = point.map { Double($0.x) } ?? Double.random(in: (w * 0.15)...(w * 0.85))
-        let targetY = point.map { Double($0.y) } ?? Double.random(in: (h * 0.12)...(h * 0.38))
+        // apex band sits above the ball's top (~0.23 h) so most bursts open
+        // in clear sky instead of behind the sphere
+        let targetY = point.map { Double($0.y) } ?? Double.random(in: (h * 0.05)...(h * 0.22))
         let clampedTarget = min(h * 0.8, max(h * 0.05, targetY))
         rockets.append(Rocket(
             x: x, y: h + 8,
@@ -198,9 +210,11 @@ final class FireworkEngine {
             if rockets[i].trail.count > 12 { rockets[i].trail.removeFirst() }
             if rockets[i].vy > -40 * s {
                 let r = rockets.remove(at: i)
-                explode(x: r.x, y: r.y, color: r.color, scale: s)
+                explode(x: r.x, y: r.y, color: r.color, scale: s, now: now)
             }
         }
+
+        flashes.removeAll { now - $0.birth > Self.flashLife }
 
         for i in stride(from: sparks.count - 1, through: 0, by: -1) {
             sparks[i].age += dt
@@ -216,12 +230,15 @@ final class FireworkEngine {
         }
     }
 
-    private func explode(x: Double, y: Double, color: RGB, scale s: Double) {
+    private func explode(x: Double, y: Double, color: RGB, scale s: Double, now: Double) {
         guard sparks.count < 2600 else { return }   // hard cap; never runs away
         enum Burst: CaseIterable { case peony, ring, willow, crackle }
         let type = [Burst.peony, .peony, .ring, .willow, .crackle].randomElement()!
         let n = type == .ring ? 90 : Int.random(in: 130...210)
         let base = type == .willow ? bdayBlush : color
+
+        flashes.append(Flash(x: x, y: y, color: base, birth: now))
+        if flashes.count > 5 { flashes.removeFirst(flashes.count - 5) }
         let maxV = (type == .willow ? 190.0 : 250.0) * s
 
         for i in 0..<n {
@@ -254,9 +271,13 @@ final class BirthdayShowController: ObservableObject {
     /// Session-local time origin so Canvas trig runs on small numbers.
     let epoch = Date()
     @Published var messageRisen = false
-    /// Ball slot frame in the "birthdayHome" coordinate space; read by the
-    /// sky canvas every frame, so plain storage (not @Published) is enough.
-    var ballFrame: CGRect = .zero
+    /// Ball slot frame in the "birthdayHome" coordinate space. The sky canvas
+    /// reads it every frame, but it must ALSO be @Published: the layout shifts
+    /// after launch (the VO₂ card loads in async from HealthKit) and the
+    /// parked message has to follow the ball, not its first reported frame.
+    /// Updates only on real layout changes, so the extra invalidation is
+    /// negligible.
+    @Published var ballFrame: CGRect = .zero
 
     /// Runs the opening sequence: message rises (0.8 s delay, 4 s ease-out,
     /// view-attached animations), finale timed so rockets (~1.2 s flight,
@@ -289,7 +310,8 @@ struct DiscoBallStartButton: View {
             Canvas { ctx, size in
                 let t = timeline.date.timeIntervalSince(controller.epoch)
                 controller.spin.step(now: t)
-                Self.drawBall(&ctx, size: size, t: t, angle: controller.spin.angle)
+                Self.drawBall(&ctx, size: size, t: t, angle: controller.spin.angle,
+                              flashLights: Self.flashLights(for: controller, at: t))
             }
         }
         .frame(width: side, height: side)
@@ -332,6 +354,29 @@ struct DiscoBallStartButton: View {
         (Vec3(x: -0.65, y: -0.15, z: -0.15), bdayWarm),
     ].map { (dir: $0.0.normalized(), color: $0.1) }
 
+    /// Firework bursts as live light sources for the ball. Direction runs
+    /// from the ball's centre to the burst (both in the sky canvas's space,
+    /// same space as ballFrame), pushed forward (+z) so the reflection sits
+    /// inside the rim facing the burst — the same half-vector model as the
+    /// room lights. Intensity fades over the flash's life.
+    private static func flashLights(for controller: BirthdayShowController, at t: Double)
+        -> [(dir: Vec3, color: RGB, intensity: Double)] {
+        let frame = controller.ballFrame
+        guard frame != .zero else { return [] }
+        var lights: [(dir: Vec3, color: RGB, intensity: Double)] = []
+        for flash in controller.engine.flashes {
+            let k = (t - flash.birth) / FireworkEngine.flashLife
+            guard k >= 0, k < 1 else { continue }
+            let dx = flash.x - Double(frame.midX)
+            let dy = flash.y - Double(frame.midY)
+            let planar = max(1, (dx * dx + dy * dy).squareRoot())
+            lights.append((dir: Vec3(x: dx, y: -dy, z: 0.45 * planar).normalized(),
+                           color: flash.color,
+                           intensity: pow(1 - k, 1.2)))
+        }
+        return lights
+    }
+
     private static let keyLight = Vec3(x: -0.45, y: 0.55, z: 0.75).normalized()
     private static let halfVec: Vec3 = {
         let l = keyLight
@@ -340,7 +385,9 @@ struct DiscoBallStartButton: View {
     private static let sidePink = Vec3(x: -0.85, y: -0.05, z: 0.5).normalized()
     private static let sideBlue = Vec3(x: 0.85, y: -0.05, z: 0.5).normalized()
 
-    static func drawBall(_ ctx: inout GraphicsContext, size: CGSize, t: Double, angle: Double) {
+    fileprivate static func drawBall(_ ctx: inout GraphicsContext, size: CGSize,
+                                     t: Double, angle: Double,
+                                     flashLights: [(dir: Vec3, color: RGB, intensity: Double)] = []) {
         let cx = Double(size.width) / 2, cy = Double(size.height) / 2
         let R = Double(min(size.width, size.height)) * 0.36
         let rot = angle                        // integrated by DiscoBallSpin
@@ -380,6 +427,8 @@ struct DiscoBallStartButton: View {
                 let refl = Vec3(x: 2 * n.z * n.x, y: 2 * n.z * n.y, z: 2 * n.z * n.z - 1)
                 var flash = 0.0
                 var flashColor = bdayWarm
+                var burstFlash = 0.0
+                var burstColor = bdayPink
                 if h2 > 0.12 {                 // some facets are dull mirrors
                     for light in roomLights {
                         let a = refl.dot(light.dir)
@@ -388,16 +437,48 @@ struct DiscoBallStartButton: View {
                             if s > flash { flash = min(1, s); flashColor = light.color }
                         }
                     }
+                    // firework bursts reflect too — an extended source, so a
+                    // much wider cone. Tracked separately from the room
+                    // lights: lifting toward white hid them among the
+                    // ordinary glints, so burst facets take the burst COLOUR.
+                    for light in flashLights {
+                        let a = refl.dot(light.dir)
+                        let burstCone = 0.90
+                        if a > burstCone {
+                            let s = ((a - burstCone) / (1 - burstCone))
+                                * light.intensity * (0.6 + 0.6 * h2)
+                            if s > burstFlash { burstFlash = min(1, s); burstColor = light.color }
+                        }
+                    }
                 }
 
                 let v = (0.133 + 0.588 * diff) * shimmer
                 var r = v + bdayPink.r * tintA * 0.35 + bdayBlue.r * tintB * 0.35
                 var g = v + bdayPink.g * tintA * 0.35 + bdayBlue.g * tintB * 0.35
                 var bl = v + bdayPink.b * tintA * 0.35 + bdayBlue.b * tintB * 0.35
+                // colored wash on the side of the ball facing a burst
+                for light in flashLights {
+                    let d = max(0, n.dot(light.dir))
+                    let wash = d * d * 0.30 * light.intensity
+                    r += light.color.r * wash
+                    g += light.color.g * wash
+                    bl += light.color.b * wash
+                }
                 // lerp toward white so bright tiles keep their shading
                 let lift = max(spec > 0.4 ? spec : 0, flash)
                 if lift > 0 {
                     r += (1 - r) * lift; g += (1 - g) * lift; bl += (1 - bl) * lift
+                }
+                // burst reflections lerp toward the burst colour half-lifted
+                // to white — bright enough to read as a glint, coloured
+                // enough to unmistakably be the firework
+                if burstFlash > 0 {
+                    let cr = burstColor.r + (1 - burstColor.r) * 0.5
+                    let cg = burstColor.g + (1 - burstColor.g) * 0.5
+                    let cb = burstColor.b + (1 - burstColor.b) * 0.5
+                    r += (cr - r) * burstFlash
+                    g += (cg - g) * burstFlash
+                    bl += (cb - bl) * burstFlash
                 }
 
                 // facet quad, inset for grout gaps
@@ -419,6 +500,9 @@ struct DiscoBallStartButton: View {
                 }
                 if flash > 0.2 {
                     glints.append((cx + R * n.x, cy - R * n.y, flash, flashColor))
+                }
+                if burstFlash > 0.15 {
+                    glints.append((cx + R * n.x, cy - R * n.y, burstFlash, burstColor))
                 }
             }
         }
@@ -639,6 +723,12 @@ struct BirthdayMessageView: View {
 struct BirthdayBallFrameKey: PreferenceKey {
     static var defaultValue: CGRect = .zero
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        value = nextValue()
+        // Only the ball sets this preference; every other subtree contributes
+        // the .zero default. Keep the real frame instead of letting a later
+        // sibling's default overwrite it (device-checked 2026-07-23: blind
+        // assignment left ballFrame at .zero — no parked message tracking,
+        // no wire/beams, no burst reflections).
+        let next = nextValue()
+        if next != .zero { value = next }
     }
 }
