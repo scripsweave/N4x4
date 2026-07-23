@@ -40,12 +40,15 @@
 		5EA1000000000000000000C5 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		9737DE8D392F4BFDB8DB7D21 /* N4x4LiveActivity.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */; };
+		B1DA5E9902AC20260000D15D /* BirthdayEasterEgg.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1DA5E9902AC20260000D15C /* BirthdayEasterEgg.swift */; };
+		B1DA5E9902AC20260000D15F /* BirthdayActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1DA5E9902AC20260000D15E /* BirthdayActivation.swift */; };
 		A909AEA31315440880A95B1B /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
 		B1E0000000000000000000B1 /* HeartRateMeasurementParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */; };
 		B1E0000000000000000000B2 /* HeartRateAggregator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F2 /* HeartRateAggregator.swift */; };
 		B1E0000000000000000000B3 /* BluetoothHeartRateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */; };
 		B1E0000000000000000000B4 /* HeartRateMonitorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */; };
 		B1E0000000000000000000C1 /* HeartRateBluetoothTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */; };
+		B1E0000000000000000000C2 /* BirthdayEasterEggTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1E0000000000000000000F6 /* BirthdayEasterEggTests.swift */; };
 		B6DD7735FB154EF1A7DC0B09 /* N4x4LiveActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F8A0FC40C249C78F45259B /* N4x4LiveActivityView.swift */; };
 		BF3EDE7BA5FC43599829D290 /* TipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A37A004B0EA4A46A5664A04 /* TipsView.swift */; };
 		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
@@ -148,11 +151,14 @@
 		877A3724FA574CBF8B36EC54 /* N4x4LiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = N4x4LiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = N4x4LiveActivityAttributes.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateGuidanceCard.swift; sourceTree = "<group>"; };
+		B1DA5E9902AC20260000D15C /* BirthdayEasterEgg.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BirthdayEasterEgg.swift; sourceTree = "<group>"; };
+		B1DA5E9902AC20260000D15E /* BirthdayActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BirthdayActivation.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F1 /* HeartRateMeasurementParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMeasurementParser.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F2 /* HeartRateAggregator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateAggregator.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F3 /* BluetoothHeartRateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothHeartRateManager.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorViews.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateBluetoothTests.swift; sourceTree = "<group>"; };
+		B1E0000000000000000000F6 /* BirthdayEasterEggTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BirthdayEasterEggTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -245,6 +251,8 @@
 				3DF13A762C938ABA00DD18E7 /* Extensions.swift */,
 				3D516A642CAB347F001279C0 /* HelpView.swift */,
 				A1B2C3D4E5F60718293A4B5B /* HeartRateGuidanceCard.swift */,
+				B1DA5E9902AC20260000D15C /* BirthdayEasterEgg.swift */,
+				B1DA5E9902AC20260000D15E /* BirthdayActivation.swift */,
 				4A37A004B0EA4A46A5664A04 /* TipsView.swift */,
 				5739937EF07648BE8983755B /* SpeechManager.swift */,
 				9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */,
@@ -268,6 +276,7 @@
 			children = (
 				3DF13A552C9389C200DD18E7 /* N4x4Tests.swift */,
 				B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */,
+				B1E0000000000000000000F6 /* BirthdayEasterEggTests.swift */,
 			);
 			path = N4x4Tests;
 			sourceTree = "<group>";
@@ -543,6 +552,8 @@
 				3DF13A6F2C938A4F00DD18E7 /* Interval.swift in Sources */,
 				3DF13A772C938ABA00DD18E7 /* Extensions.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5C /* HeartRateGuidanceCard.swift in Sources */,
+				B1DA5E9902AC20260000D15D /* BirthdayEasterEgg.swift in Sources */,
+				B1DA5E9902AC20260000D15F /* BirthdayActivation.swift in Sources */,
 				BF3EDE7BA5FC43599829D290 /* TipsView.swift in Sources */,
 				CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */,
 				F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */,
@@ -564,6 +575,7 @@
 			files = (
 				3DF13A562C9389C200DD18E7 /* N4x4Tests.swift in Sources */,
 				B1E0000000000000000000C1 /* HeartRateBluetoothTests.swift in Sources */,
+				B1E0000000000000000000C2 /* BirthdayEasterEggTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -633,7 +645,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -670,7 +682,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -834,7 +846,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -876,7 +888,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -975,7 +987,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1001,7 +1013,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 4.10;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

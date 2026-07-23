@@ -271,7 +271,62 @@ struct HomeScreen: View {
         viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2
     }
 
+    // 2 August easter egg (see BirthdayEasterEgg.swift). The preview flag is
+    // @AppStorage so flipping the DEBUG Settings toggle re-renders Home live.
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(BirthdayEasterEgg.previewDefaultsKey) private var birthdayPreview = false
+    @StateObject private var birthday = BirthdayShowController()
+    /// Bumped by `significantTimeChangeNotification` (fires at local midnight,
+    /// and on time-zone/clock changes) so the date check flips live even if
+    /// the app sits open or suspended across midnight.
+    @State private var dayFlipTick = 0
+
+    private var isBirthday: Bool {
+        // The preview read is compiled out of Release: the UserDefaults key
+        // survives app updates, so a device that ever ran a debug build with
+        // the toggle on must not stay in birthday mode on the App Store build.
+        #if DEBUG
+        if birthdayPreview { return true }
+        #endif
+        return BirthdayEasterEgg.isTheDay()
+    }
+
     var body: some View {
+        ZStack {
+            if isBirthday {
+                BirthdaySkyView(controller: birthday)
+            }
+            homeContent
+            if isBirthday {
+                BirthdayMessageView(controller: birthday)
+            }
+        }
+        .coordinateSpace(name: "birthdayHome")
+        .onPreferenceChange(BirthdayBallFrameKey.self) { birthday.ballFrame = $0 }
+        // Any tap sparks a firework (simultaneous, so controls still work);
+        // the opening show replays on every arrival at Home that day.
+        .simultaneousGesture(
+            SpatialTapGesture(coordinateSpace: .named("birthdayHome"))
+                .onEnded { value in
+                    guard isBirthday else { return }
+                    birthday.engine.launch(at: value.location)
+                }
+        )
+        .onAppear { if isBirthday { birthday.beginShow() } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, isBirthday { birthday.beginShow() }
+        }
+        .onChange(of: birthdayPreview) { _, enabled in
+            if enabled { birthday.beginShow() }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIApplication.significantTimeChangeNotification)) { _ in
+            dayFlipTick += 1   // invalidates Home so isBirthday re-evaluates
+            if BirthdayEasterEgg.isTheDay() { birthday.beginShow() }
+        }
+    }
+
+    private var homeContent: some View {
         VStack(spacing: 0) {
             header
                 .padding(.horizontal, 20)
@@ -292,7 +347,15 @@ struct HomeScreen: View {
             Spacer(minLength: 8)
                 .frame(maxHeight: hasVO2Data ? .infinity : 28)
 
-            StartRingButton(title: "START", side: 340) { viewModel.startTimer() }
+            if isBirthday {
+                DiscoBallStartButton(side: 340, controller: birthday) { viewModel.startTimer() }
+                    .background(GeometryReader { geo in
+                        Color.clear.preference(key: BirthdayBallFrameKey.self,
+                                               value: geo.frame(in: .named("birthdayHome")))
+                    })
+            } else {
+                StartRingButton(title: "START", side: 340) { viewModel.startTimer() }
+            }
 
             // Interval plan + VO₂ trend, always sitting clearly below the ring.
             // The bottom-anchored layout means this block's height pushes the ring

@@ -127,8 +127,24 @@ struct SettingsView: View {
             displayRow
             replayOnboardingRow
             feedbackRow
+            #if DEBUG
+            birthdayPreviewRow
+            #endif
         }
     }
+
+    #if DEBUG
+    /// Dev-only preview of the 2 August easter egg (BirthdayEasterEgg.swift).
+    /// Compiled out of Release/App Store builds; deliberately not searchable.
+    @AppStorage(BirthdayEasterEgg.previewDefaultsKey) private var birthdayPreviewEnabled = false
+
+    private var birthdayPreviewRow: some View {
+        HStack(spacing: 12) {
+            SettingsIconTile(systemName: "party.popper.fill", tint: .pink)
+            Toggle("Birthday Preview", isOn: $birthdayPreviewEnabled)
+        }
+    }
+    #endif
 
     private var resetSection: some View {
         Section {

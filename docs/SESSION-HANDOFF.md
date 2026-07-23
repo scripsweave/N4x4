@@ -1,11 +1,13 @@
 # N4x4 — Session Handoff
 
-> **Current state:** the real-time heart-rate release (Apple Watch + Garmin +
-> WHOOP + Bluetooth), the reimagined post-workout experience, the marketing
-> rewrite, and the release/versioning setup are documented in
-> [`SESSION-HANDOFF-2026-07-20.md`](SESSION-HANDOFF-2026-07-20.md). **Read that
-> first.** It supersedes the 2026-07-10 handoff, which supersedes 2026-07-09.
-> The notes below are older context.
+> **Current state:** the 2 August birthday easter egg (disco ball, fireworks,
+> 4.10 bump) and its Mac verification checklist are in
+> [`SESSION-HANDOFF-2026-07-23.md`](SESSION-HANDOFF-2026-07-23.md). **Read
+> that first**, plus the feature doc [`Birthday-Easter-Egg.md`](Birthday-Easter-Egg.md).
+> It supersedes [`SESSION-HANDOFF-2026-07-22b.md`](SESSION-HANDOFF-2026-07-22b.md)
+> (first Mac build of 4.6/4.7, duplicate-Health-workout fix, 4.8), which
+> supersedes the 2026-07-20 handoff (real-time HR release, marketing,
+> release/versioning setup). The notes below are older context.
 
 Authoritative status for resuming work. Last updated 2026-06-19.
 
