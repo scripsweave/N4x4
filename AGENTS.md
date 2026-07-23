@@ -198,6 +198,8 @@ To verify:
 | Disabling user toggles on `.unknown` permission | Only disable on `.denied` / `.unavailable` |
 | Using `@ViewBuilder` on non-View functions | `@ViewBuilder` is only for `some View`-returning functions |
 | Re-adding manual `broadcastStateToWatch()` calls | The broadcast is reactive (see Apple Watch below) — don't hand-place it |
+| `PreferenceKey.reduce` that assigns `value = nextValue()` | Every sibling that doesn't set the preference contributes the default and overwrites the real value. Guard: `if next != defaultValue { value = next }` (found 2026-07-23: zeroed ball frame silently disabled four birthday-egg features at once) |
+| Trusting `swiftc -parse` (Linux sessions) as a compile check | It misses access-control violations (public-ish member exposing a `private` type), lost tuple labels in array literals, and type-checker timeouts on large literal expressions. First Xcode build of parse-checked code needed 5 such fixes on 2026-07-23 — always budget a fix round |
 
 ---
 

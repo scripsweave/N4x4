@@ -6,7 +6,9 @@ and the 4.10 bump. Supersedes
 [`SESSION-HANDOFF-2026-07-22b.md`](SESSION-HANDOFF-2026-07-22b.md) for
 current state.
 
-Current marketing version: **4.10** (4.9 was the Guide-tab bump).
+Current marketing version: **4.11** (4.9 was the Guide-tab bump; 4.10 was
+never uploaded — its CI build failed on first-compile errors — but treat it
+as skipped, not reusable).
 
 > **Hard constraint, same as every Linux session:** none of the SwiftUI in
 > this session has been compiled by Xcode. Everything parses under
@@ -89,6 +91,23 @@ Tests: 101/101 green on the iPhone 17 Pro simulator (4 new: one-shot
 consume-once, flick relaxation, grab-stop-respool, velocity clamp).
 Feature doc updated. Steps 3–4 of the checklist above now use the Guide
 trigger instead of the Settings toggle.
+
+Evening round (device-iterated with Jan, pushed as `4e3711f`, **4.11**):
+
+- **Root cause of the "message overlaps the ball" reports:**
+  `BirthdayBallFrameKey.reduce` blindly took the last sibling's value, so
+  the two ZStack children that don't set the preference zeroed the ball
+  frame — which silently disabled message parking, the hanging wire, the
+  floor beams AND the burst reflections. One-line reduce fix.
+- **Fireworks reflect in the ball** (Jan's ask): every burst records a
+  `Flash` light source; facets catch it through the existing mirror test
+  (wider cone, facet lerps toward the burst COLOUR — white-lifting made
+  them invisible among room-light glints), plus a colored wash on the
+  facing side. Knobs: `burstCone 0.90`, wash gain `0.30`, `flashLife 1.3`.
+- Rocket apex band raised to 5–22% of screen height (bursts open above
+  the ball, not behind it); message clearance 48 pt above the sphere top.
+- Device-verified by Jan ("looks amazing"). 4.11 built by Xcode Cloud
+  from `4e3711f` — that's the build to submit.
 
 ## Linux toolchain note (for future agent sessions)
 
