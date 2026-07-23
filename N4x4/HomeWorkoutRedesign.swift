@@ -271,24 +271,25 @@ struct HomeScreen: View {
         viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2
     }
 
-    // 2 August easter egg (see BirthdayEasterEgg.swift). The preview flag is
-    // @AppStorage so flipping the DEBUG Settings toggle re-renders Home live.
+    // 2 August easter egg (see BirthdayEasterEgg.swift).
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(BirthdayEasterEgg.previewDefaultsKey) private var birthdayPreview = false
     @StateObject private var birthday = BirthdayShowController()
     /// Bumped by `significantTimeChangeNotification` (fires at local midnight,
     /// and on time-zone/clock changes) so the date check flips live even if
     /// the app sits open or suspended across midnight.
     @State private var dayFlipTick = 0
+    /// True after the Guide easter egg's one-shot flag was consumed —
+    /// birthday mode for the rest of this app session only. The persisted
+    /// flag is already cleared, so the next launch is normal again.
+    @State private var birthdayOneShot = false
 
     private var isBirthday: Bool {
-        // The preview read is compiled out of Release: the UserDefaults key
-        // survives app updates, so a device that ever ran a debug build with
-        // the toggle on must not stay in birthday mode on the App Store build.
-        #if DEBUG
-        if birthdayPreview { return true }
-        #endif
-        return BirthdayEasterEgg.isTheDay()
+        birthdayOneShot || BirthdayEasterEgg.isTheDay()
+    }
+
+    private func activateBirthdayIfDue() {
+        if BirthdayEasterEgg.consumeOneShot() { birthdayOneShot = true }
+        if isBirthday { birthday.beginShow() }
     }
 
     var body: some View {
@@ -312,12 +313,9 @@ struct HomeScreen: View {
                     birthday.engine.launch(at: value.location)
                 }
         )
-        .onAppear { if isBirthday { birthday.beginShow() } }
+        .onAppear { activateBirthdayIfDue() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, isBirthday { birthday.beginShow() }
-        }
-        .onChange(of: birthdayPreview) { _, enabled in
-            if enabled { birthday.beginShow() }
+            if phase == .active { activateBirthdayIfDue() }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: UIApplication.significantTimeChangeNotification)) { _ in

@@ -58,18 +58,77 @@ private struct Vec3 {
     func dot(_ o: Vec3) -> Double { x * o.x + y * o.y + z * o.z }
 }
 
+// MARK: - Spin dynamics
+
+/// Angular state of the mirror ball. A motor normally turns it at
+/// `defaultOmega`; a horizontal drag grabs the surface (the ball follows the
+/// finger, so holding still stops it) and releasing throws it with the
+/// finger's velocity. Once free, motor-plus-friction torque relaxes it back
+/// to the house speed over a few seconds. Injected time, no SwiftUI —
+/// unit-tested in BirthdayEasterEggTests.
+final class DiscoBallSpin {
+    static let defaultOmega = 0.8          // rad/s — the locked mockup speed
+    static let maxOmega = 10.0             // flick cap (~1.6 rev/s)
+    /// Motor/friction time constant. A stopped or thrown ball is visibly
+    /// back to normal within ~3τ ≈ 12 s.
+    static let relaxationTau = 4.0
+
+    private(set) var angle = 0.0
+    private(set) var omega = DiscoBallSpin.defaultOmega
+    private(set) var isGrabbed = false
+    private var lastTime: Double?
+    private var lastDragX: Double?
+    private var lastDragTime: Double?
+
+    /// Advance to `now` (the Canvas session clock). While grabbed the finger
+    /// owns the angle and this only keeps the clock current.
+    func step(now: Double) {
+        let dt = min(0.05, max(0, lastTime.map { now - $0 } ?? 0.016))
+        lastTime = now
+        guard !isGrabbed else { return }
+        omega += (Self.defaultOmega - omega) * (1 - exp(-dt / Self.relaxationTau))
+        angle += omega * dt
+    }
+
+    /// `x` in the ball view's local space; `time` on the same session clock;
+    /// `radius` the sphere radius in points (dx/radius = surface radians).
+    func dragChanged(x: Double, time: Double, radius: Double) {
+        guard radius > 0 else { return }
+        if !isGrabbed {
+            isGrabbed = true
+            lastDragX = nil
+            lastDragTime = nil
+            omega = 0                       // caught — surface now follows the finger
+        }
+        if let px = lastDragX, let pt = lastDragTime, time > pt {
+            let dAngle = (x - px) / radius
+            angle += dAngle
+            // smoothed finger velocity, so a still hold releases to a stop
+            omega = omega * 0.65 + (dAngle / (time - pt)) * 0.35
+        }
+        lastDragX = x
+        lastDragTime = time
+    }
+
+    func dragEnded(velocityX: Double, radius: Double) {
+        isGrabbed = false
+        guard radius > 0 else { return }
+        omega = max(-Self.maxOmega, min(Self.maxOmega, velocityX / radius))
+    }
+}
+
 // MARK: - Firework engine
 
 /// Particle state for the birthday fireworks. A plain reference type mutated
 /// from inside the Canvas draw closure each frame (Canvas polls it; nothing
 /// observes it), so it deliberately is NOT an ObservableObject.
 final class FireworkEngine {
-    struct Rocket {
+    fileprivate struct Rocket {
         var x: Double, y: Double, vx: Double, vy: Double
         var color: RGB
         var trail: [CGPoint] = []
     }
-    struct Spark {
+    fileprivate struct Spark {
         var x: Double, y: Double, vx: Double, vy: Double
         var age: Double, life: Double, drag: Double, size: Double
         var twinkle: Double            // 0 = steady; else flicker frequency
@@ -191,6 +250,7 @@ final class FireworkEngine {
 /// ball). One instance per `HomeScreen`.
 final class BirthdayShowController: ObservableObject {
     let engine = FireworkEngine()
+    let spin = DiscoBallSpin()
     /// Session-local time origin so Canvas trig runs on small numbers.
     let epoch = Date()
     @Published var messageRisen = false
@@ -213,17 +273,23 @@ final class BirthdayShowController: ObservableObject {
 // MARK: - The disco ball (replaces StartRingButton on the day)
 
 /// The mirror ball in the ring's 340pt slot. Tap = START (same contract as
-/// `StartRingButton`); long-press = manual finale.
+/// `StartRingButton`); long-press = manual finale; horizontal drag grabs the
+/// ball — flick to spin it up, hold to stop it, and the motor eases it back
+/// to house speed after release (DiscoBallSpin).
 struct DiscoBallStartButton: View {
     var side: CGFloat = 340
     let controller: BirthdayShowController
     let startAction: () -> Void
 
+    /// Sphere radius in points — must match drawBall's `R` for the 340 slot.
+    private var ballRadius: Double { Double(side) * 0.36 }
+
     var body: some View {
         TimelineView(.animation) { timeline in
             Canvas { ctx, size in
                 let t = timeline.date.timeIntervalSince(controller.epoch)
-                Self.drawBall(&ctx, size: size, t: t)
+                controller.spin.step(now: t)
+                Self.drawBall(&ctx, size: size, t: t, angle: controller.spin.angle)
             }
         }
         .frame(width: side, height: side)
@@ -232,6 +298,19 @@ struct DiscoBallStartButton: View {
         .onLongPressGesture(minimumDuration: 0.5) {
             controller.engine.finale()
         }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 12)
+                .onChanged { value in
+                    controller.spin.dragChanged(
+                        x: value.location.x,
+                        time: value.time.timeIntervalSince(controller.epoch),
+                        radius: ballRadius)
+                }
+                .onEnded { value in
+                    controller.spin.dragEnded(velocityX: value.velocity.width,
+                                              radius: ballRadius)
+                }
+        )
         .accessibilityLabel("Start workout")
         .accessibilityHint("Long press for fireworks")
         .accessibilityAddTraits(.isButton)
@@ -251,7 +330,7 @@ struct DiscoBallStartButton: View {
         (Vec3(x: -0.85, y: 0.05, z: 0.50), RGB(r: 1.0, g: 0.745, b: 0.863)), // faint pink
         (Vec3(x: 0.70, y: 0.30, z: -0.10), bdayWarm),                        // rim catchers
         (Vec3(x: -0.65, y: -0.15, z: -0.15), bdayWarm),
-    ].map { (dir: $0.dir.normalized(), color: $0.color) }
+    ].map { (dir: $0.0.normalized(), color: $0.1) }
 
     private static let keyLight = Vec3(x: -0.45, y: 0.55, z: 0.75).normalized()
     private static let halfVec: Vec3 = {
@@ -261,10 +340,10 @@ struct DiscoBallStartButton: View {
     private static let sidePink = Vec3(x: -0.85, y: -0.05, z: 0.5).normalized()
     private static let sideBlue = Vec3(x: 0.85, y: -0.05, z: 0.5).normalized()
 
-    static func drawBall(_ ctx: inout GraphicsContext, size: CGSize, t: Double) {
+    static func drawBall(_ ctx: inout GraphicsContext, size: CGSize, t: Double, angle: Double) {
         let cx = Double(size.width) / 2, cy = Double(size.height) / 2
         let R = Double(min(size.width, size.height)) * 0.36
-        let rot = t * 0.8                      // locked: spin slider at 1.6
+        let rot = angle                        // integrated by DiscoBallSpin
         let cone = 1 - 0.0035 * 3.0            // locked: sparkle slider at max
         let center = CGPoint(x: cx, y: cy)
         let ballRect = CGRect(x: cx - R, y: cy - R, width: 2 * R, height: 2 * R)
@@ -401,13 +480,16 @@ struct BirthdaySkyView: View {
     @ObservedObject var controller: BirthdayShowController
 
     /// Wandering reflections thrown by the ball; deterministic per index.
-    private static let spots: [(phi: Double, y: Double, r: Double, pink: Bool)] =
-        (0..<16).map { i in
-            (phi: bdayHash(Double(i), 1) * 2 * .pi,
-             y: 0.12 + bdayHash(Double(i), 2) * 0.75,
-             r: 5 + bdayHash(Double(i), 3) * 9,
-             pink: i % 2 == 0)
+    private static let spots: [(phi: Double, y: Double, r: Double, pink: Bool)] = {
+        var result: [(phi: Double, y: Double, r: Double, pink: Bool)] = []
+        for i in 0..<16 {
+            let phi = bdayHash(Double(i), 1) * 2 * Double.pi
+            let y = 0.12 + bdayHash(Double(i), 2) * 0.75
+            let r = 5.0 + bdayHash(Double(i), 3) * 9
+            result.append((phi: phi, y: y, r: r, pink: i % 2 == 0))
         }
+        return result
+    }()
 
     var body: some View {
         TimelineView(.animation) { timeline in
@@ -416,16 +498,20 @@ struct BirthdaySkyView: View {
                 controller.engine.step(now: t, in: size)
                 Self.draw(&ctx, size: size, t: t,
                           engine: controller.engine,
-                          ballFrame: controller.ballFrame)
+                          ballFrame: controller.ballFrame,
+                          spinAngle: controller.spin.angle)
             }
         }
         .allowsHitTesting(false)
     }
 
     private static func draw(_ ctx: inout GraphicsContext, size: CGSize, t: Double,
-                             engine: FireworkEngine, ballFrame: CGRect) {
+                             engine: FireworkEngine, ballFrame: CGRect,
+                             spinAngle: Double) {
         let w = Double(size.width), h = Double(size.height)
-        let rot = t * 0.8
+        // the room reflections are thrown by the ball, so they follow its
+        // actual rotation — spin it up or stop it and the spots do the same
+        let rot = spinAngle
 
         // light spots wandering the room
         ctx.drawLayer { layer in
@@ -525,12 +611,26 @@ struct BirthdayMessageView: View {
                 .shadow(color: bdayPink.color(0.5), radius: 14)
                 .scaleEffect(risen ? 1 : 0.3)
                 .position(x: geo.size.width / 2,
-                          y: geo.size.height * (risen ? 0.16 : 0.9))
+                          y: risen ? parkedY(in: geo.size) : geo.size.height * 0.9)
                 .animation(.timingCurve(0.22, 1, 0.36, 1, duration: 4).delay(0.8), value: risen)
                 .opacity(risen ? 1 : 0)
                 .animation(.easeIn(duration: 0.6).delay(0.8), value: risen)
         }
         .allowsHitTesting(false)
+    }
+
+    /// Parks just above the sphere's top edge. The ball is R = 0.36 × the
+    /// slot's short side, centred in the slot, so the slot's minY is well
+    /// above the visible ball — compute from the sphere, not the frame.
+    /// 48 pt of clearance leaves ~30 pt of daylight under the descenders and
+    /// the glow (device-checked 2026-07-23: 30 pt read as overlapping).
+    /// Clamped so it can't ride up under the streak header; falls back to a
+    /// fixed height until layout has reported the frame.
+    private func parkedY(in size: CGSize) -> CGFloat {
+        let frame = controller.ballFrame
+        guard frame != .zero else { return size.height * 0.16 }
+        let r = min(frame.width, frame.height) * 0.36
+        return max(frame.midY - r - 48, size.height * 0.10)
     }
 }
 

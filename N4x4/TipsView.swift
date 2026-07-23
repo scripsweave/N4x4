@@ -154,7 +154,8 @@ struct TipsView: View {
                         case .beginner:
                             tipsList(beginnerTips, accent: TipsMode.beginner.accentColor)
                         case .advanced:
-                            tipsList(advancedTips, accent: TipsMode.advanced.accentColor)
+                            tipsList(advancedTips, accent: TipsMode.advanced.accentColor,
+                                     secretTileAction: armBirthdayOneShot)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -428,12 +429,29 @@ struct TipsView: View {
 
     // MARK: - Tips list (beginner / advanced)
 
-    private func tipsList(_ tips: [Tip], accent: Color) -> some View {
+    private func tipsList(_ tips: [Tip], accent: Color,
+                          secretTileAction: (() -> Void)? = nil) -> some View {
         VStack(spacing: 14) {
             ForEach(Array(tips.enumerated()), id: \.element.id) { index, tip in
-                TipCard(tip: tip, number: index + 1, accent: accent)
+                let card = TipCard(tip: tip, number: index + 1, accent: accent)
+                // The true easter egg: only the LAST tile carries the gesture,
+                // so scrolling over the rest of the list is untouched.
+                if index == tips.count - 1, let secretTileAction {
+                    card.onLongPressGesture(minimumDuration: 2,
+                                            perform: secretTileAction)
+                } else {
+                    card
+                }
             }
         }
+    }
+
+    /// Hidden trigger for the 2 August easter egg (BirthdayActivation.swift):
+    /// a 2 s press on the last Advanced tile arms birthday mode for the next
+    /// visit to Home, once. No visible UI — a success haptic is the only tell.
+    private func armBirthdayOneShot() {
+        BirthdayEasterEgg.armOneShot()
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     // MARK: - Shared helpers

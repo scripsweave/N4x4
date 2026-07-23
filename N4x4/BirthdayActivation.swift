@@ -7,11 +7,22 @@
 import Foundation
 
 enum BirthdayEasterEgg {
-    /// DEBUG-only Settings toggle writes this key to preview the egg any day.
-    /// Release builds must never read it (the key survives app updates, so a
-    /// device that ever ran a debug build could otherwise stay in birthday
-    /// mode forever).
-    static let previewDefaultsKey = "birthdayPreviewEnabled"
+    /// The hidden manual trigger (a long press on the last Advanced tile in
+    /// the Guide) arms this key. The next arrival at Home consumes it and
+    /// runs birthday mode once — consuming clears the key, so the flag can
+    /// never stick a device in birthday mode.
+    static let oneShotDefaultsKey = "birthdayOneShotPending"
+
+    static func armOneShot(in defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: oneShotDefaultsKey)
+    }
+
+    /// True exactly once per arming — reading clears the flag.
+    static func consumeOneShot(in defaults: UserDefaults = .standard) -> Bool {
+        guard defaults.bool(forKey: oneShotDefaultsKey) else { return false }
+        defaults.removeObject(forKey: oneShotDefaultsKey)
+        return true
+    }
 
     /// True on 2 August in the given (device-local) time zone — any year; the
     /// annual recurrence is deliberate. Explicitly Gregorian: `Calendar.current`

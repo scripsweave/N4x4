@@ -68,6 +68,28 @@ Current marketing version: **4.10** (4.9 was the Guide-tab bump).
 - 4.6/4.7 remain burned version numbers; 4.9 shipped the Guide tab. Never
   reuse numbers (AGENTS.md).
 
+## Addendum — Mac session, 23 Jul afternoon
+
+The first Xcode compile found four errors `swiftc -parse` couldn't
+(access levels vs the file-private `RGB`, dropped tuple labels in
+`roomLights`, a type-checker timeout on `spots`) — fixed, no behavior
+change. Then three feature changes on Jan's direction:
+
+- **Interactive spin** (`DiscoBallSpin`): drag grabs the ball (hold =
+  stop), flick throws it (±10 rad/s cap), motor+friction relaxes it back
+  to 0.8 rad/s (τ = 4 s). Room-light spots follow the real rotation.
+- **Message parks above the ball**, computed from the reported ball frame
+  (48 pt clearance, floored at 10% height) — the fixed 0.16 fraction
+  overlapped the sphere on device.
+- **Manual trigger replaced the DEBUG Settings toggle**: Guide → Advanced
+  → hold the last tile 2 s → success haptic → next arrival at Home runs
+  birthday mode once (flag self-clears; works in all build configs).
+
+Tests: 101/101 green on the iPhone 17 Pro simulator (4 new: one-shot
+consume-once, flick relaxation, grab-stop-respool, velocity clamp).
+Feature doc updated. Steps 3–4 of the checklist above now use the Guide
+trigger instead of the Settings toggle.
+
 ## Linux toolchain note (for future agent sessions)
 
 The date-logic tests were run on this box via the scratch-SPM recipe

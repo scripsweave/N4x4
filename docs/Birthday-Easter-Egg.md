@@ -24,8 +24,18 @@ implementation now).
 3. **Gestures:**
    - Tap the ball → starts the workout (unchanged contract).
    - Long-press the ball (≥ 0.5 s) → manual grand finale.
+   - **Drag the ball horizontally** → grabs it: the surface follows your
+     finger (hold still to stop it dead), a flick throws it with your release
+     velocity (capped at ±10 rad/s). Once free, a motor-plus-friction torque
+     (`DiscoBallSpin`, exponential relaxation, τ = 4 s) eases it back to the
+     house speed of 0.8 rad/s within ~12 s. The wandering room-light spots
+     read the same rotation, so they whip around and freeze with the ball.
    - Tap anywhere else → one firework bursts where you tapped
      (simultaneous gesture; all normal controls keep working).
+
+4. **The message** parks just above the sphere's top edge (computed from the
+   reported ball frame: `midY − 0.36 × slot side − 48 pt`, floored at 10% of
+   screen height), never overlapping the ball.
 
 ## Design decisions (locked — don't re-litigate casually)
 
@@ -61,10 +71,25 @@ gone (same rollback philosophy as `HomeWorkoutRedesign.swift`).
     floor beams anchored under the ball, hanging wire.
   - `BirthdayMessageView` — rises via two stacked `.animation(_:value:)`
     modifiers (4 s timing-curve for position/scale, 0.6 s ease-in for opacity).
+  - `DiscoBallSpin` — angular state of the ball (plain class, injected time,
+    unit-tested): motor at 0.8 rad/s, grab/flick via a drag gesture,
+    exponential relaxation back to default after release.
 - **`N4x4/BirthdayActivation.swift`** — pure Foundation, unit-tested:
-  `BirthdayEasterEgg.isTheDay(on:timeZone:)` and `previewDefaultsKey`.
-- **`HomeScreen`** (`HomeWorkoutRedesign.swift`) — the only integration point:
+  `BirthdayEasterEgg.isTheDay(on:timeZone:)` plus the one-shot manual
+  trigger (`armOneShot` / `consumeOneShot`, key `birthdayOneShotPending`).
+- **`HomeScreen`** (`HomeWorkoutRedesign.swift`) — the main integration point:
   ZStack wrap + conditional ball/ring swap + gesture + lifecycle triggers.
+- **`TipsView.swift`** (Guide tab) — the hidden trigger (see below).
+
+## The hidden manual trigger (a true easter egg)
+
+Guide tab → **Advanced** → press and hold the **last tile** ("Sleep Is Where
+You Improve") for **2 seconds**. A success haptic is the only feedback. The
+next arrival at the Home screen runs birthday mode for that app session;
+consuming the flag clears it, so the next launch is normal again. Works in
+every build configuration (it replaced the old DEBUG-only Settings toggle),
+which also means it can be demoed on 1 Aug without touching the clock. Only
+the last Advanced tile carries the gesture, so list scrolling is unaffected.
 
 ## Reliability (the "will it actually fire?" checklist)
 
@@ -79,10 +104,11 @@ All verified by `N4x4Tests/BirthdayEasterEggTests.swift` (6 tests, green):
   and on clock/zone changes), bumps a `@State` tick so `isBirthday`
   re-evaluates, and starts the show if the day just began. Foregrounding is
   separately covered by the `scenePhase` observer.
-- **Preview flag can't leak into Release:** the `birthdayPreviewEnabled`
-  UserDefaults key survives app updates, so a device that ever ran a debug
-  build with the toggle on would otherwise stay in birthday mode forever.
-  The read of that key in `HomeScreen.isBirthday` is inside `#if DEBUG`.
+- **The manual trigger can't stick:** `consumeOneShot` clears the persisted
+  flag the moment it's read; the session-only `@State` in `HomeScreen` dies
+  with the process. A device can't stay in birthday mode past one session.
+  (The old DEBUG-only `birthdayPreviewEnabled` toggle is gone; its key is
+  simply never read any more.)
 
 Not covered by tests (needs eyes on a device): the visuals themselves.
 
@@ -91,18 +117,18 @@ Not covered by tests (needs eyes on a device): the visuals themselves.
 1. **Unit tests:** run the `N4x4Tests` scheme — `BirthdayEasterEggTests`
    must be green (they also run on Linux via the scratch-SPM recipe in the
    agent memory / handoff notes).
-2. **Visual preview (Debug builds only):** Settings → General →
-   **Birthday Preview** (party-popper icon). Toggling it on flips Home into
-   birthday mode immediately, any day. The row is `#if DEBUG` — it does not
-   exist in Release/App Store builds and is deliberately excluded from
-   Settings search. **Turn it off when done** (it persists).
+2. **Visual preview (any build):** Guide → Advanced → hold the last tile
+   for 2 s (success haptic), then go to Home. One session of birthday mode;
+   next launch is normal. Repeat the press to see it again.
 3. **The honest end-to-end test:** build a **Release** configuration to a
    device, set the iPhone's date manually to 2 August (Settings → General →
    Date & Time), launch. This exercises the exact path she will hit —
-   no preview flag involved.
+   no manual trigger involved.
 4. **On-device visual checklist** (first Xcode build of this code):
-   - message parking spot vs. the streak header (top-left) — adjust the
-     `0.16` height fraction in `BirthdayMessageView` if they collide
+   - message parks just above the sphere — check the 48 pt clearance in
+     `BirthdayMessageView.parkedY(in:)` feels right on device
+   - grab/flick/stop the ball — the spin should feel like a real heavy ball
+     (tuning knobs: `DiscoBallSpin.relaxationTau`, `maxOmega`)
    - spark motion-streaks: the mockup had persistent additive trails; the
      Swift approximates with velocity streaks — judge and tune
    - frame rate during a finale (~600 facet quads + up to 2600 sparks per
@@ -115,5 +141,5 @@ Not covered by tests (needs eyes on a device): the visuals themselves.
   Review is typically < 48 h but don't cut it fine.
 - Do **not** mention the easter egg in `whats_new.txt` / App Store notes —
   it's a surprise. "Small improvements" is fine.
-- The `#if DEBUG` toggle means TestFlight builds (Release config) do NOT
-  have the preview switch — use the date-set test there.
+- The Guide trigger works in TestFlight/App Store builds too — handy for a
+  quick sanity check after release, and it self-clears after one session.

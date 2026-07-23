@@ -56,6 +56,71 @@ final class BirthdayEasterEggTests: XCTestCase {
         XCTAssertFalse(BirthdayEasterEgg.isTheDay(on: d, timeZone: utc))
     }
 
+    // MARK: - One-shot manual trigger (Guide → Advanced → last tile)
+
+    func testOneShotConsumesExactlyOnce() {
+        let suite = "birthday-oneshot-test"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        XCTAssertFalse(BirthdayEasterEgg.consumeOneShot(in: defaults),
+                       "must not fire before arming")
+        BirthdayEasterEgg.armOneShot(in: defaults)
+        XCTAssertTrue(BirthdayEasterEgg.consumeOneShot(in: defaults))
+        XCTAssertFalse(BirthdayEasterEgg.consumeOneShot(in: defaults),
+                       "consuming must clear the flag — one show, then normal")
+        XCTAssertNil(defaults.object(forKey: BirthdayEasterEgg.oneShotDefaultsKey),
+                     "the key must not linger in defaults")
+    }
+
+    // MARK: - Disco ball spin dynamics
+
+    func testSpinReturnsToHouseSpeedAfterFlick() {
+        let spin = DiscoBallSpin()
+        spin.step(now: 0)
+        spin.dragChanged(x: 0, time: 0.10, radius: 120)
+        spin.dragChanged(x: 60, time: 0.20, radius: 120)
+        spin.dragEnded(velocityX: 600, radius: 120)     // 5 rad/s flick
+        XCTAssertEqual(spin.omega, 5.0, accuracy: 0.01)
+
+        var t = 0.20
+        while t < 30 { t += 1.0 / 60; spin.step(now: t) }
+        XCTAssertEqual(spin.omega, DiscoBallSpin.defaultOmega, accuracy: 0.05,
+                       "motor + friction must relax the ball back to default spin")
+    }
+
+    func testGrabStopsTheBallAndStillReleaseKeepsItStopped() {
+        let spin = DiscoBallSpin()
+        spin.step(now: 0)
+        spin.step(now: 0.5)
+        spin.dragChanged(x: 100, time: 0.6, radius: 120)   // catch it
+        let caughtAngle = spin.angle
+        spin.step(now: 1.5)                                 // held still
+        XCTAssertEqual(spin.angle, caughtAngle,
+                       "the finger owns the angle while grabbed")
+        spin.dragEnded(velocityX: 0, radius: 120)
+        XCTAssertEqual(spin.omega, 0, accuracy: 0.001,
+                       "releasing without a flick leaves the ball stopped")
+
+        var t = 1.5
+        while t < 30 { t += 1.0 / 60; spin.step(now: t) }
+        XCTAssertEqual(spin.omega, DiscoBallSpin.defaultOmega, accuracy: 0.05,
+                       "the motor must spool a stopped ball back up")
+    }
+
+    func testFlickVelocityIsCapped() {
+        let spin = DiscoBallSpin()
+        spin.step(now: 0)
+        spin.dragChanged(x: 0, time: 0.1, radius: 120)
+        spin.dragEnded(velocityX: 1_000_000, radius: 120)
+        XCTAssertEqual(spin.omega, DiscoBallSpin.maxOmega,
+                       "a violent flick must clamp, not run away")
+        spin.dragChanged(x: 0, time: 0.2, radius: 120)
+        spin.dragEnded(velocityX: -1_000_000, radius: 120)
+        XCTAssertEqual(spin.omega, -DiscoBallSpin.maxOmega,
+                       "the cap applies in both directions")
+    }
+
     func testGregorianEvenIfDeviceCalendarDiffers() {
         // A phone set to the Islamic calendar reports different month/day
         // numbers for the same instant. The check must fire on the real
