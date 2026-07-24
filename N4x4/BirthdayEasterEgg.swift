@@ -676,7 +676,7 @@ struct BirthdaySkyView: View {
 
 // MARK: - Birthday message
 
-/// "Happy birthday to 🫧" — rises once from the bottom, parks near the top.
+/// "Happy Birthday 🫧!" — rises once from the bottom, parks near the top.
 /// Rendered above the home content; never intercepts touches.
 struct BirthdayMessageView: View {
     @ObservedObject var controller: BirthdayShowController
@@ -689,7 +689,8 @@ struct BirthdayMessageView: View {
     var body: some View {
         GeometryReader { geo in
             let risen = controller.messageRisen
-            (Text("Happy birthday to ").foregroundStyle(gradient) + Text("🫧"))
+            (Text("Happy Birthday ").foregroundStyle(gradient) + Text("🫧")
+                + Text("!").foregroundStyle(gradient))
                 .font(.system(size: 28, weight: .heavy, design: .rounded))
                 .lineLimit(1)
                 .shadow(color: bdayPink.color(0.5), radius: 14)

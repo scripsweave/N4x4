@@ -2,7 +2,7 @@
 
 Annual easter egg, shipping from v4.10. Every 2 August (local time, any year)
 the home screen's chrome START ring becomes a spinning mirror ball with
-fireworks behind it and a "Happy birthday to 🫧" message. Cosmetic only —
+fireworks behind it and a "Happy Birthday 🫧!" message. Cosmetic only —
 the ball is still the START button and the workout screen is untouched.
 
 The look was locked through a live HTML motion mockup before any Swift was
