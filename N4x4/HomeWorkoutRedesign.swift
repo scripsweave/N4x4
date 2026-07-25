@@ -283,13 +283,18 @@ struct HomeScreen: View {
     /// flag is already cleared, so the next launch is normal again.
     @State private var birthdayOneShot = false
 
+    /// 2 August for everyone, plus the user's own birthday once HealthKit has
+    /// given us one (`BirthdayEasterEgg.isCelebrationDay`).
     private var isBirthday: Bool {
-        birthdayOneShot || BirthdayEasterEgg.isTheDay()
+        birthdayOneShot || BirthdayEasterEgg.isCelebrationDay()
     }
 
     private func activateBirthdayIfDue() {
-        if BirthdayEasterEgg.consumeOneShot() { birthdayOneShot = true }
-        if isBirthday { birthday.beginShow() }
+        // A freshly armed one-shot (Guide → Advanced → hold the last tile) is an
+        // explicit "show me now", so it skips the arrival cooldown.
+        let armed = BirthdayEasterEgg.consumeOneShot()
+        if armed { birthdayOneShot = true }
+        if isBirthday { birthday.beginShow(force: armed) }
     }
 
     var body: some View {
@@ -299,6 +304,9 @@ struct HomeScreen: View {
             }
             homeContent
             if isBirthday {
+                // room light landing on the cards, so the reflections don't
+                // stop dead at the edge of the content
+                BirthdayLightSpillView(controller: birthday)
                 BirthdayMessageView(controller: birthday)
             }
         }
@@ -315,7 +323,13 @@ struct HomeScreen: View {
         )
         .onAppear { activateBirthdayIfDue() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { activateBirthdayIfDue() }
+            if phase == .active {
+                activateBirthdayIfDue()
+            } else {
+                // the spin rumble is a looping haptic player — never leave it
+                // running into the background
+                birthday.suspend()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(
             for: UIApplication.significantTimeChangeNotification)) { _ in

@@ -51,9 +51,17 @@ completion blocks, not immediately after the initiating call.
 | Morning-of weekly | `workoutReminderMorningOf_N` | ✅ weekly | `cancelAllWeeklyReminders()` |
 | One-shot daily follow-up | `workoutReminderFollowup_N_daily_DD` | ❌ | `cancelMissedWorkoutFollowUpReminder(for:)` |
 | Interval cue | `nextInterval` | ❌ | Explicit remove before each reschedule |
+| Birthday nudge (2 Aug, everyone) | `birthdayNudge_0802` | ✅ yearly | Never — re-registered on foreground |
+| Birthday nudge (user's own) | `birthdayNudge_user` | ✅ yearly | Removed when the user's birthday IS 2 Aug |
 
 `N` = weekday integer (1–7, where 1 = Sunday).
 `DD` = day of month (1–31).
+
+The two birthday nudges (06:00 local, `BirthdayEasterEgg.scheduleMorningNudges`)
+sit **outside** the `workoutRemindersEnabled` families on purpose: they fire once
+a year and they are the only thing that stops the easter egg being missed by a
+phone that stays in a pocket all day. They still require notification permission
+and never request it.
 
 ### Always cancel the full identifier family
 
@@ -198,6 +206,9 @@ To verify:
 | Disabling user toggles on `.unknown` permission | Only disable on `.denied` / `.unavailable` |
 | Using `@ViewBuilder` on non-View functions | `@ViewBuilder` is only for `some View`-returning functions |
 | Re-adding manual `broadcastStateToWatch()` calls | The broadcast is reactive (see Apple Watch below) — don't hand-place it |
+| A particle cap checked as `count < cap` before appending a whole burst | Check `count + n <= cap`. The old birthday firework guard admitted a burst that then appended up to 210 sparks, so the documented 2600 ceiling was really 2809 (found 2026-07-25 by `testSparkCapHoldsUnderAContinuousShow`) |
+| Additive "light spill" layers drawn over the object throwing the light | Clip the source out (`clip(to:options: .inverse)`). Laying the ball's own bloom over the ball washed the facets pale and the sphere lost its dark base |
+| `min(0.05, now - last)` as a frame-delta clamp | Clamp both ends: `min(0.05, max(0, …))`. The clock does run backwards in the field (local-midnight zone change, NTP correction, the documented manual date edit for testing the egg) and a negative dt runs simulations in reverse |
 | `PreferenceKey.reduce` that assigns `value = nextValue()` | Every sibling that doesn't set the preference contributes the default and overwrites the real value. Guard: `if next != defaultValue { value = next }` (found 2026-07-23: zeroed ball frame silently disabled four birthday-egg features at once) |
 | Trusting `swiftc -parse` (Linux sessions) as a compile check | It misses access-control violations (public-ish member exposing a `private` type), lost tuple labels in array literals, and type-checker timeouts on large literal expressions. First Xcode build of parse-checked code needed 5 such fixes on 2026-07-23 — always budget a fix round |
 

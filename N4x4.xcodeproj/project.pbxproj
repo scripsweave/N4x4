@@ -645,7 +645,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.12;
+				MARKETING_VERSION = 4.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -682,7 +682,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.12;
+				MARKETING_VERSION = 4.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -833,7 +833,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = N4x4;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "N4x4 connects to Bluetooth heart rate monitors like chest straps to show your live heart rate and coach you into your target zone.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your VO₂ max data to show your fitness trend over time.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your VO₂ max data to show your fitness trend over time, and your date of birth.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 writes completed interval workouts to Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -846,7 +846,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.12;
+				MARKETING_VERSION = 4.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -875,7 +875,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = N4x4;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "N4x4 connects to Bluetooth heart rate monitors like chest straps to show your live heart rate and coach you into your target zone.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your VO₂ max data to show your fitness trend over time.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "N4x4 reads your VO₂ max data to show your fitness trend over time, and your date of birth.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "N4x4 writes completed interval workouts to Apple Health.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -888,7 +888,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.12;
+				MARKETING_VERSION = 4.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -987,7 +987,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.12;
+				MARKETING_VERSION = 4.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1013,7 +1013,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.12;
+				MARKETING_VERSION = 4.13;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

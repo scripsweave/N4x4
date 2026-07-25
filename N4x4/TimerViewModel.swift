@@ -3056,7 +3056,14 @@ class TimerViewModel: ObservableObject {
             return
         }
 
-        let readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType()]
+        // Date of birth drives the birthday easter egg (BirthdayActivation.swift):
+        // read-only characteristic, cached as month/day so nothing on the home
+        // screen has to touch HealthKit. Optional on purpose — a user who never
+        // entered a birthday just doesn't get that half of the feature.
+        var readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType()]
+        if let dobType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
+            readTypes.insert(dobType)
+        }
         let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
@@ -3070,9 +3077,28 @@ class TimerViewModel: ObservableObject {
                 self.healthKitEnabled = success
                 if success {
                     self.fetchVO2MaxSamples()
+                    self.refreshCachedUserBirthday()
                 }
                 completion?()
             }
+        }
+    }
+
+    /// Caches the user's birthday (month/day only) for the easter egg. The
+    /// characteristic read throws until HealthKit has been authorized for it,
+    /// and returns components with no month/day if the user never entered one —
+    /// both are silent no-ops, leaving the egg on its 2 August schedule.
+    func refreshCachedUserBirthday() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        guard let components = try? healthStore.dateOfBirthComponents(),
+              let month = components.month, let day = components.day else { return }
+        let hadBirthday = BirthdayEasterEgg.cachedUserBirthday() != nil
+        BirthdayEasterEgg.cacheUserBirthday(month: month, day: day)
+        // First grant of the day-of-birth read lands after refreshOnForeground's
+        // notification completion has already run, so schedule the nudge here
+        // rather than making the user wait for the next foreground.
+        if !hadBirthday, notificationPermissionState == .granted {
+            BirthdayEasterEgg.scheduleMorningNudges()
         }
     }
 
@@ -3171,6 +3197,12 @@ class TimerViewModel: ObservableObject {
             if self.workoutRemindersEnabled {
                 self.rescheduleRemindersOnAppLaunch()
             }
+            // The 06:00 birthday nudges sit outside the workout-reminder
+            // families on purpose: they're once a year and they're the only
+            // thing that stops the easter egg being missed entirely.
+            if self.notificationPermissionState == .granted {
+                BirthdayEasterEgg.scheduleMorningNudges()
+            }
         }
 
         refreshHealthKitAuthorizationState()
@@ -3178,6 +3210,7 @@ class TimerViewModel: ObservableObject {
         if healthKitEnabled {
             if healthKitPermissionState == .granted {
                 fetchVO2MaxSamples()
+                refreshCachedUserBirthday()
             } else {
                 requestHealthKitAuthorizationIfNeeded()
             }
