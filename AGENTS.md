@@ -2,6 +2,14 @@
 
 Guidelines for AI agents working on this codebase. Derived from real bugs found in v2.0.
 
+**Start here:** [`docs/SESSION-HANDOFF.md`](docs/SESSION-HANDOFF.md) always points
+at the current session handoff, which is where "what changed last and what is
+still unverified" lives. Feature docs worth reading before touching their area:
+[`Birthday-Easter-Egg.md`](docs/Birthday-Easter-Egg.md) (the 2 August egg — has
+locked design decisions, don't re-litigate them casually),
+[`Bluetooth HR Monitor Plan.md`](docs/Bluetooth%20HR%20Monitor%20Plan.md),
+[`Watch App - HR Zone Feedback Handoff.md`](docs/Watch%20App%20-%20HR%20Zone%20Feedback%20Handoff.md).
+
 ---
 
 ## Architecture Essentials
