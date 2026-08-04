@@ -36,10 +36,28 @@ struct N4x4LiveActivityAttributes: ActivityAttributes {
         var hrLow: Int
         /// Upper bound of the target HR zone for the current phase (bpm).
         var hrHigh: Int
+        /// Live heart rate (bpm) from the active source, or 0 when none is
+        /// streaming. Defaulted so older encoded states still decode.
+        var currentHR: Int = 0
     }
 
     // Static — set once when the activity starts, never changes mid-workout.
     var workoutStartTime: Date
+}
+
+extension N4x4LiveActivityAttributes.ContentState {
+    /// Whether a live heart rate is currently streaming.
+    var hasLiveHR: Bool { currentHR > 0 }
+
+    /// Colour for the live HR readout: orange below the target zone, red above,
+    /// green inside — matching the in-app zone colours (see ZoneFeedbackStyle).
+    /// White when there is no reading or no target to compare against.
+    var liveHRColor: Color {
+        guard currentHR > 0 else { return .white }
+        if hrLow > 0 && currentHR < hrLow { return Color(red: 1.0, green: 0.58, blue: 0.0) }
+        if hrHigh > 0 && currentHR > hrHigh { return Color(red: 1.0, green: 0.23, blue: 0.19) }
+        return Color(red: 0.20, green: 0.78, blue: 0.55)
+    }
 }
 #endif
 

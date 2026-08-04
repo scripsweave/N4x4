@@ -189,6 +189,7 @@ struct RedesignRootView: View {
 
     @State private var selectedTab = 0
     @State private var showWatchHelp = false
+    @Environment(\.scenePhase) private var scenePhase
 
     /// A workout is "active" (show Workout screen) whenever the timer is running
     /// or a session has been started but not yet reset. `reset()` clears
@@ -243,6 +244,18 @@ struct RedesignRootView: View {
         }
         .onAppear {
             viewModel.evaluateHRSourcesAnnouncement()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // The redesigned UI replaced TimerView, which used to own this. Without
+            // it the foreground refresh (streak sync, reminder rescheduling, health
+            // auth, idle-timer re-assert) and post-background timer reconciliation
+            // never ran in the shipping app.
+            if phase == .active {
+                viewModel.refreshOnForeground()
+                if viewModel.isRunning {
+                    viewModel.reconcileTimerState(now: Date(), playAlarm: false)
+                }
+            }
         }
         .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
             PostWorkoutSummaryRedesignView(viewModel: viewModel)
@@ -1248,6 +1261,9 @@ struct RedesignHistoryView: View {
     @State private var detailedWorkout: WorkoutLogEntry?
     @State private var selectedPerfModality: TrainingModality?
     @State private var selectedChartDate: Date?
+    /// The month shown in the calendar grid. Defaults to today; the chevrons move
+    /// it a whole month at a time and it never pages past the current month.
+    @State private var monthAnchor = Date()
 
     private let cal = Calendar.current
     private let daySymbols = ["S", "M", "T", "W", "T", "F", "S"]
@@ -1409,8 +1425,31 @@ struct RedesignHistoryView: View {
 
     private var calendarCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(monthTitle)
-                .font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.textSecondary).tracking(0.5)
+            HStack {
+                Button { shiftMonth(by: -1) } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Palette.surfaceRaised))
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+                Text(monthTitle)
+                    .font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.textSecondary).tracking(0.5)
+                Spacer()
+
+                Button { shiftMonth(by: 1) } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(isCurrentMonth ? Palette.textTertiary.opacity(0.4) : Palette.textSecondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Palette.surfaceRaised))
+                }
+                .buttonStyle(.plain)
+                .disabled(isCurrentMonth)
+            }
 
             let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 7)
             LazyVGrid(columns: columns, spacing: 6) {
@@ -1640,24 +1679,44 @@ struct RedesignHistoryView: View {
 
     // MARK: Data helpers
 
-    private var monthTitle: String {
-        let f = DateFormatter(); f.dateFormat = "MMMM"
-        return f.string(from: Date()).uppercased()
+    /// First day of the month currently shown in the calendar grid.
+    private var monthStart: Date {
+        cal.date(from: cal.dateComponents([.year, .month], from: monthAnchor)) ?? monthAnchor
     }
-    private var currentMonthDays: Int { cal.range(of: .day, in: .month, for: Date())?.count ?? 30 }
+    /// True when the shown month is the real current month — the forward chevron
+    /// is disabled here so the user can't page into empty future months.
+    private var isCurrentMonth: Bool {
+        cal.isDate(monthAnchor, equalTo: Date(), toGranularity: .month)
+    }
+    private func shiftMonth(by delta: Int) {
+        guard let d = cal.date(byAdding: .month, value: delta, to: monthStart) else { return }
+        // Never navigate past the current month.
+        if delta > 0 && cal.compare(d, to: Date(), toGranularity: .month) == .orderedDescending { return }
+        monthAnchor = d
+    }
+    private var monthTitle: String {
+        let f = DateFormatter()
+        // Append the year only when it isn't the current one — keeps the common
+        // case clean while staying unambiguous when paging back across years.
+        f.dateFormat = cal.isDate(monthAnchor, equalTo: Date(), toGranularity: .year) ? "MMMM" : "MMMM yyyy"
+        return f.string(from: monthStart).uppercased()
+    }
+    private var currentMonthDays: Int { cal.range(of: .day, in: .month, for: monthStart)?.count ?? 30 }
     private var leadingBlanks: Int {
-        let comps = cal.dateComponents([.year, .month], from: Date())
-        guard let first = cal.date(from: comps) else { return 0 }
-        return cal.component(.weekday, from: first) - 1
+        cal.component(.weekday, from: monthStart) - 1
     }
     /// Calendar cells: leading nils to align day 1 to its weekday, then day numbers.
     private var monthCells: [Int?] {
         Array(repeating: Int?.none, count: leadingBlanks) + (1...currentMonthDays).map { Int?($0) }
     }
-    private func isToday(_ day: Int) -> Bool { cal.component(.day, from: Date()) == day }
-    private func isFutureDay(_ day: Int) -> Bool { day > cal.component(.day, from: Date()) }
+    /// The absolute date for a day number in the currently shown month.
+    private func dateFor(_ day: Int) -> Date {
+        cal.date(byAdding: .day, value: day - 1, to: monthStart) ?? monthStart
+    }
+    private func isToday(_ day: Int) -> Bool { cal.isDate(dateFor(day), inSameDayAs: Date()) }
+    private func isFutureDay(_ day: Int) -> Bool { dateFor(day) > cal.startOfDay(for: Date()) }
     private func workoutOnDay(_ day: Int) -> WorkoutLogEntry? {
-        guard let interval = cal.dateInterval(of: .month, for: Date()) else { return nil }
+        guard let interval = cal.dateInterval(of: .month, for: monthStart) else { return nil }
         return viewModel.workoutLogEntries
             .filter { interval.contains($0.completedAt) && cal.component(.day, from: $0.completedAt) == day }
             .max(by: { $0.completedAt < $1.completedAt })

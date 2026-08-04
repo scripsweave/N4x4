@@ -178,22 +178,36 @@ struct ExpandedCenterView: View {
     }
 }
 
-/// Bottom: HR zone target
+/// Bottom: live HR (when streaming) + HR zone target
 struct ExpandedBottomView: View {
     let context: ActivityViewContext<N4x4LiveActivityAttributes>
 
     var body: some View {
-        if context.state.hrLow > 0 && context.state.hrHigh > 0 {
-            Text("Target: \(context.state.hrLow)–\(context.state.hrHigh) bpm")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
-        } else {
-            Text("Easy effort")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
+        HStack(spacing: 6) {
+            if context.state.hasLiveHR {
+                Image(systemName: "heart.fill")
+                    .font(.caption)
+                    .foregroundStyle(context.state.liveHRColor)
+                Text("\(context.state.currentHR) bpm")
+                    .font(.caption.bold())
+                    .monospacedDigit()
+                    .foregroundStyle(context.state.liveHRColor)
+                if context.state.hrLow > 0 && context.state.hrHigh > 0 {
+                    Text("· Target \(context.state.hrLow)–\(context.state.hrHigh)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if context.state.hrLow > 0 && context.state.hrHigh > 0 {
+                Text("Target: \(context.state.hrLow)–\(context.state.hrHigh) bpm")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Easy effort")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .padding(.bottom, 4)
     }
 }
 
@@ -225,8 +239,22 @@ struct LockScreenView: View {
 
             Spacer()
 
-            // Right column: interval name + HR target + dots
+            // Right column: live HR + interval name + HR target + dots
             VStack(alignment: .trailing, spacing: 6) {
+                if context.state.hasLiveHR {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.caption)
+                            .foregroundStyle(context.state.liveHRColor)
+                        Text("\(context.state.currentHR)")
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(context.state.liveHRColor)
+                        Text("bpm")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 if context.state.phase == .highIntensity {
                     Text("\(context.state.phase.shortLabel) \(context.state.currentInterval)/\(context.state.totalIntervals)")
                         .font(.headline)
@@ -303,7 +331,8 @@ extension N4x4LiveActivityAttributes.ContentState {
             currentInterval: 2,
             totalIntervals: 4,
             hrLow: 161,
-            hrHigh: 181
+            hrHigh: 181,
+            currentHR: 172
         )
     }
 
@@ -316,7 +345,8 @@ extension N4x4LiveActivityAttributes.ContentState {
             currentInterval: 2,
             totalIntervals: 4,
             hrLow: 119,
-            hrHigh: 133
+            hrHigh: 133,
+            currentHR: 145
         )
     }
 }

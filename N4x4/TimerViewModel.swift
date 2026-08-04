@@ -8,6 +8,9 @@ import UserNotifications
 import HealthKit
 import ActivityKit
 import StoreKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum PermissionState: Equatable {
     case unknown
@@ -489,7 +492,9 @@ class TimerViewModel: ObservableObject {
         set { audioModeRaw = newValue.rawValue }
     }
 
-    @AppStorage("preventSleep") var preventSleep: Bool = true
+    @AppStorage("preventSleep") var preventSleep: Bool = true {
+        didSet { updateIdleTimerState() }
+    }
     // Interval haptics run on BOTH iPhone and Apple Watch and are independent
     // of the audio mode. Mirrored to the Watch like the zone-haptic setting.
     @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true {
@@ -965,6 +970,8 @@ class TimerViewModel: ObservableObject {
     }
 
     private var watchBroadcastCancellable: AnyCancellable?
+    private var idleTimerCancellable: AnyCancellable?
+    private var liveActivityHRCancellable: AnyCancellable?
 
     /// High-level connection state for status display and troubleshooting.
     enum WatchConnectionStatus {
@@ -1542,6 +1549,28 @@ class TimerViewModel: ObservableObject {
             .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
             .sink { [weak self] in self?.broadcastStateToWatch() }
 
+        // Keep the screen awake while a workout is running (if the user opted in).
+        // Managed here rather than in a view because the active UI lives in the
+        // redesigned screens; the old TimerView's idle-timer wiring never runs.
+        idleTimerCancellable = $isRunning
+            .sink { [weak self] _ in
+                // Defer so isRunning has settled to its new value before we read it.
+                DispatchQueue.main.async { self?.updateIdleTimerState() }
+            }
+
+        // Push the live heart rate to the Live Activity / Dynamic Island. Reduce
+        // to integer bpm and drop repeats so we only spend an ActivityKit update
+        // when the shown number actually changes, then throttle to at most one
+        // every few seconds to stay well inside the update budget.
+        liveActivityHRCancellable = $currentHeartRate
+            .map { $0.map { Int($0.rounded()) } ?? 0 }
+            .removeDuplicates()
+            .throttle(for: .seconds(3), scheduler: DispatchQueue.main, latest: true)
+            .sink { [weak self] _ in
+                guard let self, self.liveActivity != nil, self.isRunning else { return }
+                self.updateLiveActivity(isRunning: true)
+            }
+
         // End any Live Activities that were left running from a previous session
         // (e.g. after a force-quit). Without this they persist on the Dynamic Island
         // and can even survive a device reboot within the 8-hour ActivityKit window.
@@ -1765,6 +1794,11 @@ class TimerViewModel: ObservableObject {
             }
             UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             scheduleNextIntervalNotification()
+            // Push the new interval to the Dynamic Island / Live Activity. The
+            // natural (countdown-driven) advance happens here, not in
+            // moveToNextInterval, so without this the island froze on the first
+            // interval's state and its countdown end-time fell into the past.
+            updateLiveActivity(isRunning: true)
         }
     }
 
@@ -2659,6 +2693,17 @@ class TimerViewModel: ObservableObject {
         SpeechManager.shared.speak(phrase)
     }
 
+    // MARK: - Keep screen awake
+
+    /// Disables the idle timer (screen auto-lock) while a workout is running and
+    /// the user has opted in. Re-enables it otherwise. Called reactively from an
+    /// `isRunning` subscription, from `preventSleep`'s didSet, and on foreground.
+    func updateIdleTimerState() {
+        #if canImport(UIKit)
+        UIApplication.shared.isIdleTimerDisabled = isRunning && preventSleep
+        #endif
+    }
+
     // MARK: - Live Activity
 
     /// Builds the current ContentState from live timer state.
@@ -2709,7 +2754,8 @@ class TimerViewModel: ObservableObject {
             currentInterval: max(1, completedHIT),
             totalIntervals: totalHIT,
             hrLow: hrLow,
-            hrHigh: hrHigh
+            hrHigh: hrHigh,
+            currentHR: currentHeartRate.map { Int($0.rounded()) } ?? 0
         )
     }
 
@@ -3189,6 +3235,10 @@ class TimerViewModel: ObservableObject {
     func refreshOnForeground() {
         // S1: keep the stored streak in sync with the log (it was previously only ever increased).
         refreshStreak()
+
+        // isIdleTimerDisabled only has effect while the app is foreground+active,
+        // so re-assert it here after returning from the background.
+        updateIdleTimerState()
 
         // N1: reschedule one-shot daily follow-ups inside the async permission completion,
         // so notificationPermissionState is guaranteed to be current when we check it.
