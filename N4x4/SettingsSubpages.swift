@@ -6,6 +6,8 @@
 
 import SwiftUI
 import WatchConnectivity
+import HealthKit
+import UIKit
 
 // MARK: - Shared row components
 
@@ -532,10 +534,288 @@ struct AppleHealthSettingsView: View {
                 }
                 .disabled(!viewModel.healthKitEnabled)
             }
+
+            // Deliberately outside the toggle's `if`: someone whose connection
+            // looks off is exactly who needs the checklist most.
+            Section {
+                NavigationLink {
+                    AppleHealthTroubleshootView(viewModel: viewModel)
+                } label: {
+                    Label("Troubleshoot Apple Health", systemImage: "stethoscope")
+                        .font(.footnote)
+                }
+            } footer: {
+                Text("No VO₂ max chart on the home screen? Check what N4x4 can actually see.")
+            }
         }
         .navigationTitle("Apple Health")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { viewModel.refreshHealthKitAuthorizationState() }
+    }
+}
+
+// MARK: - Apple Health troubleshooting
+
+/// Answers "why is there no VO₂ max graph?" without the user having to write in.
+/// Every row is a live check rather than static advice, because the usual causes
+/// look identical from the home screen: permission revoked, never granted,
+/// granted but Apple Health simply holds no Cardio Fitness readings.
+struct AppleHealthTroubleshootView: View {
+    @ObservedObject var viewModel: TimerViewModel
+    @State private var copied = false
+
+    private var points: [VO2DataPoint] {
+        viewModel.vo2DataPoints.sorted { $0.date < $1.date }
+    }
+
+    private var healthDataAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
+
+    private static let stamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    private static let day: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    var body: some View {
+        Form {
+            checksSection
+            actionsSection
+            whereItComesFromSection
+            manualStepsSection
+            diagnosticsSection
+        }
+        .navigationTitle("Troubleshoot")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            viewModel.refreshHealthKitAuthorizationState()
+            if viewModel.healthKitEnabled { viewModel.fetchVO2MaxSamples() }
+        }
+    }
+
+    // MARK: Checks
+
+    private var checksSection: some View {
+        Section(header: Text("Checks"), footer: Text(verdict)) {
+            HealthCheckRow(
+                state: healthDataAvailable ? .pass : .fail,
+                title: "Health data on this device",
+                detail: healthDataAvailable ? "Available" : "This device has no Health database"
+            )
+            HealthCheckRow(
+                state: viewModel.healthKitEnabled ? .pass : .fail,
+                title: "Apple Health enabled in N4x4",
+                detail: viewModel.healthKitEnabled
+                    ? "On"
+                    : (viewModel.healthKitUserOptedOut
+                       ? "Switched off on the previous screen"
+                       : "Off — use Reconnect below")
+            )
+            HealthCheckRow(
+                state: permissionCheckState,
+                title: "Permission",
+                detail: "Workout access \(viewModel.healthKitPermissionState.diagnosticLabel)"
+            )
+            HealthCheckRow(
+                state: points.isEmpty ? .fail : .pass,
+                title: "VO₂ max readings found",
+                detail: readingsDetail
+            )
+            HealthCheckRow(
+                state: points.count >= 2 ? .pass : .warn,
+                title: "Enough for a trend line",
+                detail: points.count >= 2
+                    ? "Yes — the chart should appear on the home screen"
+                    : "Needs at least 2 readings"
+            )
+        }
+    }
+
+    private var permissionCheckState: HealthCheckRow.State {
+        switch viewModel.healthKitPermissionState {
+        case .granted:       return .pass
+        case .denied, .unavailable: return .fail
+        case .notDetermined, .unknown: return .warn
+        }
+    }
+
+    private var readingsDetail: String {
+        guard let latest = points.last else { return "None in Apple Health" }
+        return "\(points.count) · latest \(String(format: "%.1f", latest.value)) mL/kg·min on \(Self.day.string(from: latest.date))"
+    }
+
+    /// The single sentence the user came here for.
+    private var verdict: String {
+        if !healthDataAvailable {
+            return "This device can't store Health data, so the VO₂ max chart is unavailable."
+        }
+        if !viewModel.healthKitEnabled || viewModel.healthKitPermissionState == .denied {
+            return "N4x4 can't read Apple Health right now. Reconnect below, then check the permission in the Settings app."
+        }
+        if points.isEmpty {
+            return "N4x4 can read Apple Health, but Apple Health holds no VO₂ max readings. That is what's missing — see below for where the number comes from."
+        }
+        if points.count < 2 {
+            return "One reading so far. The chart needs two before it can draw a trend."
+        }
+        return "Everything checks out. The VO₂ max chart should be on the home screen."
+    }
+
+    // MARK: Actions
+
+    private var actionsSection: some View {
+        Section(header: Text("Try this")) {
+            Button {
+                viewModel.reconnectAppleHealth()
+            } label: {
+                Label("Reconnect Apple Health", systemImage: "arrow.triangle.2.circlepath")
+            }
+
+            Button {
+                viewModel.fetchVO2MaxSamples()
+            } label: {
+                Label("Re-check for readings", systemImage: "arrow.clockwise")
+            }
+            .disabled(!viewModel.healthKitEnabled)
+
+            if TimerViewModel.canOpenHealthApp {
+                Button {
+                    viewModel.openHealthApp()
+                } label: {
+                    Label("Open the Health app", systemImage: "heart.text.square")
+                }
+            }
+
+            Button {
+                viewModel.openAppSettings()
+            } label: {
+                Label("Open N4x4 in the Settings app", systemImage: "gear")
+            }
+        }
+    }
+
+    // MARK: Explanations
+
+    private var whereItComesFromSection: some View {
+        Section(header: Text("Where the number comes from")) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("N4x4 reads your VO₂ max — it doesn't measure it.")
+                    .font(.footnote.weight(.semibold))
+                Text("Apple records VO₂ max as \"Cardio Fitness\", and only Apple Watch produces it, during outdoor walks, runs and hikes. A chest strap or other heart rate monitor gives N4x4 live heart rate during a session, but it can't generate a Cardio Fitness reading.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text("If another app writes VO₂ max into Apple Health, N4x4 will read that too.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var manualStepsSection: some View {
+        Section(header: Text("Check it yourself")) {
+            TroubleshootStep(
+                number: 1,
+                text: "In the Health app, go to Browse → Heart → Cardio Fitness. If that is empty, there is no VO₂ max data for N4x4 to show."
+            )
+            TroubleshootStep(
+                number: 2,
+                text: "In the Settings app, go to Privacy & Security → Health → N4x4 and make sure Cardio Fitness is switched on under \"Allow N4x4 to read\"."
+            )
+            TroubleshootStep(
+                number: 3,
+                text: "If you changed anything there, come back and tap Reconnect Apple Health above."
+            )
+        }
+    }
+
+    // MARK: Diagnostics
+
+    private var diagnosticsSection: some View {
+        Section(
+            header: Text("Diagnostics"),
+            footer: Text("Still stuck? Copy this and include it when you send feedback.")
+        ) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(viewModel.healthDiagnosticsSummary())
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                if let fetched = viewModel.lastVO2FetchDate {
+                    Text("Checked \(Self.stamp.string(from: fetched))")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 2)
+
+            Button {
+                UIPasteboard.general.string = viewModel.healthDiagnosticsSummary()
+                copied = true
+            } label: {
+                Label(copied ? "Copied" : "Copy Diagnostics",
+                      systemImage: copied ? "checkmark" : "doc.on.doc")
+            }
+        }
+    }
+}
+
+/// Pass / warn / fail row used by the checklist above.
+struct HealthCheckRow: View {
+    enum State { case pass, warn, fail }
+
+    let state: State
+    let title: String
+    let detail: String
+
+    private var symbol: (String, Color) {
+        switch state {
+        case .pass: return ("checkmark.circle.fill", .green)
+        case .warn: return ("exclamationmark.circle.fill", .orange)
+        case .fail: return ("xmark.circle.fill", .red)
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: symbol.0)
+                .foregroundStyle(symbol.1)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct TroubleshootStep: View {
+    let number: Int
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.accentColor))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.footnote)
+        }
+        .padding(.vertical, 2)
     }
 }
 

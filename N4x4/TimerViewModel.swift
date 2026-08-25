@@ -18,6 +18,16 @@ enum PermissionState: Equatable {
     case granted
     case denied
     case unavailable
+
+    var diagnosticLabel: String {
+        switch self {
+        case .unknown:       return "unknown"
+        case .notDetermined: return "not asked yet"
+        case .granted:       return "granted"
+        case .denied:        return "denied"
+        case .unavailable:   return "unavailable on this device"
+        }
+    }
 }
 
 enum AudioMode: String, CaseIterable, Identifiable {
@@ -1116,6 +1126,11 @@ class TimerViewModel: ObservableObject {
     @AppStorage("logWorkoutsToHealthKit") var logWorkoutsToHealthKit: Bool = true
     @Published var healthAuthorizationGranted: Bool = false
     @Published var vo2DataPoints: [VO2DataPoint] = []
+    /// When the last VO₂ query came back, and what it said if it failed.
+    /// Both exist for the Troubleshoot page — a user who sees no chart needs to
+    /// know whether the read ran at all, not just that the graph is missing.
+    @Published var lastVO2FetchDate: Date?
+    @Published var lastVO2FetchError: String?
 
     @Published var notificationPermissionState: PermissionState = .unknown
     @Published var healthKitPermissionState: PermissionState = .unknown
@@ -2548,6 +2563,8 @@ class TimerViewModel: ObservableObject {
         logWorkoutsToHealthKit = true
         healthAuthorizationGranted = false
         vo2DataPoints = []
+        lastVO2FetchDate = nil
+        lastVO2FetchError = nil
         cancelWorkoutReminder()
         cancelMissedWorkoutFollowUpReminder()
 
@@ -3194,6 +3211,10 @@ class TimerViewModel: ObservableObject {
         let query = HKSampleQuery(sampleType: vo2Type, predicate: nil, limit: 60, sortDescriptors: [sortDescriptor]) { _, samples, error in
             if let error = error {
                 print("VO2 fetch error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.lastVO2FetchError = error.localizedDescription
+                    self.lastVO2FetchDate = Date()
+                }
                 return
             }
 
@@ -3204,6 +3225,8 @@ class TimerViewModel: ObservableObject {
 
             DispatchQueue.main.async {
                 self.vo2DataPoints = mapped
+                self.lastVO2FetchError = nil
+                self.lastVO2FetchDate = Date()
             }
         }
 
@@ -3289,6 +3312,59 @@ class TimerViewModel: ObservableObject {
         if UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
         }
+    }
+
+    /// Deep link into the Health app so the user can check Cardio Fitness for
+    /// themselves. Requires "x-apple-health" in LSApplicationQueriesSchemes.
+    static var canOpenHealthApp: Bool {
+        guard let url = URL(string: "x-apple-health://") else { return false }
+        return UIApplication.shared.canOpenURL(url)
+    }
+
+    func openHealthApp() {
+        guard let url = URL(string: "x-apple-health://") else { return }
+        UIApplication.shared.open(url)
+    }
+
+    /// One-tap repair for a connection that went stale — clears the opt-out,
+    /// re-arms the flag and re-runs authorization so the VO₂ read fires again.
+    /// This is the fix for the case where access was revoked in iOS Settings
+    /// and then granted back: the persisted flag alone can't tell that apart
+    /// from the user switching Apple Health off inside N4x4.
+    func reconnectAppleHealth() {
+        healthKitUserOptedOut = false
+        healthKitEnabled = true
+        requestHealthKitAuthorizationIfNeeded()
+    }
+
+    /// Plain-text summary the user can paste into a support email, so a "no
+    /// graph" report arrives with the answer already in it.
+    func healthDiagnosticsSummary() -> String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+
+        var lines: [String] = []
+        lines.append("N4x4 \(version) (\(build)) · iOS \(UIDevice.current.systemVersion)")
+        lines.append("Health data available: \(HKHealthStore.isHealthDataAvailable() ? "yes" : "no")")
+        lines.append("Apple Health enabled in N4x4: \(healthKitEnabled ? "yes" : "no")")
+        lines.append("User opted out in-app: \(healthKitUserOptedOut ? "yes" : "no")")
+        lines.append("Workout permission: \(healthKitPermissionState.diagnosticLabel)")
+        lines.append("VO₂ max readings found: \(vo2DataPoints.count)")
+        if let latest = vo2DataPoints.max(by: { $0.date < $1.date }) {
+            lines.append("Latest reading: \(String(format: "%.1f", latest.value)) mL/kg·min on \(formatter.string(from: latest.date))")
+        }
+        if let fetched = lastVO2FetchDate {
+            lines.append("Last checked: \(formatter.string(from: fetched))")
+        } else {
+            lines.append("Last checked: never")
+        }
+        if let error = lastVO2FetchError {
+            lines.append("Last error: \(error)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     func reminderWeekdayTitle(_ weekday: Int) -> String {
