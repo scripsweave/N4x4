@@ -280,9 +280,13 @@ struct HomeScreen: View {
     /// Dismisses the "connect your Watch" banner for this app session; it
     /// reappears next launch if the Watch app is still not installed.
     @State private var watchBannerDismissed = false
+    /// True when there is enough history to draw the trend line. Drives layout
+    /// only — the card itself renders on `showVO2Card` so that users with no
+    /// readings get the card's empty state instead of blank space.
     private var hasVO2Data: Bool {
         viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2
     }
+    private var showVO2Card: Bool { viewModel.healthKitEnabled }
 
     // 2 August easter egg (see BirthdayEasterEgg.swift).
     @Environment(\.scenePhase) private var scenePhase
@@ -394,7 +398,7 @@ struct HomeScreen: View {
                 }
                 .padding(.horizontal, 8)
 
-                if hasVO2Data {
+                if showVO2Card {
                     VO2HistoryCard(viewModel: viewModel)
                 }
             }
@@ -787,17 +791,44 @@ struct VO2HistoryCard: View {
 #endif
     }
 
+    /// Says which of the three "no chart" situations the user is actually in.
+    /// The old copy ("log more sessions") was misleading for the common case:
+    /// N4x4 never writes VO₂ max, it only reads what Apple Health already holds,
+    /// and Cardio Fitness is produced by Apple Watch — so logging more N4x4
+    /// sessions does nothing for someone training with a chest strap alone.
+    private var emptyStateMessage: (String, String?) {
+        guard viewModel.healthKitEnabled else {
+            return ("Connect Apple Health to track your VO₂ max.", nil)
+        }
+        switch allPoints.count {
+        case 0:
+            return ("No VO₂ max readings in Apple Health yet.",
+                    "Apple records Cardio Fitness from Apple Watch during outdoor walks, runs and hikes. N4x4 reads that number — it can't measure it from a heart rate monitor alone.")
+        case 1:
+            return ("One reading so far.",
+                    "The trend line appears once Apple Health holds at least two.")
+        default:
+            return ("VO₂ max trend unavailable.", nil)
+        }
+    }
+
     private var emptyState: some View {
-        VStack(spacing: 6) {
+        let (title, detail) = emptyStateMessage
+        return VStack(spacing: 6) {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 26))
                 .foregroundStyle(Palette.textTertiary)
-            Text(viewModel.healthKitEnabled
-                 ? "Log more sessions to see your VO₂ max trend."
-                 : "Connect Apple Health to track VO₂ max.")
+            Text(title)
                 .font(.system(size: 13))
                 .foregroundStyle(Palette.textSecondary)
                 .multilineTextAlignment(.center)
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)

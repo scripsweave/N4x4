@@ -1108,6 +1108,11 @@ class TimerViewModel: ObservableObject {
 
     // HealthKit
     @AppStorage("healthKitEnabled") var healthKitEnabled: Bool = false
+    /// Set only when the user switches "Enable Apple Health" off themselves.
+    /// `healthKitEnabled` also gets cleared when iOS revokes access, so this is
+    /// what tells the two apart — without it, re-arming the connection after a
+    /// revoke would also override a deliberate opt-out on the next foreground.
+    @AppStorage("healthKitUserOptedOut") var healthKitUserOptedOut: Bool = false
     @AppStorage("logWorkoutsToHealthKit") var logWorkoutsToHealthKit: Bool = true
     @Published var healthAuthorizationGranted: Bool = false
     @Published var vo2DataPoints: [VO2DataPoint] = []
@@ -2539,6 +2544,7 @@ class TimerViewModel: ObservableObject {
         longestStreak = 0
 
         healthKitEnabled = false
+        healthKitUserOptedOut = false
         logWorkoutsToHealthKit = true
         healthAuthorizationGranted = false
         vo2DataPoints = []
@@ -3121,6 +3127,7 @@ class TimerViewModel: ObservableObject {
                 self.healthAuthorizationGranted = success
                 self.refreshHealthKitAuthorizationState()
                 self.healthKitEnabled = success
+                if success { self.healthKitUserOptedOut = false }
                 if success {
                     self.fetchVO2MaxSamples()
                     self.refreshCachedUserBirthday()
@@ -3160,6 +3167,12 @@ class TimerViewModel: ObservableObject {
         case .sharingAuthorized:
             healthKitPermissionState = .granted
             healthAuthorizationGranted = true
+            // Re-arm after an iOS-side revoke. `healthKitEnabled` is persisted and
+            // the .sharingDenied branch below clears it, so a user who hits "Turn
+            // Off All" in Settings > Privacy > Health and then re-grants every
+            // toggle would otherwise stay disconnected forever: fetchVO2MaxSamples()
+            // is guarded on this flag, so the VO2 card would never come back.
+            if !healthKitUserOptedOut { healthKitEnabled = true }
         case .sharingDenied:
             healthKitPermissionState = .denied
             healthAuthorizationGranted = false

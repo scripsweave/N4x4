@@ -508,6 +508,9 @@ struct AppleHealthSettingsView: View {
             ) {
                 Toggle("Enable Apple Health", isOn: $viewModel.healthKitEnabled)
                     .onChange(of: viewModel.healthKitEnabled) { _, enabled in
+                        // Remember that this was the user's own choice, so the
+                        // authorization refresh doesn't switch it back on.
+                        viewModel.healthKitUserOptedOut = !enabled
                         if enabled {
                             viewModel.requestHealthKitAuthorizationIfNeeded()
                         }

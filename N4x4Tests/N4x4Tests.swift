@@ -21,6 +21,7 @@ final class N4x4Tests: XCTestCase {
             "workoutReminderMode",
             "workoutReminderWeekday",
             "healthKitEnabled",
+            "healthKitUserOptedOut",
             "hasCompletedOnboarding",
             "workoutLogEntriesData",
             "unitPreference",
