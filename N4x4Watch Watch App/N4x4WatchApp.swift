@@ -14,7 +14,7 @@ struct N4x4WatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            WatchTimerView()
+            WatchRootView()
                 .environmentObject(sessionManager)
                 .environmentObject(workoutManager)
                 .onAppear {
@@ -23,5 +23,54 @@ struct N4x4WatchApp: App {
                     workoutManager.discardAbandonedSession()
                 }
         }
+    }
+}
+
+private struct WatchRootView: View {
+    @EnvironmentObject var sessionManager: WatchSessionManager
+    @EnvironmentObject var workoutManager: WorkoutManager
+
+    private var workoutActive: Bool {
+        let s = sessionManager.timerState
+        return s.sessionStarted && !s.workoutComplete
+    }
+
+    var body: some View {
+        NavigationStack {
+            if workoutActive {
+                WatchTimerView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) {
+                        NavigationLink { WatchHomeView() } label: {
+                            Image(systemName: "house")
+                        }
+                    }}
+            } else {
+                WatchHomeView()
+            }
+        }
+    }
+}
+
+private struct WatchHomeView: View {
+    @EnvironmentObject var sessionManager: WatchSessionManager
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "figure.run").font(.system(size: 34)).foregroundStyle(.cyan)
+            Text("N4x4").font(.system(size: 24, weight: .heavy, design: .rounded))
+            Text("Norwegian 4×4").font(.caption).foregroundStyle(.secondary)
+            Button { sessionManager.sendStartPause() } label: {
+                Label("Start workout", systemImage: "play.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            if sessionManager.timerState.intervalDuration > 0 {
+                Button(role: .destructive) { sessionManager.sendDiscard() } label: {
+                    Label("Discard session", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding()
+        .navigationTitle("N4x4")
     }
 }

@@ -189,6 +189,7 @@ struct RedesignRootView: View {
 
     @State private var selectedTab = 0
     @State private var showWatchHelp = false
+    @State private var workoutMinimized = false
     @Environment(\.scenePhase) private var scenePhase
 
     /// A workout is "active" (show Workout screen) whenever the timer is running
@@ -201,10 +202,25 @@ struct RedesignRootView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Group {
-                if isSessionActive {
-                    WorkoutScreen(viewModel: viewModel, showWatchHelp: $showWatchHelp)
+                if isSessionActive && !workoutMinimized {
+                    WorkoutScreen(viewModel: viewModel, showWatchHelp: $showWatchHelp,
+                                  onMinimize: { workoutMinimized = true })
                 } else {
-                    HomeScreen(viewModel: viewModel, showWatchHelp: $showWatchHelp)
+                    ZStack(alignment: .bottom) {
+                        HomeScreen(viewModel: viewModel, showWatchHelp: $showWatchHelp)
+                        if isSessionActive {
+                            Button { workoutMinimized = false } label: {
+                                Label("Workout in progress · Tap to return", systemImage: "stopwatch.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(Palette.electricBlue)
+                                    .padding(.vertical, 12)
+                                    .padding(.horizontal, 16)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.bottom, 12)
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -226,6 +242,9 @@ struct RedesignRootView: View {
         }
         .tint(Palette.electricBlue)
         .preferredColorScheme(.dark)
+        .onChange(of: isSessionActive) { _, active in
+            if !active { workoutMinimized = false }
+        }
         // Genuinely modal flows stay as sheets/covers. `StreakHistoryView`,
         // `PostWorkoutSummaryView` and `MilestoneCelebrationView` are internal
         // (see TimerView.swift).
@@ -840,6 +859,7 @@ struct VO2HistoryCard: View {
 struct WorkoutScreen: View {
     @ObservedObject var viewModel: TimerViewModel
     @Binding var showWatchHelp: Bool
+    var onMinimize: () -> Void = {}
 
     @State private var showEndAlert = false
     @State private var showSkipConfirmation = false
@@ -899,6 +919,13 @@ struct WorkoutScreen: View {
                     .tracking(0.5)
             }
             Spacer()
+            Button(action: onMinimize) {
+                Image(systemName: "chevron.down")
+                    .foregroundStyle(Palette.textSecondary)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Palette.surfaceRaised))
+            }
+            .buttonStyle(.plain)
             Button { showEndAlert = true } label: {
                 Text("END")
                     .font(.system(size: 13, weight: .heavy))
@@ -1288,6 +1315,7 @@ struct RedesignHistoryView: View {
     var embedded: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var selectedWorkout: WorkoutLogEntry?
+    @State private var workoutPendingDeletion: WorkoutLogEntry?
     /// Entry opened in the full-session detail sheet (charts + intervals).
     @State private var detailedWorkout: WorkoutLogEntry?
     @State private var selectedPerfModality: TrainingModality?
@@ -1320,6 +1348,19 @@ struct RedesignHistoryView: View {
         .preferredColorScheme(.dark)
         .sheet(item: $detailedWorkout) { workout in
             SessionDetailSheet(entry: workout, viewModel: viewModel)
+        }
+        .alert("Delete workout?", isPresented: Binding(
+            get: { workoutPendingDeletion != nil },
+            set: { if !$0 { workoutPendingDeletion = nil } }
+        ), presenting: workoutPendingDeletion) { workout in
+            Button("Delete", role: .destructive) {
+                viewModel.deleteWorkoutLogEntry(id: workout.id)
+                workoutPendingDeletion = nil
+                selectedWorkout = nil
+            }
+            Button("Cancel", role: .cancel) { workoutPendingDeletion = nil }
+        } message: { workout in
+            Text("This removes the \(workout.workoutType.rawValue) session from N4x4 history.")
         }
     }
 
@@ -1673,6 +1714,13 @@ struct RedesignHistoryView: View {
                 Divider().overlay(Palette.hairline)
                 Text(workout.notes).font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
             }
+            Button(role: .destructive) {
+                workoutPendingDeletion = workout
+            } label: {
+                Label("Delete workout", systemImage: "trash")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
             if workout.hrSummary != nil {
                 Button {
                     detailedWorkout = workout

@@ -112,6 +112,13 @@ struct WatchTimerView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                Button(role: .destructive) { sessionManager.sendDiscard() } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 6)

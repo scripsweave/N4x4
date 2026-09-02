@@ -197,6 +197,28 @@ final class N4x4Tests: XCTestCase {
         XCTAssertFalse(vm.healthAuthorizationGranted)
     }
 
+    func testDeleteWorkoutLogEntryRemovesEntryAndPersists() {
+        let vm = TimerViewModel()
+        let id = UUID()
+        vm.workoutLogEntries = [WorkoutLogEntry(id: id, workoutType: .run, notes: "test")]
+
+        vm.deleteWorkoutLogEntry(id: id)
+
+        XCTAssertTrue(vm.workoutLogEntries.isEmpty)
+        let reloaded = TimerViewModel()
+        XCTAssertTrue(reloaded.workoutLogEntries.isEmpty)
+    }
+
+    func testDeleteUnknownWorkoutIsNoOp() {
+        let vm = TimerViewModel()
+        let entry = WorkoutLogEntry(workoutType: .run, notes: "test")
+        vm.workoutLogEntries = [entry]
+
+        vm.deleteWorkoutLogEntry(id: UUID())
+
+        XCTAssertEqual(vm.workoutLogEntries, [entry])
+    }
+
     func testOnboardingFlowMovesForwardAndBackWithinBounds() {
         let flow = OnboardingFlowViewModel()
 

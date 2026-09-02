@@ -22,6 +22,7 @@ struct WatchTimerState: Equatable {
     var hrLow: Int
     var hrHigh: Int
     var workoutComplete: Bool
+    var sessionStarted: Bool
     var currentIntervalIndex: Int
     var zoneHapticEnabled: Bool
     var intervalHapticsEnabled: Bool
@@ -69,6 +70,7 @@ struct WatchTimerState: Equatable {
         hrLow: 0,
         hrHigh: 0,
         workoutComplete: false,
+        sessionStarted: false,
         currentIntervalIndex: 0,
         zoneHapticEnabled: true,
         intervalHapticsEnabled: true
@@ -96,6 +98,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     func sendStartPause() { sendCommand(WatchMessageKey.cmdStartPause) }
     func sendSkip()        { sendCommand(WatchMessageKey.cmdSkip) }
+    func sendDiscard()     { sendCommand(WatchMessageKey.cmdReset) }
 
     func requestStateFromPhone() {
         guard WCSession.isSupported(),
@@ -195,6 +198,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             hrLow:                p[WatchMessageKey.hrLow]                as? Int    ?? 0,
             hrHigh:               p[WatchMessageKey.hrHigh]               as? Int    ?? 0,
             workoutComplete:      p[WatchMessageKey.workoutComplete]      as? Bool   ?? false,
+            sessionStarted:       p[WatchMessageKey.sessionStarted]       as? Bool   ?? false,
             currentIntervalIndex: p[WatchMessageKey.currentIntervalIndex] as? Int    ?? 0,
             zoneHapticEnabled:    p[WatchMessageKey.zoneHapticEnabled]    as? Bool   ?? true,
             intervalHapticsEnabled: p[WatchMessageKey.intervalHapticsEnabled] as? Bool ?? true

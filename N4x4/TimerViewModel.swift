@@ -2196,6 +2196,15 @@ class TimerViewModel: ObservableObject {
         reset()
     }
 
+    /// Permanently removes a saved workout and its persisted heart-rate series.
+    func deleteWorkoutLogEntry(id: UUID) {
+        guard workoutLogEntries.contains(where: { $0.id == id }) else { return }
+        workoutLogEntries.removeAll { $0.id == id }
+        HeartRateSeriesStore.delete(for: id)
+        persistWorkoutLogEntries()
+        refreshStreak()
+    }
+
     /// The most recent logged performance set for a given modality, used to
     /// pre-fill the post-workout summary so a typical session is one tap to save.
     /// `workoutLogEntries` is kept newest-first, so the first match wins.

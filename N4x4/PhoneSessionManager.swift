@@ -60,6 +60,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.hrLow:                  hrLow,
             WatchMessageKey.hrHigh:                 hrHigh,
             WatchMessageKey.workoutComplete:        vm.showPostWorkoutSummary,
+            WatchMessageKey.sessionStarted:         vm.workoutStartDate != nil,
             WatchMessageKey.zoneHapticEnabled:      vm.zoneHapticAlertsEnabled,
             WatchMessageKey.intervalHapticsEnabled: vm.hapticsEnabled,
         ]
@@ -141,6 +142,8 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             if vm.isRunning { vm.pause() } else { vm.startTimer() }
         case WatchMessageKey.cmdSkip:
             vm.skip()
+        case WatchMessageKey.cmdReset:
+            vm.closePostWorkoutSummaryWithoutSaving()
         case WatchMessageKey.cmdRequestState:
             sendStateUpdate(to: vm)
         case WatchMessageKey.heartRate:
