@@ -96,8 +96,8 @@ BID=Jan-van-Rensburg.N4x4.watchkitapp
 # for each <device>:<udid> in ultra3 / s11-46 / se-44, and each state in
 # local controls offline localComplete:
 xcrun simctl launch <udid> $BID -demoState <state>; sleep 4
-xcrun simctl io <udid> screenshot raw/<device>-<state>.png
-python3 AppStore/make-watch-store-set.py raw/
+xcrun simctl io <udid> screenshot AppStore/raw-watch/<device>-<state>.png
+python3 AppStore/make-watch-store-set.py        # reads AppStore/raw-watch/ by default
 ```
 
 The simulator clock shows the real time; Apple does not require 9:41 on
@@ -106,7 +106,7 @@ watch screenshots.
 ## Regenerating the framed watch (`assets/watch-ultra-framed.png`)
 
 ```
-python3 AppStore/make-framed-watch.py raw/ultra3-local.png   # real capture (5.0+)
+python3 AppStore/make-framed-watch.py AppStore/raw-watch/ultra3-local.png   # real capture (5.0+)
 python3 AppStore/make-framed-watch.py                        # legacy: HTML face
 ```
 
@@ -128,7 +128,7 @@ the real app UI match** — keep them in sync (see
 ## Regenerating `03-watch.png`
 
 ```
-python3 AppStore/make-framed-watch.py raw/ultra3-local.png   # only if the face changed
+python3 AppStore/make-framed-watch.py AppStore/raw-watch/ultra3-local.png   # only if the face changed
 python3 AppStore/make-watch-screenshot.py
 sips -z 2778 1284 AppStore/screenshots/03-watch.png \
   --out AppStore/screenshots/6.7in/03-watch.png
