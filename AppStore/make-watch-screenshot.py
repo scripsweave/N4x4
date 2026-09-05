@@ -46,8 +46,8 @@ def ctext(y, txt, f, fill):
 
 ctext(178, "Your Apple Watch,", hf, (255, 255, 255))
 ctext(272, "your coach.", hf, (255, 255, 255))
-ctext(382, "Heart rate streams live from your wrist,", sf, (168, 168, 176))
-ctext(432, "with real-time speed-up cues.", sf, (168, 168, 176))
+ctext(382, "Live heart rate and zone cues on your wrist.", sf, (168, 168, 176))
+ctext(432, "Runs on its own when your iPhone isn't around.", sf, (168, 168, 176))
 
 w = Image.open(WATCH).convert("RGBA")
 tw = 1040

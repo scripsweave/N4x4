@@ -59,46 +59,56 @@ white outline read as a generic Android. The frame lives in CSS in
 - `watch-ultra-framed.png` — ours (see frame provenance below); its composited
   screen corners were rounded in 4.7 to follow the case curve.
 
-## `watch-screenshots/` — Apple Watch slot (required)
+## `watch-screenshots/` — Apple Watch slots (required)
 
 Because the binary includes a watchOS app, App Store Connect requires at least
-one Apple Watch screenshot. These are the raw watch screen (no device frame),
-rendered to match the real `WatchTimerView` UI. Upload
-**`watch-ultra-410x502.png`** — per Apple's screenshot specifications
-(checked 2026-07-22), 410×502 is the accepted size for Ultra 1/2/**and 3**
-(the Ultra 3's physical 422×514 resolution is NOT an accepted upload size;
-`watch-ultra3-422x514.png` is kept only in case ASC adds the slot).
+one Apple Watch screenshot. **Apple's watch slots take the raw screen only —
+no device frame and no caption/marketing text** (that lives on the phone card
+`03-watch.png` instead). Since 5.0 these are real Simulator captures of the
+shipped UI, not HTML mockups, so the listing can't drift from the app.
 
-Regenerate from `make-watch-screen.html` (headless Chrome, one render per size).
-**Render at 2× and downsample** — Chrome's new headless mode clamps the window
-to ~500×500 minimum, so a 1× render at these sizes lays out for a 500px
-viewport and crops it, pushing everything off-centre:
+One numbered set per slot; upload the **`ultra-410x502/`** set (per Apple's
+specifications, checked 2026-07-22, 410×502 is the accepted size for Ultra
+1/2/3 — the Ultra 3's physical 422×514 is not an upload size). The other
+folders exist for the optional per-size slots.
+
+| Folder | Size | ASC slot |
+|--------|------|----------|
+| `ultra-410x502/` | 410×502 | Ultra / Ultra 2 / Ultra 3 — **upload this one** |
+| `series11-416x496/` | 416×496 | Series 10 / 11 |
+| `45mm-396x484/` | 396×484 | Series 7–9 |
+| `44mm-368x448/` | 368×448 | Series 4–6 / SE |
+
+| File | Shows |
+|------|-------|
+| `01-workout.png` | Work interval: countdown ring, in-zone HR, IN ZONE cue (Watch-led) |
+| `02-home.png` | Home: streak, START ring, plan bar, "No iPhone · runs on Watch" |
+| `03-controls.png` | Controls page: timeline, PAUSE / SKIP / END |
+| `04-complete.png` | Watch-led completion with sync status |
+
+Regenerate: capture each demo state on the Ultra 3, Series 11 46 mm and SE
+44 mm simulators, then fit them to the slots (letterboxed on black where the
+aspect differs by a hair; alpha stripped):
 
 ```
-cd AppStore
-CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-for s in watch-44mm-368x448:368:448 watch-45mm-396x484:396:484 \
-         watch-series11-416x496:416:496 watch-ultra-410x502:410:502 \
-         watch-ultra3-422x514:422:514; do
-  IFS=: read name w h <<< "$s"
-  "$CHROME" --headless=new --screenshot="watch-screenshots/$name.png" \
-    --window-size=$((w*2)),$((h*2)) --hide-scrollbars --force-device-scale-factor=2 \
-    "file://$(pwd)/make-watch-screen.html"
-  sips -z $h $w "watch-screenshots/$name.png" --out "watch-screenshots/$name.png"
-done
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+BID=Jan-van-Rensburg.N4x4.watchkitapp
+# for each <device>:<udid> in ultra3 / s11-46 / se-44, and each state in
+# local controls offline localComplete:
+xcrun simctl launch <udid> $BID -demoState <state>; sleep 4
+xcrun simctl io <udid> screenshot raw/<device>-<state>.png
+python3 AppStore/make-watch-store-set.py raw/
 ```
 
-The face shows a below-zone reading (148 in a 158–172 zone), so the orange
-number and the "Speed Up" cue agree with each other and with the app's live
-zone colouring. Keep it in sync with `WatchTimerView` and the website mockup.
+The simulator clock shows the real time; Apple does not require 9:41 on
+watch screenshots.
 
-| File | Size | ASC slot |
-|------|------|----------|
-| `watch-ultra-410x502.png` | 410×502 | Ultra / Ultra 2 / Ultra 3 — **upload this one** |
-| `watch-series11-416x496.png` | 416×496 | Series 10 / 11 |
-| `watch-45mm-396x484.png` | 396×484 | Series 7–9 |
-| `watch-44mm-368x448.png` | 368×448 | Series 4–6 / SE |
-| `watch-ultra3-422x514.png` | 422×514 | ⚠ no ASC slot accepts this size (kept speculatively) |
+## Regenerating the framed watch (`assets/watch-ultra-framed.png`)
+
+```
+python3 AppStore/make-framed-watch.py raw/ultra3-local.png   # real capture (5.0+)
+python3 AppStore/make-framed-watch.py                        # legacy: HTML face
+```
 
 ## `assets/` — reusable source
 
@@ -118,7 +128,7 @@ the real app UI match** — keep them in sync (see
 ## Regenerating `03-watch.png`
 
 ```
-python3 AppStore/make-framed-watch.py    # only if the face changed
+python3 AppStore/make-framed-watch.py raw/ultra3-local.png   # only if the face changed
 python3 AppStore/make-watch-screenshot.py
 sips -z 2778 1284 AppStore/screenshots/03-watch.png \
   --out AppStore/screenshots/6.7in/03-watch.png

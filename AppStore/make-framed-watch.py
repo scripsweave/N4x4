@@ -8,8 +8,15 @@ Fixes two defects in the previous build:
   screen opening.
 
 Approach: flood-fill the transparent screen opening of the frame to get an
-exact mask, clip the freshly rendered face to that mask, then composite the
-frame on top.
+exact mask, clip the face to that mask, then composite the frame on top.
+
+The face is a real Simulator capture when one is given (preferred — the
+advertised watch then IS the shipped UI):
+
+    python3 AppStore/make-framed-watch.py path/to/ultra3-local.png
+
+With no argument it falls back to rendering make-watch-face.html in headless
+Chrome (the pre-5.0 mockup path).
 """
 import os, subprocess, sys, tempfile
 from collections import deque
@@ -57,15 +64,24 @@ bx, by, bx2, by2 = bb
 bw, bh = bx2 - bx, by2 - by
 print(f"opening at {TW}x{TH}: x {bx}-{bx2}, y {by}-{by2} ({bw}x{bh})")
 
-# Render the face at 2x the opening size (scale factor 2 keeps the window above
-# headless Chrome's ~500px minimum, so vw units resolve correctly), then downsample.
-face_png = os.path.join(SCRATCH, "face-render.png")
-subprocess.run([
-    CHROME, "--headless=new", f"--screenshot={face_png}",
-    f"--window-size={bw*2},{bh*2}", "--hide-scrollbars",
-    "--force-device-scale-factor=2", f"file://{FACE_HTML}",
-], check=True, capture_output=True)
-face = Image.open(face_png).convert("RGBA").resize((bw, bh), Image.LANCZOS)
+if len(sys.argv) > 1:
+    # Real capture: scale to COVER the opening (the Ultra opening and the
+    # 422x514 Ultra 3 capture differ in aspect by well under 1%), centre-crop.
+    src = Image.open(sys.argv[1]).convert("RGBA")
+    scale = max(bw / src.width, bh / src.height)
+    sw, sh = round(src.width * scale), round(src.height * scale)
+    src = src.resize((sw, sh), Image.LANCZOS)
+    face = src.crop(((sw - bw) // 2, (sh - bh) // 2, (sw - bw) // 2 + bw, (sh - bh) // 2 + bh))
+else:
+    # Render the face at 2x the opening size (scale factor 2 keeps the window above
+    # headless Chrome's ~500px minimum, so vw units resolve correctly), then downsample.
+    face_png = os.path.join(SCRATCH, "face-render.png")
+    subprocess.run([
+        CHROME, "--headless=new", f"--screenshot={face_png}",
+        f"--window-size={bw*2},{bh*2}", "--hide-scrollbars",
+        "--force-device-scale-factor=2", f"file://{FACE_HTML}",
+    ], check=True, capture_output=True)
+    face = Image.open(face_png).convert("RGBA").resize((bw, bh), Image.LANCZOS)
 
 # Face layer clipped to the exact opening, frame composited on top
 layer = Image.new("RGBA", (TW, TH), (0, 0, 0, 0))
