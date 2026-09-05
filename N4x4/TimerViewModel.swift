@@ -1344,7 +1344,7 @@ class TimerViewModel: ObservableObject {
         Self.successMessages.randomElement() ?? "Great job, Viking!"
     }
 
-    private let healthStore = HKHealthStore()
+    let healthStore = HKHealthStore()
     private var isSchedulingWorkoutReminder = false
     private var isResolvingNotificationPermission = false
     private var isRequestingNotificationAuthorization = false
@@ -2352,7 +2352,7 @@ class TimerViewModel: ObservableObject {
         workoutLogEntries = []
     }
 
-    private func persistWorkoutLogEntries() {
+    func persistWorkoutLogEntries() {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(workoutLogEntries), let json = String(data: data, encoding: .utf8) {
@@ -2522,7 +2522,7 @@ class TimerViewModel: ObservableObject {
         workoutLogEntries.contains { Calendar.current.isDate($0.completedAt, inSameDayAs: date) }
     }
 
-    private func cancelMissedWorkoutFollowUpIfCompletedToday() {
+    func cancelMissedWorkoutFollowUpIfCompletedToday() {
         guard workoutReminderMode == .weeklyWeekday else { return }
         // Any logged workout counts as a comeback, so clear all pending follow-ups.
         cancelMissedWorkoutFollowUpReminder()
@@ -3243,10 +3243,17 @@ class TimerViewModel: ObservableObject {
     }
 
     func saveCompletedWorkoutToHealthKit() {
-        guard healthKitEnabled, healthAuthorizationGranted, logWorkoutsToHealthKit else { return }
-
         let endDate = Date()
         let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())
+        saveWorkoutToHealthKit(start: startDate, end: endDate)
+    }
+
+    /// Writes one HIIT workout record to Health for the given span. Used for
+    /// the just-finished phone session and for workouts imported from a
+    /// standalone Watch run (the Watch never saves — see AGENTS.md).
+    func saveWorkoutToHealthKit(start startDate: Date, end endDate: Date) {
+        guard healthKitEnabled, healthAuthorizationGranted, logWorkoutsToHealthKit else { return }
+        guard endDate > startDate else { return }
 
         let config = HKWorkoutConfiguration()
         config.activityType = .highIntensityIntervalTraining

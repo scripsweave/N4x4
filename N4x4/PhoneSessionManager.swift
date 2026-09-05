@@ -63,6 +63,18 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.sessionStarted:         vm.workoutStartDate != nil,
             WatchMessageKey.zoneHapticEnabled:      vm.zoneHapticAlertsEnabled,
             WatchMessageKey.intervalHapticsEnabled: vm.hapticsEnabled,
+            // Home-screen extras so the Watch can mirror the phone: streak
+            // header and the full interval plan (timeline bar + "N min left").
+            WatchMessageKey.streak:                 vm.currentStreak,
+            WatchMessageKey.planPhases:             vm.intervals.map { workoutPhase(for: $0.type).rawValue },
+            WatchMessageKey.planDurations:          vm.intervals.map { $0.duration },
+            // Per-phase targets + default type so the Watch can run (and log)
+            // a workout on its own when the phone is out of reach.
+            WatchMessageKey.workHRLow:              vm.highIntensityTargetRange.lowerBound,
+            WatchMessageKey.workHRHigh:             vm.highIntensityTargetRange.upperBound,
+            WatchMessageKey.recoveryHRLow:          vm.recoveryTargetRange.lowerBound,
+            WatchMessageKey.recoveryHRHigh:         vm.recoveryTargetRange.upperBound,
+            WatchMessageKey.workoutTypeRaw:         vm.resolvedDefaultWorkoutType.rawValue,
         ]
 
         if WCSession.default.isReachable {
@@ -73,6 +85,17 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             }
         } else {
             try? WCSession.default.updateApplicationContext(payload)
+        }
+    }
+
+    /// Mirrors `TimerViewModel.currentWorkoutPhase` for any interval so the
+    /// Watch can draw the whole plan, not just the current phase.
+    private func workoutPhase(for type: IntervalType) -> WorkoutPhase {
+        switch type {
+        case .warmup:        return .warmup
+        case .highIntensity: return .highIntensity
+        case .rest:          return .rest
+        case .cooldown:      return .cooldown
         }
     }
 
@@ -131,6 +154,13 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
         replyHandler([:])
     }
 
+    /// Queued delivery (transferUserInfo) — how the Watch hands over workouts
+    /// it ran on its own. Guaranteed and ordered, delivered whenever the phone
+    /// is next reachable, even if that is hours later.
+    func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        DispatchQueue.main.async { [weak self] in self?.handle(userInfo) }
+    }
+
     // MARK: - Incoming message routing
 
     private func handle(_ message: [String: Any]) {
@@ -150,8 +180,38 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             if let bpm = message[WatchMessageKey.hrBPM] as? Double {
                 vm.ingestHeartRate(bpm, from: .watch)
             }
+        case WatchMessageKey.workoutCompleted:
+            handleCompletedWatchWorkout(message, vm: vm)
+        case WatchMessageKey.workoutDiscard:
+            if let idString = message[WatchMessageKey.workoutID] as? String,
+               let id = UUID(uuidString: idString) {
+                vm.discardWatchWorkout(id: id)
+            }
         default:
             break
         }
+    }
+
+    // MARK: - Standalone Watch workouts
+
+    /// Import (idempotent) and always ack by id — an already-imported or
+    /// discarded record still needs acking so the Watch can clear its queue.
+    /// A record that fails to decode is not acked; the Watch keeps it and the
+    /// next app build can try again.
+    private func handleCompletedWatchWorkout(_ message: [String: Any], vm: TimerViewModel) {
+        guard let idString = message[WatchMessageKey.workoutID] as? String,
+              let data = message[WatchMessageKey.workoutRecord] as? Data,
+              let record = CompletedWatchWorkout.decode(data),
+              record.id.uuidString == idString else { return }
+        vm.importWatchWorkout(record)
+        ackWatchWorkout(id: idString)
+    }
+
+    private func ackWatchWorkout(id: String) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        WCSession.default.transferUserInfo([
+            WatchMessageKey.messageType: WatchMessageKey.workoutAck,
+            WatchMessageKey.workoutID:   id,
+        ])
     }
 }

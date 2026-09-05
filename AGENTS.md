@@ -245,7 +245,67 @@ To verify:
 - **`WorkoutPhase` is the cross-target type.** Never put `IntervalType` in a
   WatchConnectivity message — it has no `rawValue`. `WorkoutPhase` is `Codable`.
 - **Watch deployment target is watchOS 10.0** (the UI uses two-parameter
-  `onChange`). HR only works on a physical Series 4+ Watch, never the Simulator.
+  `onChange` and `.tabViewStyle(.verticalPage)`). HR only works on a physical
+  Series 4+ Watch, never the Simulator.
+- **Watch lifecycle lives in the root, not a screen.** `WatchRootView`
+  (`N4x4WatchApp.swift`) owns the HKWorkoutSession start/stop, interval and
+  countdown haptics and the foreground re-sync, and routes on the phone's
+  state: `workoutComplete` → `WatchCompleteView`, `sessionStarted` →
+  `WatchTimerView`, else `WatchHomeView`. Never hang those `onChange`s on a
+  screen view again — 4.16 did, and the screen was unmounted exactly when
+  the final state arrived, so the session leaked and HR never started until
+  the first interval boundary.
+- **Watch design tokens mirror the phone.** `WatchTheme.swift` repeats
+  `Palette` as `WatchPalette` plus `NeonRing` / `WatchTimelineBar` /
+  `WatchPulsingHeart` / `WatchControlButtonStyle` (the iOS `Palette`,
+  `MetalRing`, `IntervalTimelineBar` are iOS-target only). Change colours in
+  both places together.
+- **Home extras in the state payload:** `streak`, `planPhases`,
+  `planDurations` (parallel arrays) let the Watch draw the streak header and
+  the timeline bar. Defaults are safe for an older phone build.
+- **Watch demo mode (DEBUG only):** launch the Watch app with
+  `-demoState home|offline|workout|paused|controls|complete|local|localComplete`
+  to see any screen in the Simulator with no phone and no HK session
+  (`WatchDemoState`). Use it for layout checks on the 40 mm SE — it's the
+  tightest screen. Relaunching with no arguments after `local` proves the
+  Watch-led workout restores from disk.
+
+## Standalone Watch workouts (4.18+)
+
+- **Who leads is decided at START, never mid-workout.** Phone reachable →
+  the phone's `TimerViewModel` leads exactly as before (mirror mode). Phone
+  unreachable → the Watch runs `Shared/WatchWorkoutEngine.swift` itself
+  (local mode). There is no hand-over in either direction; two engines
+  leading the same workout was the failure mode to avoid.
+- **The engine is pure Foundation and shared.** `WatchWorkoutPlan` /
+  `WatchWorkoutEngine` / `CompletedWatchWorkout` compile into both targets
+  and are tested in `N4x4Tests/WatchStandaloneTests.swift`. Absolute-time
+  model: `reconcile(now:)` walks every boundary that has passed, so a
+  suspended or relaunched app catches up. Add behaviour there, with a test.
+- **Mirror mode projects.** Between phone messages (and with the phone out
+  of range) `WatchTimerState.projected(at:)` advances the phone's last state
+  through the synced plan so intervals, haptics and zone targets keep
+  moving. The next phone message re-seeds it. The payload therefore carries
+  the full plan plus per-phase targets (`planPhases`, `planDurations`,
+  `workHRLow/High`, `recoveryHRLow/High`).
+- **Controls are never queued.** `sendCommand` only uses `sendMessage` while
+  reachable; the old `transferUserInfo` fallback is gone because a pause or
+  reset landing minutes later is a hazard. Offline in mirror mode the
+  controls are disabled and END merely stops showing the phone's workout.
+- **Watch-led state persists.** The live engine is written to UserDefaults
+  (`watchLocalEngine`, boundaries immediately, HR samples throttled to 30 s)
+  and restored in `WatchSessionManager.init`. The cached plan
+  (`watchCachedPlan`) is what a standalone run uses; `WatchWorkoutPlan.fallback`
+  is the protocol default for a Watch that has never synced.
+- **Completed records sync via `transferUserInfo` and stay pending until
+  acked.** `pendingWorkouts` (`watchPendingWorkouts`) is flushed on
+  completion, activation, reachability and foreground, skipping ids already
+  in `outstandingUserInfoTransfers`. The phone (`WatchWorkoutImport.swift`)
+  imports idempotently by record id, remembers discarded ids, and always
+  acks — even for duplicates — so the Watch queue drains.
+- **The Watch still never saves to Health.** The phone's
+  `saveWorkoutToHealthKit(start:end:)` writes the imported workout with the
+  Watch's real start/end. Keep the single-saver rule.
 
 ## Heart-rate zone feedback
 

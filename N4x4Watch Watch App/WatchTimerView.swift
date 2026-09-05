@@ -1,260 +1,295 @@
 // WatchTimerView.swift
-// Main Watch UI: two-line phase header, progress ring with a big heart-rate
-// readout, a Speed Up / Slow Down coaching cue with the live target range, and
-// start/pause/skip controls. This mirrors the layout advertised on the website
-// so the real app and the marketing look identical. Out-of-zone haptics are
-// driven from here as each reading arrives.
+// Active-workout UI, mirroring the phone's WorkoutScreen: a "ROUND 2 OF 4"
+// header, the neon countdown ring (time, phase, live zone-coloured HR) with
+// the Speed Up / Slow Down cue beneath, then a second vertical page with the
+// plan timeline and PAUSE / SKIP / END controls (END and skip-out-of-cooldown
+// confirm, like the phone). Works identically for phone-led and Watch-led
+// workouts; the header badge says which, and controls go quiet when a
+// phone-led workout is being shown with the phone out of range. Lifecycle —
+// HK session, haptics, re-sync — lives in the root view.
 
 import SwiftUI
-import WatchKit
 
 struct WatchTimerView: View {
 
     @EnvironmentObject var sessionManager: WatchSessionManager
     @EnvironmentObject var workoutManager: WorkoutManager
 
-    @State private var lastIntervalIndex = 0
-    /// Pending countdown-tap haptics for the current interval; cancelled and
-    /// rebuilt whenever fresh state arrives from the phone.
-    @State private var countdownTaps: [DispatchWorkItem] = []
-    @Environment(\.scenePhase) private var scenePhase
+    @State private var page: Int
+    @State private var showEndAlert = false
+    @State private var showSkipAlert = false
+
+    /// `initialPage` 1 opens on the controls page (used by the DEBUG demo mode).
+    init(initialPage: Int = 0) {
+        _page = State(initialValue: initialPage)
+    }
 
     private var state: WatchTimerState { sessionManager.timerState }
-
-    /// The ring scales to the watch's actual screen width so it never clips on
-    /// small models (e.g. 40 mm Series 4), while staying capped on large ones.
-    private var ringSize: CGFloat {
-        min(WKInterfaceDevice.current().screenBounds.width * 0.60, 132)
-    }
+    private var phaseColor: Color { state.phase.color }
+    private var hasTarget: Bool { state.hrLow > 0 && state.hrHigh > 0 }
+    private var hasPlan: Bool { state.hasPlan }
+    private var canControl: Bool { sessionManager.canControl }
+    private var offline: Bool { sessionManager.isProjectingOffline }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 8) {
-
-                // TimelineView drives a smooth 1 s countdown (a plain
-                // Timer.publish is throttled to ~5 s on watchOS).
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    let remaining = state.timeRemaining(asOf: context.date)
-                    VStack(spacing: 8) {
-
-                        // ── Header: phase + interval / countdown ──
-                        VStack(spacing: 1) {
-                            Text(phaseName)
-                                .font(.system(size: 13, weight: .heavy, design: .rounded))
-                                .foregroundColor(state.phase.color)
-                                .tracking(0.5)
-                            Text(detailLine(remaining))
-                                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundColor(.white.opacity(0.55))
-                                .monospacedDigit()
-                        }
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                        // ── Progress ring with big BPM readout ──
-                        ZStack {
-                            Circle()
-                                .stroke(Color.white.opacity(0.15), lineWidth: 8)
-
-                            Circle()
-                                .trim(from: 0, to: state.progressValue(asOf: context.date))
-                                .stroke(style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                                .foregroundColor(state.phase.color)
-                                .rotationEffect(.degrees(-90))
-                                .shadow(color: state.phase.color.opacity(0.6), radius: 4)
-
-                            centerContent(remaining: remaining)
-                        }
-                        .frame(width: ringSize, height: ringSize)
-
-                        // ── Coaching cue + target range ──
-                        VStack(spacing: 1) {
-                            if let cue = zoneCue {
-                                Text(cue.text)
-                                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                                    .foregroundColor(cue.color)
-                            }
-                            if hasTarget {
-                                Text("TARGET \(state.hrLow)–\(state.hrHigh)")
-                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                    .foregroundColor(.white.opacity(0.4))
-                                    .monospacedDigit()
-                                    .tracking(0.5)
-                            }
-                        }
-                        .frame(minHeight: 32)
-                    }
-                }
-
-                // ── Controls ────────────────────────────────────
-                HStack(spacing: 14) {
-                    Button {
-                        sessionManager.sendStartPause()
-                    } label: {
-                        Image(systemName: state.isRunning ? "pause.fill" : "play.fill")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 54, height: 42)
-                            .background(Color.white.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        sessionManager.sendSkip()
-                    } label: {
-                        Image(systemName: "forward.end.alt.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(width: 54, height: 42)
-                            .background(Color.white.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 12))
-                    }
-                    .buttonStyle(.plain)
-                }
-                Button(role: .destructive) { sessionManager.sendDiscard() } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(.red)
-                        .frame(width: 42, height: 42)
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+        TabView(selection: $page) {
+            ringPage.tag(0)
+            controlsPage.tag(1)
         }
-        // Drive the zone-feedback engine off each fresh HR reading.
-        .onChange(of: workoutManager.heartRate) { _, bpm in
-            sessionManager.evaluateZoneHaptic(bpm: bpm)
+        .tabViewStyle(.verticalPage)
+        .alert(offline ? "Stop showing this workout?" : "End workout?", isPresented: $showEndAlert) {
+            Button(offline ? "Stop" : "End", role: .destructive) { sessionManager.endWorkout() }
+            Button("Keep Going", role: .cancel) {}
+        } message: {
+            Text(offline
+                 ? "Your iPhone is out of range. The workout continues on the iPhone and is saved there."
+                 : "This ends the current session. Your progress so far won't be logged.")
         }
-
-        // Manage the HKWorkoutSession off the full timer state. The session must
-        // be active while running OR paused mid-workout, and ended on completion,
-        // reset, or abandon. Keying only off `isRunning` (with a workoutComplete
-        // guard) leaked the session on every non-completed exit — the phone
-        // pushing an idle/reset or a complete-while-paused state never stopped it.
-        .onChange(of: sessionManager.timerState) { _, s in
-            let shouldRun = s.isRunning || (!s.workoutComplete && s.intervalDuration > 0)
-            if shouldRun, !workoutManager.isSessionActive {
-                workoutManager.startWorkout()
-            } else if !shouldRun, workoutManager.isSessionActive {
-                workoutManager.stopWorkout()
-            }
-            scheduleCountdownTaps(for: s)
-        }
-
-        // Long buzz as the new interval starts — closes the two-short-taps
-        // countdown. Only while actively running, so the reset-to-idle index
-        // change doesn't fire a spurious buzz.
-        .onChange(of: state.currentIntervalIndex) { _, newIndex in
-            let advanced = newIndex != lastIntervalIndex
-            lastIntervalIndex = newIndex
-            if advanced, state.isRunning, state.intervalHapticsEnabled {
-                WKInterfaceDevice.current().play(.notification)
-            }
-        }
-
-        // The workout's end is signalled by the two countdown taps alone —
-        // no closing buzz, since no new interval starts.
-        .onChange(of: state.workoutComplete) { _, complete in
-            if complete {
-                countdownTaps.forEach { $0.cancel() }
-                countdownTaps = []
-            }
-        }
-
-        // Re-sync when the Watch app returns to the foreground.
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { sessionManager.requestStateFromPhone() }
+        .alert("End workout now?", isPresented: $showSkipAlert) {
+            Button("End Now", role: .destructive) { sessionManager.skip() }
+            Button("Continue Cooldown", role: .cancel) {}
         }
     }
 
-    // MARK: - Countdown haptics
+    // MARK: - Page 1: ring
 
-    /// Two short wrist taps at ~3 s and ~2 s before the interval boundary,
-    /// mirroring the phone. The interval boundary itself gets the long buzz
-    /// (interval-change handler above); after the final interval nothing
-    /// follows, so the taps stand alone. Scheduled off the absolute end time
-    /// because watchOS timers tied to view updates are throttled.
-    private func scheduleCountdownTaps(for s: WatchTimerState) {
-        countdownTaps.forEach { $0.cancel() }
-        countdownTaps = []
-        guard s.isRunning, s.intervalHapticsEnabled, !s.workoutComplete else { return }
+    private var ringPage: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width * 0.76, geo.size.height * 0.72)
+            // TimelineView drives a smooth 1 s countdown (a plain
+            // Timer.publish is throttled to ~5 s on watchOS).
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                let remaining = state.timeRemaining(asOf: context.date)
+                let progress = state.progressValue(asOf: context.date)
+                VStack(spacing: 0) {
+                    HStack(spacing: 4) {
+                        Text(headerText)
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundStyle(WatchPalette.electricBlue)
+                            .tracking(0.8)
+                        modeBadge
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
 
-        for lead in [3.0, 2.0] {
-            let delay = s.intervalEndTime.timeIntervalSinceNow - lead
-            guard delay > 0 else { continue }
-            let tap = DispatchWorkItem { WKInterfaceDevice.current().play(.click) }
-            countdownTaps.append(tap)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: tap)
+                    Spacer(minLength: 2)
+
+                    NeonRing(side: side,
+                             progress: progress,
+                             glow: AnyShapeStyle(phaseColor),
+                             glowColor: phaseColor,
+                             showDot: true,
+                             animates: true,
+                             dimmed: !state.isRunning) {
+                        ringCenter(remaining: remaining, side: side)
+                    }
+
+                    Spacer(minLength: 2)
+
+                    cueRow
+                        .frame(height: 16)
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+        }
+        .padding(.horizontal, 6)
+    }
+
+    /// Ring centre, same stack as the phone: countdown, phase (or PAUSED),
+    /// then the live heart rate with a beating heart, tinted by zone status
+    /// (shared mapping: orange = too low, red = too high, green = in zone).
+    /// Before the first reading the slot shows an outline heart and "--" so
+    /// the layout doesn't jump when HR arrives, and it's clear HR is expected.
+    private func ringCenter(remaining: TimeInterval, side: CGFloat) -> some View {
+        let hr = workoutManager.heartRate
+        return VStack(spacing: side * 0.005) {
+            Text(watchTimeString(remaining))
+                .font(.system(size: side * 0.21, weight: .heavy, design: .rounded))
+                .foregroundStyle(WatchPalette.textPrimary)
+                .monospacedDigit()
+
+            Text(state.isRunning ? state.phase.watchLabel : "PAUSED")
+                .font(.system(size: side * 0.085, weight: .heavy))
+                .foregroundStyle(state.isRunning ? phaseColor : WatchPalette.amber)
+                .tracking(0.8)
+
+            HStack(spacing: side * 0.03) {
+                if hr > 0 {
+                    WatchPulsingHeart(bpm: hr, size: side * 0.075)
+                        .id(Int((hr / 4).rounded()))
+                    Text("\(Int(hr))")
+                        .foregroundStyle(
+                            sessionManager.zoneStatus(bpm: hr).tint ?? WatchPalette.textPrimary)
+                } else {
+                    Image(systemName: "heart")
+                        .font(.system(size: side * 0.075, weight: .semibold))
+                        .foregroundStyle(WatchPalette.textTertiary)
+                    Text("--")
+                        .foregroundStyle(WatchPalette.textTertiary)
+                }
+            }
+            .font(.system(size: side * 0.15, weight: .heavy, design: .rounded))
+            .monospacedDigit()
+            .padding(.top, side * 0.015)
+        }
+        .frame(maxWidth: side * 0.74)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+    }
+
+    /// Where the workout is running: Watch-led, or phone-led with the phone
+    /// currently out of range (controls unavailable). Nothing when the phone
+    /// leads and is in reach — the normal case needs no badge.
+    @ViewBuilder private var modeBadge: some View {
+        if sessionManager.mode == .local {
+            Image(systemName: "applewatch")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(WatchPalette.textTertiary)
+        } else if offline {
+            Image(systemName: "iphone.slash")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(WatchPalette.amber)
         }
     }
 
-    // MARK: - Helpers
+    /// Phone's header line: round / recovery count in electric blue. Warm-up
+    /// and cool-down show the protocol name instead of repeating the phase
+    /// label that already sits inside the ring.
+    private var headerText: String {
+        switch state.phase {
+        case .highIntensity:      return "ROUND \(state.highIntensityCount) OF \(state.totalIntervals)"
+        case .rest:               return "RECOVERY \(state.highIntensityCount) OF \(state.totalIntervals)"
+        case .warmup, .cooldown:  return "NORWEGIAN 4×4"
+        }
+    }
 
-    /// Ring centre: big live heart rate with a small BPM label (matches the
-    /// advertised layout). Falls back to the countdown until HR is streaming.
-    /// The number itself is colour-coded to the zone — orange when too low,
-    /// red when too high, white in zone / no target (shared tint mapping).
-    @ViewBuilder
-    private func centerContent(remaining: TimeInterval) -> some View {
-        if workoutManager.heartRate > 0 {
-            VStack(spacing: 0) {
-                Text("\(Int(workoutManager.heartRate))")
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(
-                        sessionManager.zoneStatus(bpm: workoutManager.heartRate).tint ?? .white)
-                    .monospacedDigit()
-                Text("BPM")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .foregroundColor(.white.opacity(0.45))
-                    .tracking(2)
+    /// Live coaching cue (same copy, icons and colours as the phone). Without
+    /// a reading the target range takes the slot so it's still visible.
+    @ViewBuilder private var cueRow: some View {
+        let hr = workoutManager.heartRate
+        let status = sessionManager.zoneStatus(bpm: hr)
+        if hr > 0, status != .noTarget {
+            let cue = cueStyle(status)
+            HStack(spacing: 4) {
+                Image(systemName: cue.icon)
+                    .font(.system(size: 12, weight: .heavy))
+                Text(cue.text)
+                    .font(.system(size: 13, weight: .heavy))
+                    .tracking(1)
             }
-        } else {
-            Text(timeString(remaining))
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+            .foregroundStyle(cue.color)
+            .animation(.easeInOut(duration: 0.3), value: status)
+        } else if hasTarget {
+            Text("TARGET \(state.hrLow)–\(state.hrHigh) BPM")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(WatchPalette.textTertiary)
+                .tracking(0.5)
                 .monospacedDigit()
         }
     }
 
-    /// Line 1 of the header — full phase name, colour-coded to the phase.
-    private var phaseName: String {
-        switch state.phase {
-        case .highIntensity: return "HIGH INTENSITY"
-        case .rest:          return "RECOVERY"
-        case .warmup:        return "WARM UP"
-        case .cooldown:      return "COOL DOWN"
-        }
-    }
-
-    /// Line 2 of the header — interval count (high-intensity only) plus the
-    /// live countdown, so time-remaining stays visible during a workout.
-    private func detailLine(_ remaining: TimeInterval) -> String {
-        let t = timeString(remaining)
-        if state.phase == .highIntensity {
-            return "INTERVAL \(state.highIntensityCount) / \(state.totalIntervals)  ·  \(t)"
-        }
-        return t
-    }
-
-    private var hasTarget: Bool { state.hrLow > 0 && state.hrHigh > 0 }
-
-    /// Coaching cue from live HR vs the target zone (matches the phone/website).
-    /// Colours come from the shared zone tint so all surfaces agree: orange =
-    /// speed up, red = slow down, green = in zone.
-    private var zoneCue: (text: String, color: Color)? {
-        let status = sessionManager.zoneStatus(bpm: workoutManager.heartRate)
+    private func cueStyle(_ status: HRZoneStatus) -> (text: String, icon: String, color: Color) {
         switch status {
-        case .below:    return ("▲ SPEED UP", status.tint ?? .orange)
-        case .above:    return ("▼ SLOW DOWN", status.tint ?? .red)
-        case .inZone:   return ("✓ IN ZONE", status.tint ?? .green)
-        case .noTarget: return nil
+        case .below:    return ("SPEED UP",  "arrow.up.circle.fill",   WatchPalette.amber)
+        case .above:    return ("SLOW DOWN", "arrow.down.circle.fill", WatchPalette.danger)
+        case .inZone:   return ("IN ZONE",   "checkmark.circle.fill",  WatchPalette.recovery)
+        case .noTarget: return ("", "", .clear)
         }
     }
 
-    private func timeString(_ t: TimeInterval) -> String {
-        String(format: "%02d:%02d", Int(t) / 60 % 60, Int(t) % 60)
+    // MARK: - Page 2: controls
+
+    private var controlsPage: some View {
+        ScrollView {
+            VStack(spacing: 6) {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let remaining = state.timeRemaining(asOf: context.date)
+                    VStack(spacing: 4) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(state.phase.watchLabel)
+                                .font(.system(size: 11, weight: .heavy))
+                                .foregroundStyle(phaseColor)
+                                .tracking(0.8)
+                            Spacer(minLength: 4)
+                            Text(watchTimeString(remaining))
+                                .font(.system(size: 13, weight: .heavy, design: .rounded))
+                                .foregroundStyle(WatchPalette.textPrimary)
+                                .monospacedDigit()
+                        }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .padding(.top, 2)
+
+                        if hasPlan {
+                            WatchTimelineBar(phases: state.planPhases,
+                                             durations: state.planDurations,
+                                             currentIndex: state.currentIntervalIndex,
+                                             timeRemaining: remaining)
+                            Text("\(minutesLeft(asOf: context.date)) min left")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(WatchPalette.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    }
+                }
+
+                if offline {
+                    HStack(spacing: 4) {
+                        Image(systemName: "iphone.slash")
+                        Text("Controls need your iPhone")
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(WatchPalette.amber)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                }
+
+                Button { sessionManager.togglePause() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: state.isRunning ? "pause.fill" : "play.fill")
+                            .font(.system(size: 13, weight: .bold))
+                        Text(state.isRunning ? "PAUSE" : "RESUME")
+                    }
+                }
+                .buttonStyle(WatchControlButtonStyle())
+                .disabled(!canControl)
+                .opacity(canControl ? 1 : 0.45)
+
+                Button { skipTapped() } label: {
+                    HStack(spacing: 6) {
+                        Text("SKIP")
+                        Image(systemName: "chevron.right.2")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                }
+                .buttonStyle(WatchControlButtonStyle())
+                .disabled(!state.isRunning || !canControl)
+                .opacity(state.isRunning && canControl ? 1 : 0.45)
+
+                Button { showEndAlert = true } label: {
+                    Text("END")
+                }
+                .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.danger, outlined: true))
+            }
+            .padding(.leading, 6)
+            // Clear the vertical page indicator / scroll bar on the right.
+            .padding(.trailing, 12)
+            .padding(.bottom, 4)
+        }
+    }
+
+    /// Skipping the cool-down ends the workout, so it confirms like the phone.
+    /// Other intervals skip immediately (the phone's per-interval confirmation
+    /// setting isn't mirrored to the Watch).
+    private func skipTapped() {
+        if state.phase == .cooldown {
+            showSkipAlert = true
+        } else {
+            sessionManager.skip()
+        }
+    }
+
+    private func minutesLeft(asOf now: Date) -> Int {
+        max(0, Int(((state.planTotal - state.planElapsed(asOf: now)) / 60).rounded()))
     }
 }
