@@ -46,6 +46,12 @@ struct N4x4LiveActivityAttributes: ActivityAttributes {
 }
 
 extension N4x4LiveActivityAttributes.ContentState {
+    /// The extension may render an old state after its end time, before the
+    /// phone update/removal arrives. ClosedRange traps if lower > upper.
+    func countdownRange(at now: Date = Date()) -> ClosedRange<Date> {
+        now...max(now, intervalEndTime)
+    }
+
     /// Whether a live heart rate is currently streaming.
     var hasLiveHR: Bool { currentHR > 0 }
 

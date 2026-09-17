@@ -671,7 +671,7 @@ struct PostWorkoutSummaryRedesignView: View {
             }
             .background(Palette.background.ignoresSafeArea())
             .preferredColorScheme(.dark)
-            .navigationTitle("Workout Complete")
+            .navigationTitle(viewModel.sessionEndedEarly ? "Workout Saved" : "Workout Complete")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -688,8 +688,7 @@ struct PostWorkoutSummaryRedesignView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        viewModel.completeWorkoutReview()
-                        dismiss()
+                        if viewModel.completeWorkoutReview() { dismiss() }
                     }
                     .fontWeight(.bold)
                 }
@@ -704,6 +703,8 @@ struct PostWorkoutSummaryRedesignView: View {
                 loadGhost()
             }
         }
+        .interactiveDismissDisabled(viewModel.hasPendingWorkoutSave)
+        .safeAreaInset(edge: .top) { WorkoutSaveNotice(viewModel: viewModel) }
         .alert("Delete workout?", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 viewModel.deleteCurrentWorkoutAndResetSession()
@@ -722,13 +723,13 @@ struct PostWorkoutSummaryRedesignView: View {
                     .font(.system(size: 26))
                     .foregroundStyle(Palette.recovery)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Norwegian 4×4 complete")
+                    Text(viewModel.sessionEndedEarly ? "Workout ended early" : "Norwegian 4×4 complete")
                         .font(.system(size: 19, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.textPrimary)
                     Text(Date.now, style: .date)
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.textSecondary)
-                    Text("Saved to History")
+                    Text(viewModel.hasPendingWorkoutSave ? "Waiting to save" : "Saved to History")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Palette.recovery)
                 }
@@ -784,6 +785,7 @@ struct PostWorkoutSummaryRedesignView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("NOTES")
             TextField("Session notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
+                .accessibilityIdentifier("workout-notes")
                 .lineLimit(2...4)
                 .font(.system(size: 14))
                 .foregroundStyle(Palette.textPrimary)
@@ -845,6 +847,10 @@ struct SessionDetailSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    if entry.endedEarly == true {
+                        Text("Ended early · Saved progress")
+                            .font(.callout).foregroundStyle(Palette.amber)
+                    }
                     SessionHeroStats(
                         duration: mmss(entry.sessionBreakdown?.totalDuration ?? 0),
                         avg: entry.hrSummary?.avgBPM,
@@ -898,6 +904,23 @@ struct SessionDetailSheet: View {
                              : "The heart-rate chart for this session is unavailable.")
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.textSecondary)
+                    }
+
+                    if let series {
+                        let unmatched = (entry.intervalPerformances ?? []).filter { performance in
+                            !series.spans.contains { $0.kind == "work" && $0.workNumber == performance.intervalNumber }
+                        }
+                        if !unmatched.isEmpty {
+                            sectionTitle("SAVED PERFORMANCE")
+                            ForEach(unmatched) { performance in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Interval \(performance.intervalNumber)").font(.headline)
+                                    if let value = performance.primary { Text(savedPerformanceText(value)) }
+                                    if let note = performance.note, !note.isEmpty { Text(note) }
+                                }
+                                .font(.callout).foregroundStyle(Palette.textSecondary)
+                            }
+                        }
                     }
 
                     if !entry.notes.isEmpty {
@@ -984,5 +1007,50 @@ struct SessionDetailSheet: View {
                 summary: entry.hrSummary
             )
         }
+    }
+}
+
+// Shared by the shipping root and the legacy timer so recovery stays a
+// session concern rather than belonging to whichever timer screen is visible.
+struct WorkoutSaveNotice: View {
+    @ObservedObject var viewModel: TimerViewModel
+
+    var body: some View {
+        if let message = viewModel.workoutSaveError {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(message, systemImage: "exclamationmark.circle")
+                    .font(.callout)
+                Button("Try Again") { viewModel.retryWorkoutSave() }
+                    .font(.body.weight(.semibold))
+                    .frame(minHeight: 44)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.surfaceRaised)
+            .foregroundStyle(Palette.textPrimary)
+        }
+    }
+}
+
+private struct WorkoutRecoveryModifier: ViewModifier {
+    @ObservedObject var viewModel: TimerViewModel
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .top) { WorkoutSaveNotice(viewModel: viewModel) }
+            .alert("Workout recovered", isPresented: $viewModel.showWorkoutRecovery) {
+                Button("Resume") { viewModel.startTimer() }
+                Button("Finish & Save") { viewModel.finishAndSaveWorkout() }
+                Button("Discard Workout", role: .destructive) { viewModel.discardActiveWorkout() }
+                Button("Keep Paused", role: .cancel) {}
+            } message: {
+                Text("Your workout is paused at its last saved progress. Resume it, save what you did, or discard it.")
+            }
+    }
+}
+
+extension View {
+    func workoutRecovery(viewModel: TimerViewModel) -> some View {
+        modifier(WorkoutRecoveryModifier(viewModel: viewModel))
     }
 }

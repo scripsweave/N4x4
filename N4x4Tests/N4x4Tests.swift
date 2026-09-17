@@ -66,6 +66,7 @@ final class N4x4Tests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        try? FileManager.default.removeItem(at: TimerViewModel.defaultCheckpointURL.deletingLastPathComponent())
         let defaults = UserDefaults.standard
         [
             "numberOfIntervals",
@@ -95,6 +96,7 @@ final class N4x4Tests: XCTestCase {
             "workoutReminderWeekdays",
             "appleSensorHREnabled",
             "hrSourcePriorityRaw",
+            "cooldownDuration", "discardedPhoneWorkoutIDs", "importedWatchWorkoutIDs", "discardedWatchWorkoutIDs",
             "cooldownEnabled", "audioModeRaw", "hapticsEnabled", "shownMilestonesData",
             "hasRequestedAppReview", "liveActivitiesEnabled"
         ].forEach { defaults.removeObject(forKey: $0) }
@@ -368,6 +370,7 @@ final class N4x4Tests: XCTestCase {
         vm.currentIntervalIndex = 0
         vm.timeRemaining = 10
 
+        vm.workoutStartDate = Date()
         vm.skip()
 
         XCTAssertEqual(vm.currentIntervalIndex, 1)
@@ -383,6 +386,7 @@ final class N4x4Tests: XCTestCase {
         vm.timeRemaining = 10
         vm.isRunning = false
 
+        vm.workoutStartDate = Date()
         vm.skip()
 
         XCTAssertEqual(vm.currentIntervalIndex, 1)
@@ -401,6 +405,7 @@ final class N4x4Tests: XCTestCase {
         vm.timeRemaining = 2
         vm.isRunning = true
 
+        vm.workoutStartDate = Date()
         vm.skip()
 
         XCTAssertTrue(vm.showPostWorkoutSummary)
@@ -898,6 +903,7 @@ final class N4x4Tests: XCTestCase {
         vm.audioMode = .silent
         vm.hapticsEnabled = false
         vm.cooldownEnabled = false
+        vm.numberOfIntervals = 1
         vm.unitPreference = .metric
         vm.setDefaultWorkoutType(.treadmill)
         vm.workoutStartDate = Date(timeIntervalSince1970: 1_800_000_000)
@@ -1144,5 +1150,398 @@ final class HeartRateSeriesTests: XCTestCase {
         XCTAssertEqual(HeartRateSeriesStore.load(for: id), s)
         HeartRateSeriesStore.delete(for: id)
         XCTAssertNil(HeartRateSeriesStore.load(for: id))
+    }
+}
+
+// MARK: - Completion, recovery and durable saving
+
+extension N4x4Tests {
+    private func recoveryViewModel(cooldown: Bool = false, warmup: Double = 0,
+                                   count: Int = 1,
+                                   seriesSaver: @escaping (HeartRateSeries, UUID) -> Bool = { HeartRateSeriesStore.save($0, for: $1) }) -> TimerViewModel {
+        UserDefaults.standard.set(false, forKey: "healthKitEnabled")
+        UserDefaults.standard.set(true, forKey: "healthKitUserOptedOut")
+        UserDefaults.standard.set(false, forKey: "appleSensorHREnabled")
+        UserDefaults.standard.set(false, forKey: "notificationsEnabled")
+        UserDefaults.standard.set(false, forKey: "workoutRemindersEnabled")
+        UserDefaults.standard.set(false, forKey: "liveActivitiesEnabled")
+        let vm = TimerViewModel(seriesSaver: seriesSaver)
+        vm.audioMode = .silent
+        vm.hapticsEnabled = false
+        vm.numberOfIntervals = count
+        vm.warmupDuration = warmup
+        vm.highIntensityDuration = 4
+        vm.restDuration = 3
+        vm.cooldownEnabled = cooldown
+        vm.cooldownDuration = 60
+        return vm
+    }
+
+    func testFinishAndSaveDuringWorkKeepsElapsedProgressWithoutFullWorkoutStreak() throws {
+        let vm = recoveryViewModel()
+        let start = Date()
+        defer { vm.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; vm.reset() }
+        vm.startTimer(now: start)
+        vm.finishAndSaveWorkout(now: start + 2)
+        let entry = try XCTUnwrap(vm.workoutLogEntries.first)
+        XCTAssertEqual(entry.sessionBreakdown?.totalDuration ?? 0, 2, accuracy: 0.001)
+        XCTAssertEqual(entry.endedEarly, true)
+        XCTAssertFalse(entry.countsTowardStreak)
+        XCTAssertEqual(vm.currentWeekStreak, 0)
+        XCTAssertTrue(vm.showPostWorkoutSummary)
+        XCTAssertEqual(TimerViewModel().workoutLogEntries.first?.id, entry.id)
+    }
+
+    func testFinishInCooldownSavesFullWorkAndCountsTowardStreak() throws {
+        let vm = recoveryViewModel(cooldown: true)
+        let start = Date()
+        defer { vm.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; vm.reset() }
+        vm.startTimer(now: start)
+        vm.finishAndSaveWorkout(now: start + 10)
+        let entry = try XCTUnwrap(vm.workoutLogEntries.first)
+        XCTAssertEqual(entry.sessionBreakdown?.highIntensityDuration ?? 0, 4, accuracy: 0.001)
+        XCTAssertEqual(entry.sessionBreakdown?.cooldownDuration ?? 0, 6, accuracy: 0.001)
+        XCTAssertEqual(entry.sessionBreakdown?.cooldownSkipped, true)
+        XCTAssertEqual(entry.endedEarly, false)
+        XCTAssertEqual(vm.currentWeekStreak, 1)
+    }
+
+    func testDiscardActiveWorkoutRemovesRecoveryAndDoesNotLog() {
+        let vm = recoveryViewModel()
+        vm.startTimer()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: TimerViewModel.defaultCheckpointURL.path))
+        vm.discardActiveWorkout()
+        let restored = TimerViewModel()
+        XCTAssertNil(restored.workoutStartDate)
+        XCTAssertTrue(restored.workoutLogEntries.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: TimerViewModel.defaultCheckpointURL.path))
+    }
+
+    func testRunningWorkoutRecoversPausedWithItsOriginalPlanAndIdentity() throws {
+        let vm = recoveryViewModel(warmup: 10, count: 2)
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.reconcileTimerState(now: start + 6, playAlarm: false)
+        vm.timer?.cancel() // Simulate process loss without running the discard path.
+        let id = try XCTUnwrap(vm.activeWorkoutID)
+        let originalPlan = vm.intervals
+        vm.numberOfIntervals = 7
+        vm.highIntensityDuration = 300
+        let restored = TimerViewModel()
+        defer { restored.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; restored.reset() }
+        XCTAssertFalse(restored.isRunning)
+        XCTAssertTrue(restored.showWorkoutRecovery)
+        XCTAssertEqual(restored.activeWorkoutID, id)
+        XCTAssertEqual(restored.intervals, originalPlan)
+        XCTAssertEqual(restored.timeRemaining, 4, accuracy: 0.001)
+        XCTAssertEqual(restored.elapsedWarmupTime, 6, accuracy: 0.001)
+        restored.startTimer(now: start + 100)
+        XCTAssertFalse(restored.showWorkoutRecovery)
+        restored.finishAndSaveWorkout(now: start + 102)
+        XCTAssertEqual(restored.workoutLogEntries.first?.id, id)
+        XCTAssertEqual(restored.workoutLogEntries.first?.sessionBreakdown?.totalDuration ?? 0, 8, accuracy: 0.001)
+    }
+
+    func testPausedRecoveryFinishExcludesTimeAwayAndKeepsRecordedHeartRate() throws {
+        let vm = recoveryViewModel(warmup: 30)
+        let start = Date().addingTimeInterval(-2)
+        vm.startTimer(now: start)
+        vm.ingestHeartRate(151, from: .watch)
+        vm.pause(now: start + 2)
+        let restored = TimerViewModel()
+        defer { restored.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; restored.reset() }
+        restored.finishAndSaveWorkout(now: start + 1_000)
+        let entry = try XCTUnwrap(restored.workoutLogEntries.first)
+        let series = try XCTUnwrap(HeartRateSeriesStore.load(for: entry.id))
+        XCTAssertEqual(entry.sessionBreakdown?.totalDuration ?? 0, 2, accuracy: 0.001)
+        XCTAssertEqual(entry.completedAt.timeIntervalSince(start), 2, accuracy: 0.001)
+        XCTAssertEqual(series.samples.map(\.bpm), [151])
+        XCTAssertEqual(series.spans.last?.end ?? 0, 2, accuracy: 0.001)
+    }
+
+    func testEveryTimerSettingChangeLeavesActivePlanAndCountdownIntact() {
+        let changes: [(TimerViewModel) -> Void] = [
+            { $0.numberOfIntervals += 1 }, { $0.warmupDuration += 60 },
+            { $0.highIntensityDuration += 60 }, { $0.restDuration += 60 },
+            { $0.cooldownEnabled.toggle() }, { $0.cooldownDuration += 60 }
+        ]
+        let vm = recoveryViewModel(warmup: 30)
+        defer { vm.reset() }
+        vm.startTimer()
+        vm.pause()
+        let plan = vm.intervals
+        let remaining = vm.timeRemaining
+        let id = vm.activeWorkoutID
+        for change in changes {
+            change(vm)
+            XCTAssertEqual(vm.intervals, plan)
+            XCTAssertEqual(vm.timeRemaining, remaining)
+            XCTAssertEqual(vm.activeWorkoutID, id)
+            XCTAssertNotNil(vm.workoutStartDate)
+        }
+        vm.reset()
+        XCTAssertNotEqual(vm.intervals, plan, "New settings become the next plan")
+    }
+
+    func testCatchUpRecordsEveryBoundaryAndUsesActualCompletionTime() throws {
+        let vm = recoveryViewModel(cooldown: true, warmup: 5, count: 2)
+        let start = Date()
+        defer { vm.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; vm.reset() }
+        vm.startTimer(now: start)
+        vm.reconcileTimerState(now: start + 500, playAlarm: false)
+        let entry = try XCTUnwrap(vm.workoutLogEntries.first)
+        let series = try XCTUnwrap(HeartRateSeriesStore.load(for: entry.id))
+        XCTAssertEqual(entry.sessionBreakdown?.totalDuration ?? 0, 76, accuracy: 0.001)
+        XCTAssertEqual(entry.completedAt.timeIntervalSince(start), 76, accuracy: 0.001)
+        XCTAssertEqual(series.spans.map(\.kind), ["warmup", "work", "recovery", "work", "cooldown"])
+        XCTAssertEqual(series.spans.map(\.start), [0, 5, 9, 12, 16])
+        XCTAssertEqual(series.spans.map(\.end), [5, 9, 12, 16, 76])
+        XCTAssertEqual(series.spans.map(\.workNumber), [0, 1, 0, 2, 0])
+        XCTAssertEqual(entry.endedEarly, false)
+    }
+
+    func testPartialCatchUpKeepsCrossedSpansBeforeEarlyFinish() throws {
+        let vm = recoveryViewModel(warmup: 5, count: 2)
+        let start = Date()
+        defer { vm.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; vm.reset() }
+        vm.startTimer(now: start)
+        vm.reconcileTimerState(now: start + 10, playAlarm: false)
+        XCTAssertEqual(vm.currentIntervalIndex, 2)
+        XCTAssertEqual(vm.timeRemaining, 2, accuracy: 0.001)
+        vm.finishAndSaveWorkout(now: start + 10)
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        XCTAssertEqual(HeartRateSeriesStore.load(for: id)?.spans.map(\.kind), ["warmup", "work", "recovery"])
+        XCTAssertEqual(HeartRateSeriesStore.load(for: id)?.spans.map(\.end), [5, 9, 10])
+    }
+
+    func testReviewEditsPersistImmediatelyWithoutDoneOrDismissal() throws {
+        let vm = recoveryViewModel()
+        let start = Date()
+        defer { vm.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; vm.reset() }
+        vm.unitPreference = .metric
+        vm.startTimer(now: start)
+        vm.finishAndSaveWorkout(now: start + 2)
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()
+        vm.workoutNotesDraft = "Keep this even if the app closes"
+        vm.performanceDraft[0] = 12
+        vm.performanceNotesDraft[0] = "Incline 3%"
+        let entry = try XCTUnwrap(TimerViewModel().workoutLogEntries.first)
+        XCTAssertEqual(entry.notes, "Keep this even if the app closes")
+        XCTAssertEqual(entry.workoutType, .treadmill)
+        XCTAssertEqual(entry.intervalPerformances?.first?.primary, 12)
+        XCTAssertEqual(entry.intervalPerformances?.first?.note, "Incline 3%")
+        vm.preparePerformanceDraft() // A repeated sheet appearance must not erase edits.
+        XCTAssertEqual(vm.performanceDraft[0], 12)
+    }
+
+    func testReviewDoesNotAutosavePerformanceCopiedFromPreviousWorkout() {
+        let vm = recoveryViewModel()
+        vm.workoutLogEntries = [.init(workoutType: .treadmill, notes: "", modality: .treadmill,
+                                     intervalPerformances: [.init(intervalNumber: 1, primary: 14)])]
+        vm.persistWorkoutLogEntries()
+        vm.finishWorkout()
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()
+        XCTAssertEqual(vm.performanceDraft.count, 1)
+        XCTAssertNil(vm.performanceDraft[0])
+        XCTAssertNil(vm.workoutLogEntries.first?.intervalPerformances)
+        vm.reset()
+    }
+
+    func testFailedSeriesSaveKeepsCheckpointAndRetriesAfterRelaunchWithoutDuplicate() throws {
+        let vm = recoveryViewModel(seriesSaver: { _, _ in false })
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.finishAndSaveWorkout(now: start + 2)
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        XCTAssertTrue(vm.hasPendingWorkoutSave)
+        XCTAssertFalse(vm.completeWorkoutReview())
+        XCTAssertNotNil(vm.workoutSaveError)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: TimerViewModel.defaultCheckpointURL.path))
+        let restored = TimerViewModel()
+        defer { restored.reset(); HeartRateSeriesStore.delete(for: id) }
+        XCTAssertFalse(restored.hasPendingWorkoutSave)
+        XCTAssertEqual(restored.workoutLogEntries.map(\.id), [id])
+        XCTAssertNotNil(HeartRateSeriesStore.load(for: id))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: TimerViewModel.defaultCheckpointURL.path))
+    }
+
+    func testExplicitDeleteOfFailedSaveCannotRestoreFromCheckpoint() throws {
+        let vm = recoveryViewModel(seriesSaver: { _, _ in false })
+        vm.startTimer()
+        vm.finishAndSaveWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        vm.deleteCurrentWorkoutAndResetSession()
+        let restored = TimerViewModel()
+        XCTAssertFalse(restored.workoutLogEntries.contains { $0.id == id })
+        XCTAssertNil(restored.workoutStartDate)
+        XCTAssertFalse(restored.showPostWorkoutSummary)
+    }
+
+    func testLateWatchFinishOrDiscardNeverDeletesCompletedOrNewerWorkout() throws {
+        let vm = recoveryViewModel()
+        let start = Date()
+        defer { vm.workoutLogEntries.forEach { HeartRateSeriesStore.delete(for: $0.id) }; vm.reset() }
+        vm.startTimer(now: start)
+        let first = try XCTUnwrap(vm.activeWorkoutID)
+        vm.finishAndSaveWorkout(now: start + 2)
+        vm.handleWorkoutCommand(WatchMessageKey.cmdFinish, workoutID: first)
+        vm.handleWorkoutCommand(WatchMessageKey.cmdDiscard, workoutID: first)
+        XCTAssertEqual(vm.workoutLogEntries.map(\.id), [first])
+        vm.completeWorkoutReview()
+        vm.startTimer()
+        let second = vm.activeWorkoutID
+        vm.handleWorkoutCommand(WatchMessageKey.cmdDiscard, workoutID: first)
+        vm.handleWorkoutCommand(WatchMessageKey.cmdFinish, workoutID: first)
+        vm.handleWorkoutCommand(WatchMessageKey.cmdReset, workoutID: first)
+        vm.finishAndSaveWorkout(for: first)
+        vm.discardActiveWorkout(for: first)
+        XCTAssertEqual(vm.activeWorkoutID, second)
+        XCTAssertTrue(vm.isRunning)
+        vm.handleWorkoutCommand(WatchMessageKey.cmdDeleteCompleted, workoutID: first)
+        XCTAssertTrue(vm.workoutLogEntries.isEmpty)
+        XCTAssertEqual(vm.activeWorkoutID, second)
+        XCTAssertTrue(vm.isRunning)
+        HeartRateSeriesStore.delete(for: first)
+    }
+
+    func testMalformedHistoryFieldDoesNotDowngradeOtherDetailsOrRows() throws {
+        let first = WorkoutLogEntry(workoutType: .treadmill, notes: "Keep notes",
+                                    sessionBreakdown: .init(totalDuration: 240, warmupDuration: 0, highIntensityDuration: 240, recoveryDuration: 0, cooldownDuration: 0, cooldownSkipped: false),
+                                    modality: .treadmill, intervalPerformances: [.init(intervalNumber: 1, primary: 12)])
+        let second = WorkoutLogEntry(completedAt: Date(timeIntervalSince1970: 1_800_000_000), workoutType: .rowing, notes: "Other row", modality: .rowing)
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        var rows = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode([first, second])) as? [[String: Any]])
+        rows[0]["hrSummary"] = "invalid"
+        rows.append(["completedAt": "not a date"])
+        let raw = String(decoding: try JSONSerialization.data(withJSONObject: rows), as: UTF8.self)
+        UserDefaults.standard.set(raw, forKey: "workoutLogEntriesData")
+        let vm = TimerViewModel()
+        XCTAssertEqual(vm.workoutLogEntries.count, 2)
+        let recovered = try XCTUnwrap(vm.workoutLogEntries.first { $0.id == first.id })
+        XCTAssertEqual(recovered.sessionBreakdown, first.sessionBreakdown)
+        XCTAssertEqual(recovered.intervalPerformances, first.intervalPerformances)
+        XCTAssertEqual(recovered.notes, first.notes)
+        XCTAssertEqual(vm.workoutLogEntries.first { $0.id == second.id }, second)
+        let directory = TimerViewModel.defaultCheckpointURL.deletingLastPathComponent().appendingPathComponent("Recovery")
+        let backups = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        XCTAssertTrue(try backups.contains { try String(contentsOf: $0, encoding: .utf8) == raw })
+    }
+
+    func testUnreadableHistoryIsPreservedBeforeAnyNewSave() throws {
+        let raw = "{ broken workout history"
+        UserDefaults.standard.set(raw, forKey: "workoutLogEntriesData")
+        let vm = recoveryViewModel()
+        vm.finishWorkout()
+        XCTAssertEqual(TimerViewModel().workoutLogEntries.count, 1)
+        let directory = TimerViewModel.defaultCheckpointURL.deletingLastPathComponent().appendingPathComponent("Recovery")
+        let backups = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        XCTAssertTrue(try backups.contains { try String(contentsOf: $0, encoding: .utf8) == raw })
+        vm.reset()
+    }
+
+    func testHistoryCannotOverwriteDamagedStorageWhenBackupFails() throws {
+        let blocker = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data("not a directory".utf8).write(to: blocker)
+        defer { try? FileManager.default.removeItem(at: blocker) }
+        let raw = "{ broken but must be kept"
+        UserDefaults.standard.set(raw, forKey: "workoutLogEntriesData")
+        let vm = TimerViewModel(checkpointURL: blocker.appendingPathComponent("current.json"))
+        vm.finishWorkout()
+        XCTAssertEqual(UserDefaults.standard.string(forKey: "workoutLogEntriesData"), raw)
+        XCTAssertTrue(vm.hasPendingWorkoutSave)
+        XCTAssertNotNil(vm.workoutSaveError)
+    }
+}
+
+extension N4x4Tests {
+    func testChangingReviewTypeClearsOldMetricBeforeAutosavingNewType() throws {
+        let vm = recoveryViewModel()
+        vm.finishWorkout()
+        vm.selectedWorkoutType = .treadmill
+        vm.performanceDraft[0] = 12
+        vm.selectedWorkoutType = .rowing
+        let row = try XCTUnwrap(TimerViewModel().workoutLogEntries.first)
+        XCTAssertEqual(row.workoutType, .rowing)
+        XCTAssertNil(row.intervalPerformances, "Speed cannot become a rowing stroke rate")
+        vm.reset()
+    }
+
+    func testDamagedCheckpointIsPreservedWithoutBlockingANewWorkout() throws {
+        let url = TimerViewModel.defaultCheckpointURL
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let bad = Data("{ invalid checkpoint".utf8)
+        try bad.write(to: url)
+        let vm = recoveryViewModel()
+        XCTAssertNil(vm.workoutStartDate)
+        XCTAssertNotNil(vm.historyRecoveryNotice)
+        vm.startTimer()
+        XCTAssertNotNil(vm.activeWorkoutID)
+        let backups = try FileManager.default.contentsOfDirectory(at: url.deletingLastPathComponent().appendingPathComponent("Recovery"), includingPropertiesForKeys: nil)
+        XCTAssertTrue(try backups.contains { try Data(contentsOf: $0) == bad })
+        vm.reset()
+    }
+
+    func testDeletedWorkoutDoesNotReturnFromAnOlderLogOrCheckpoint() throws {
+        let vm = recoveryViewModel(seriesSaver: { _, _ in false })
+        vm.startTimer()
+        vm.finishAndSaveWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        let oldCheckpoint = try Data(contentsOf: TimerViewModel.defaultCheckpointURL)
+        let oldLog = UserDefaults.standard.string(forKey: "workoutLogEntriesData")
+        vm.deleteCurrentWorkoutAndResetSession()
+        try oldCheckpoint.write(to: TimerViewModel.defaultCheckpointURL)
+        UserDefaults.standard.set(oldLog, forKey: "workoutLogEntriesData")
+        let restored = TimerViewModel()
+        XCTAssertFalse(restored.workoutLogEntries.contains { $0.id == id })
+        XCTAssertNil(restored.workoutStartDate)
+        XCTAssertFalse(restored.showPostWorkoutSummary)
+    }
+
+    func testIdleOrAlreadyCompletedSkipCannotCreateAnotherWorkout() {
+        let vm = recoveryViewModel()
+        vm.skip()
+        XCTAssertTrue(vm.workoutLogEntries.isEmpty)
+        vm.startTimer()
+        vm.finishAndSaveWorkout()
+        let id = vm.completedWorkoutEntryID
+        defer { if let id { HeartRateSeriesStore.delete(for: id) }; vm.reset() }
+        vm.skip()
+        XCTAssertEqual(vm.workoutLogEntries.map(\.id), id.map { [$0] } ?? [])
+    }
+}
+
+extension N4x4Tests {
+    func testRecoveryReplaysNewerReviewEditsEvenIfOlderLogAndSeriesExist() throws {
+        let vm = recoveryViewModel(seriesSaver: { series, id in
+            _ = HeartRateSeriesStore.save(series, for: id)
+            return false // Leave a checkpoint as if the final save acknowledgement failed.
+        })
+        vm.startTimer()
+        vm.finishAndSaveWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        let olderLog = UserDefaults.standard.string(forKey: "workoutLogEntriesData")
+        vm.workoutNotesDraft = "Newer checkpoint notes"
+        UserDefaults.standard.set(olderLog, forKey: "workoutLogEntriesData")
+        let restored = TimerViewModel()
+        defer { restored.reset(); HeartRateSeriesStore.delete(for: id) }
+        XCTAssertEqual(restored.workoutLogEntries.count, 1)
+        XCTAssertEqual(restored.workoutLogEntries.first?.notes, "Newer checkpoint notes")
+        XCTAssertFalse(restored.hasPendingWorkoutSave)
+    }
+}
+
+extension N4x4Tests {
+    func testLiveActivityCanRenderExpiredCountdownWithoutInvalidDateRange() {
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        let state = N4x4LiveActivityAttributes.ContentState(
+            intervalName: "Work", phase: .highIntensity, intervalEndTime: end,
+            isRunning: true, currentInterval: 1, totalIntervals: 4, hrLow: 140, hrHigh: 170)
+        let expired = state.countdownRange(at: end + 10)
+        XCTAssertEqual(expired.lowerBound, end + 10)
+        XCTAssertEqual(expired.upperBound, end + 10)
+        XCTAssertEqual(state.countdownRange(at: end), end...end)
+        XCTAssertEqual(state.countdownRange(at: end - 10), (end - 10)...end)
     }
 }

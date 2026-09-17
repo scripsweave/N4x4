@@ -13,7 +13,10 @@ enum WatchMessageKey {
     // ── Commands: Watch → Phone ──────────────────────────────
     static let cmdStartPause        = "cmd_startPause"
     static let cmdSkip              = "cmd_skip"
-    static let cmdReset             = "cmd_reset"
+    static let cmdReset             = "cmd_reset" // Legacy; never used for deletion.
+    static let cmdFinish            = "cmd_finish"
+    static let cmdDiscard           = "cmd_discard"
+    static let cmdDeleteCompleted   = "cmd_deleteCompleted"
     static let cmdRequestState      = "request_state"
 
     // ── State sync payload: Phone → Watch ────────────────────
@@ -29,6 +32,8 @@ enum WatchMessageKey {
     static let totalIntervals       = "totalIntervals"      // Int
     static let hrLow                = "hrLow"               // Int (BPM) — current phase target floor
     static let hrHigh               = "hrHigh"              // Int (BPM) — current phase target ceiling
+    static let workoutSaved         = "workoutSaved"
+    static let endedEarly           = "endedEarly"
     static let workoutComplete      = "workoutComplete"     // Bool
     static let sessionStarted       = "sessionStarted"      // Bool
     static let zoneHapticEnabled    = "zoneHapticEnabled"   // Bool — phone-owned setting, mirrored to Watch

@@ -111,6 +111,7 @@ struct WatchHomeView: View {
 struct WatchCompleteView: View {
     @EnvironmentObject var sessionManager: WatchSessionManager
     @State private var showDiscardAlert = false
+    @State private var deletingWorkoutID: UUID?
 
     private var isLocal: Bool { sessionManager.mode == .local }
     private var record: CompletedWatchWorkout? { sessionManager.engine?.completedRecord() }
@@ -127,7 +128,8 @@ struct WatchCompleteView: View {
                     .foregroundStyle(WatchPalette.recovery)
                     .shadow(color: WatchPalette.recovery.opacity(0.6), radius: 8)
 
-                Text("WORKOUT COMPLETE")
+                Text(isLocal ? (record?.endedEarly == true ? "WORKOUT SAVED" : "WORKOUT COMPLETE")
+                     : (sessionManager.timerState.workoutSaved ? "WORKOUT SAVED" : "TIMER FINISHED"))
                     .font(.system(size: 13, weight: .heavy))
                     .tracking(1)
                     .foregroundStyle(WatchPalette.textPrimary)
@@ -142,21 +144,26 @@ struct WatchCompleteView: View {
                     .buttonStyle(WatchControlButtonStyle())
                     .padding(.top, 2)
                 } else {
-                    Text("Review your workout on your iPhone.")
+                    Text(sessionManager.timerState.workoutSaved
+                         ? "Saved on iPhone. Open N4x4 to review."
+                         : "Check your iPhone to confirm and save your workout.")
                         .font(.system(size: 11))
                         .foregroundStyle(WatchPalette.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Button { showDiscardAlert = true } label: {
+                Button {
+                    deletingWorkoutID = sessionManager.currentWorkoutID
+                    showDiscardAlert = true
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "trash").font(.system(size: 12, weight: .bold))
                         Text("DELETE")
                     }
                 }
                 .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.danger, outlined: true))
-                .disabled(!isLocal && !sessionManager.isReachable)
+                .disabled(!isLocal && (!sessionManager.isReachable || !sessionManager.timerState.workoutSaved || sessionManager.timerState.workoutID == nil))
                 .opacity(!isLocal && !sessionManager.isReachable ? 0.45 : 1)
                 .padding(.top, isLocal ? 0 : 2)
             }
@@ -164,8 +171,8 @@ struct WatchCompleteView: View {
         }
         .alert("Delete workout?", isPresented: $showDiscardAlert) {
             Button("Delete", role: .destructive) {
-                if isLocal { sessionManager.discardCompletedLocalWorkout() }
-                else { sessionManager.discardPhoneWorkout() }
+                if isLocal { sessionManager.discardCompletedLocalWorkout(for: deletingWorkoutID) }
+                else { sessionManager.discardPhoneWorkout(for: deletingWorkoutID) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -176,6 +183,9 @@ struct WatchCompleteView: View {
     /// Duration · average HR, then whether the phone has it yet.
     @ViewBuilder private var localSummary: some View {
         if let record {
+            if record.endedEarly == true {
+                Text("Ended early").font(.caption2).foregroundStyle(WatchPalette.amber)
+            }
             Text(summaryLine(record))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(WatchPalette.textSecondary)

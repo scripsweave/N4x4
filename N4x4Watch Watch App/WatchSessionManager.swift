@@ -49,6 +49,9 @@ struct WatchTimerState: Equatable {
     var recoveryLow: Int
     var recoveryHigh: Int
     var workoutTypeRaw: String?
+    var workoutID: String? = nil
+    var workoutSaved: Bool = false
+    var endedEarly: Bool = false
 
     /// While running, derive the countdown live from the absolute end-time so no
     /// per-second messages are needed. While paused, the end-time is a stale
@@ -120,6 +123,7 @@ struct WatchTimerState: Equatable {
         guard let pos = plan.position(index: currentIntervalIndex, endTime: intervalEndTime, at: now) else {
             next.isRunning = false
             next.workoutComplete = true
+            next.workoutSaved = false
             next.reportedTimeRemaining = 0
             return next
         }
@@ -322,20 +326,38 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         }
     }
 
-    /// END mid-workout. Watch-led: abandon (nothing is logged). Phone-led and
-    /// reachable: the phone resets. Phone-led and out of range: stop showing
-    /// it here — the phone carries on and logs it.
-    func endWorkout() {
+    /// Finishing retains actual elapsed work. Offline mirror controls can
+    /// only stop showing the phone session; they cannot queue destructive work.
+    var currentWorkoutID: UUID? {
+        mode == .local ? engine?.id : timerState.workoutID.flatMap { UUID(uuidString: $0) }
+    }
+
+    func endWorkout(for expectedID: UUID? = nil, now: Date = Date()) {
+        if let expectedID, expectedID != currentWorkoutID { return }
         switch mode {
         case .local:
-            clearLocalWorkout()
+            engine?.finish(now: now)
+            persistEngine(force: true)
+            tick(now: now)
         case .mirror:
             if isReachable {
-                sendCommand(WatchMessageKey.cmdReset)
+                sendBoundCommand(WatchMessageKey.cmdFinish)
             } else {
                 mirrorDismissed = true
                 tick()
             }
+        }
+    }
+
+    func discardActiveWorkout(for expectedID: UUID? = nil) {
+        if let expectedID, expectedID != currentWorkoutID { return }
+        switch mode {
+        case .local:
+            guard engine?.isComplete == false else { return }
+            clearLocalWorkout()
+        case .mirror:
+            guard isReachable else { return }
+            sendBoundCommand(WatchMessageKey.cmdDiscard)
         }
     }
 
@@ -349,7 +371,8 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     /// Complete screen "Discard" on a Watch-led workout: drop the record and
     /// tell the phone, in case a copy already got through.
-    func discardCompletedLocalWorkout() {
+    func discardCompletedLocalWorkout(for expectedID: UUID? = nil) {
+        if let expectedID, expectedID != engine?.id { return }
         guard mode == .local, let engine else { return }
         let id = engine.id
         pendingWorkouts.removeAll { $0.id == id }
@@ -368,9 +391,9 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     /// Discard from the phone-led Complete screen (phone must be reachable).
-    func discardPhoneWorkout() {
+    func discardPhoneWorkout(for expectedID: UUID? = nil) {
         guard mode == .mirror, isReachable else { return }
-        sendCommand(WatchMessageKey.cmdReset)
+        sendBoundCommand(WatchMessageKey.cmdDeleteCompleted, workoutID: expectedID?.uuidString)
     }
 
     private func clearLocalWorkout() {
@@ -400,6 +423,16 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
               WCSession.default.isReachable else { return }
         WCSession.default.sendMessage([WatchMessageKey.messageType: type],
                                       replyHandler: nil, errorHandler: nil)
+    }
+
+    private func sendBoundCommand(_ type: String, workoutID: String? = nil) {
+        guard let id = workoutID ?? timerState.workoutID, !id.isEmpty,
+              WCSession.isSupported(), WCSession.default.activationState == .activated,
+              WCSession.default.isReachable else { return }
+        WCSession.default.sendMessage([
+            WatchMessageKey.messageType: type,
+            WatchMessageKey.workoutID: id
+        ], replyHandler: nil, errorHandler: nil)
     }
 
     // MARK: - Tick (projection / engine reconcile)
@@ -681,7 +714,10 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             workHigh:             p[WatchMessageKey.workHRHigh]           as? Int    ?? 0,
             recoveryLow:          p[WatchMessageKey.recoveryHRLow]        as? Int    ?? 0,
             recoveryHigh:         p[WatchMessageKey.recoveryHRHigh]       as? Int    ?? 0,
-            workoutTypeRaw:       p[WatchMessageKey.workoutTypeRaw]       as? String
+            workoutTypeRaw:       p[WatchMessageKey.workoutTypeRaw]       as? String,
+            workoutID:            p[WatchMessageKey.workoutID]            as? String,
+            workoutSaved:         p[WatchMessageKey.workoutSaved]         as? Bool ?? false,
+            endedEarly:           p[WatchMessageKey.endedEarly]           as? Bool ?? false
         )
         lastPhoneState = state
         hasReceivedState = true

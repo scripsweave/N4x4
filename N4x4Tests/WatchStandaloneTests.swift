@@ -27,8 +27,9 @@ final class WatchStandaloneTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        try? FileManager.default.removeItem(at: TimerViewModel.defaultCheckpointURL.deletingLastPathComponent())
         ["workoutLogEntriesData", "importedWatchWorkoutIDs", "discardedWatchWorkoutIDs",
-         "currentStreak", "longestStreak", "healthKitEnabled"]
+         "currentStreak", "longestStreak", "healthKitEnabled", "discardedPhoneWorkoutIDs"]
             .forEach { UserDefaults.standard.removeObject(forKey: $0) }
     }
 
@@ -264,5 +265,84 @@ final class WatchStandaloneTests: XCTestCase {
         XCTAssertNil(HeartRateSeriesStore.load(for: record.id))
         XCTAssertFalse(vm.importWatchWorkout(record), "A deleted import must not return on redelivery")
         XCTAssertTrue(TimerViewModel().workoutLogEntries.isEmpty)
+    }
+}
+
+extension WatchStandaloneTests {
+    func testFinishStandaloneWorkoutKeepsPartialProgress() throws {
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: t0))
+        engine.record(bpm: 140, now: t0 + 20)
+        engine.finish(now: t0 + 90)
+        let record = try XCTUnwrap(engine.completedRecord())
+        XCTAssertEqual(record.totalSeconds, 90, accuracy: 0.001)
+        XCTAssertEqual(record.warmupSeconds, 60, accuracy: 0.001)
+        XCTAssertEqual(record.highIntensitySeconds, 30, accuracy: 0.001)
+        XCTAssertEqual(record.endedEarly, true)
+        XCTAssertEqual(record.samples.count, 1)
+        XCTAssertEqual(record.spans.map(\.kind), ["warmup", "work"])
+        engine.finish(now: t0 + 200)
+        XCTAssertEqual(engine.completedRecord(), record, "Finish is idempotent")
+    }
+
+    func testFinishStandaloneWorkoutInCooldownCountsAsFullWork() throws {
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: t0))
+        engine.finish(now: t0 + 380)
+        let record = try XCTUnwrap(engine.completedRecord())
+        XCTAssertEqual(record.highIntensitySeconds, 240)
+        XCTAssertEqual(record.cooldownSeconds, 20)
+        XCTAssertEqual(record.endedEarly, false)
+        XCTAssertTrue(record.cooldownSkipped)
+    }
+
+    func testFinishPausedStandaloneWorkoutExcludesPausedDuration() throws {
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: t0))
+        engine.pause(now: t0 + 20)
+        engine.finish(now: t0 + 1000)
+        XCTAssertEqual(engine.completedRecord()?.totalSeconds, 20)
+        XCTAssertEqual(engine.completedRecord()?.endedEarly, true)
+    }
+
+    func testFailedImportRemainsUnacknowledgedUntilSeriesIsSaved() throws {
+        var writesSucceed = false
+        let vm = TimerViewModel(seriesSaver: { series, id in
+            writesSucceed && HeartRateSeriesStore.save(series, for: id)
+        })
+        let record = makeRecord()
+        defer { HeartRateSeriesStore.delete(for: record.id) }
+        XCTAssertFalse(vm.importWatchWorkout(record))
+        XCTAssertFalse(vm.canAcknowledgeWatchWorkout(record.id))
+        XCTAssertTrue(vm.workoutLogEntries.isEmpty)
+        XCTAssertNotNil(vm.workoutSaveError)
+        writesSucceed = true
+        vm.retryWorkoutSave()
+        XCTAssertTrue(vm.canAcknowledgeWatchWorkout(record.id))
+        XCTAssertEqual(vm.workoutLogEntries.map(\.id), [record.id])
+        XCTAssertNotNil(HeartRateSeriesStore.load(for: record.id))
+        XCTAssertFalse(vm.importWatchWorkout(record))
+        XCTAssertEqual(vm.workoutLogEntries.count, 1)
+    }
+
+    func testEarlyWatchFinishImportsWithNoFullWorkoutStreak() throws {
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: Date().addingTimeInterval(-90)))
+        engine.finish(now: Date())
+        let record = try XCTUnwrap(engine.completedRecord())
+        defer { HeartRateSeriesStore.delete(for: record.id) }
+        let vm = TimerViewModel()
+        XCTAssertTrue(vm.importWatchWorkout(record))
+        XCTAssertEqual(vm.workoutLogEntries.first?.endedEarly, true)
+        XCTAssertEqual(vm.currentWeekStreak, 0)
+    }
+}
+
+extension WatchStandaloneTests {
+    func testExistingLogDeduplicatesWatchImportAfterIDCacheIsForgotten() {
+        let vm = TimerViewModel()
+        let record = makeRecord()
+        defer { HeartRateSeriesStore.delete(for: record.id) }
+        XCTAssertTrue(vm.importWatchWorkout(record))
+        UserDefaults.standard.removeObject(forKey: "importedWatchWorkoutIDs")
+        XCTAssertFalse(vm.importWatchWorkout(record), "An existing log is a duplicate even after bounded ID cache eviction")
+        XCTAssertEqual(vm.workoutLogEntries.map(\.id), [record.id])
+        XCTAssertTrue(vm.canAcknowledgeWatchWorkout(record.id))
     }
 }

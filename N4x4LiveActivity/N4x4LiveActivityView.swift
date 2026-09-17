@@ -74,7 +74,7 @@ struct CompactTrailingView: View {
     var body: some View {
         Group {
             if context.state.isRunning {
-                Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
+                Text(timerInterval: context.state.countdownRange(), countsDown: true)
                     .monospacedDigit()
                     .font(.caption2.bold())
                     .foregroundStyle(.white)
@@ -94,7 +94,7 @@ struct MinimalView: View {
 
     var body: some View {
         if context.state.isRunning {
-            Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
+            Text(timerInterval: context.state.countdownRange(), countsDown: true)
                 .monospacedDigit()
                 .font(.caption2.bold())
                 .foregroundStyle(context.state.phase.color)
@@ -160,7 +160,7 @@ struct ExpandedCenterView: View {
 
     var body: some View {
         if context.state.isRunning {
-            Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
+            Text(timerInterval: context.state.countdownRange(), countsDown: true)
                 .monospacedDigit()
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .foregroundStyle(context.state.phase.color)
@@ -225,7 +225,7 @@ struct LockScreenView: View {
                     .foregroundStyle(context.state.phase.color)
 
                 if context.state.isRunning {
-                    Text(timerInterval: Date.now...context.state.intervalEndTime, countsDown: true)
+                    Text(timerInterval: context.state.countdownRange(), countsDown: true)
                         .monospacedDigit()
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)

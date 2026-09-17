@@ -319,8 +319,9 @@ To verify:
   acked.** `pendingWorkouts` (`watchPendingWorkouts`) is flushed on
   completion, activation, reachability and foreground, skipping ids already
   in `outstandingUserInfoTransfers`. The phone (`WatchWorkoutImport.swift`)
-  imports idempotently by record id, remembers discarded ids, and always
-  acks — even for duplicates — so the Watch queue drains.
+  imports idempotently by record id and remembers discarded ids. Ack only
+  after both the log and series are saved, or for already imported/discarded
+  ids. Failed writes remain pending on the Watch for retry.
 - **The Watch still never saves to Health.** The phone's
   `saveWorkoutToHealthKit(start:end:)` writes the imported workout with the
   Watch's real start/end. Keep the single-saver rule.
@@ -526,3 +527,34 @@ To verify:
   bezel). Never hand-composite with cutout percentages. After a face change,
   re-run it, then `make-watch-screenshot.py` (03) and the 06 render + 6.7in
   resizes.
+
+
+## Workout completion and recovery (5.3+)
+
+- FINISH saves elapsed work; Discard is explicit. `finishAndSaveWorkout` and
+  `discardActiveWorkout` accept the ID captured when confirmation opens.
+  Optional `WorkoutLogEntry.endedEarly` / `CompletedWatchWorkout.endedEarly`
+  distinguish shortened work from a full-workout streak. Missing flags on old
+  records preserve their existing eligibility. Skipping only cooldown is full
+  completion when all planned work time was performed.
+- `TimerViewModel` checkpoints active phone sessions to
+  Application Support/PhoneWorkout/current.json. The recorder is Codable and
+  includes its open span. Restore paused at the last checkpoint; never count
+  time with the process absent as exercise. Timer settings affect the next
+  plan. Use `sessionIntervalCount` for an active session's UI/state payload.
+- Completed checkpoints are removed only after log and series writes succeed.
+  Keep newer checkpoint edits even if an older row and series exist. Deletion
+  tombstones prevent replay from resurrecting a discarded/deleted session.
+- Review drafts save synchronously through the VM's property observers.
+  Suppress observers during reset/restore. Never prefill new performance values
+  from history: autosaving would make old values look like new measurements.
+- Phone-led Watch Finish/Discard/Delete are separate ID-bound commands. Ignore
+  unbound legacy `cmdReset`. Projected completion is not confirmed persistence;
+  only the phone's `workoutSaved` payload may claim that a mirror was saved.
+- Preserve unreadable log/checkpoint bytes before replacing them, and recover
+  log rows/fields individually. A malformed optional field must not downgrade
+  the rest of History. The series saver returns success; failed imports must
+  not be acknowledged to the Watch.
+- Live Activity countdowns must use `ContentState.countdownRange(at:)`.
+  `Date.now...intervalEndTime` crashes the extension when it renders stale state
+  after that end time. Test past, current and future boundaries.

@@ -25,9 +25,11 @@ extension TimerViewModel {
         let key = record.id.uuidString
         var imported = Self.ids(forKey: Self.importedIDsKey)
         let discarded = Self.ids(forKey: Self.discardedIDsKey)
-        guard !imported.contains(key), !discarded.contains(key),
-              !workoutLogEntries.contains(where: { $0.id == record.id }) else { return false }
-        guard record.totalSeconds > 0 else { return false }
+        guard !imported.contains(key), !discarded.contains(key), !isDiscardedPhoneWorkout(record.id) else { return false }
+        guard record.totalSeconds.isFinite, record.totalSeconds >= 0 else { return false }
+        // The bounded ID cache can forget an old transfer; the committed log
+        // still proves it was imported and must prevent another Health save.
+        let alreadyLogged = isWorkoutPersistedInLog(record.id)
 
         let type = record.workoutTypeRaw.flatMap(WorkoutType.init(rawValue:)) ?? resolvedDefaultWorkoutType
 
@@ -42,7 +44,11 @@ extension TimerViewModel {
             },
             startedAt: record.startedAt
         )
-        HeartRateSeriesStore.save(series, for: record.id)
+        pendingWatchImports[record.id] = record
+        guard seriesSaver(series, record.id) else {
+            reportWorkoutSaveFailure("Your Watch workout couldn’t be saved yet. It remains on your Watch and will retry syncing.")
+            return false
+        }
         let hrSummary = HeartRateSeriesAnalytics.summary(for: series)
 
         let entry = WorkoutLogEntry(
@@ -60,26 +66,35 @@ extension TimerViewModel {
             ),
             modality: type.trainingModality,
             intervalPerformances: nil,
-            hrSummary: hrSummary
+            hrSummary: hrSummary, endedEarly: record.endedEarly
         )
 
         // The record may arrive after newer phone sessions; keep newest-first.
-        workoutLogEntries.append(entry)
+        if !workoutLogEntries.contains(where: { $0.id == record.id }) { workoutLogEntries.append(entry) }
         workoutLogEntries.sort { $0.completedAt > $1.completedAt }
-        persistWorkoutLogEntries()
+        guard persistWorkoutLogEntries() else { return false }
 
+        didSaveWatchImport(record.id)
         imported.insert(key)
         Self.store(imported, forKey: Self.importedIDsKey)
 
         updateStreakOnWorkoutComplete()
-        cancelMissedWorkoutFollowUpIfCompletedToday()
-        saveWorkoutToHealthKit(start: record.startedAt, end: record.completedAt)
-        return true
+        if entry.countsTowardStreak { cancelMissedWorkoutFollowUpIfCompletedToday() }
+        if !alreadyLogged { saveWorkoutToHealthKit(start: record.startedAt, end: record.completedAt) }
+        return !alreadyLogged
+    }
+
+    /// A failed write must leave the Watch's pending record intact for retry.
+    func canAcknowledgeWatchWorkout(_ id: UUID) -> Bool {
+        Self.ids(forKey: Self.importedIDsKey).contains(id.uuidString)
+            || Self.ids(forKey: Self.discardedIDsKey).contains(id.uuidString)
+            || isDiscardedPhoneWorkout(id)
     }
 
     /// The user discarded the workout on the Watch. Remove it if it already
     /// landed, and remember the id so a queued copy can't resurrect it.
     func discardWatchWorkout(id: UUID) {
+        pendingWatchImports.removeValue(forKey: id)
         var discarded = Self.ids(forKey: Self.discardedIDsKey)
         discarded.insert(id.uuidString)
         Self.store(discarded, forKey: Self.discardedIDsKey)

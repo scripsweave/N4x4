@@ -127,7 +127,7 @@ enum HeartRateSeriesAnalytics {
 
 /// Accumulates one workout's heart-rate stream and interval timeline.
 /// Owned by TimerViewModel; created on workout start, finished on completion.
-final class HeartRateSeriesRecorder {
+final class HeartRateSeriesRecorder: Codable {
     private(set) var samples: [HeartRateSeries.Sample] = []
     private(set) var closedSpans: [HeartRateSeries.IntervalSpan] = []
     private var openSpan: HeartRateSeries.IntervalSpan?
@@ -187,16 +187,19 @@ enum HeartRateSeriesStore {
         directory.appendingPathComponent("\(entryID.uuidString).json")
     }
 
-    static func save(_ series: HeartRateSeries, for entryID: UUID) {
+    @discardableResult
+    static func save(_ series: HeartRateSeries, for entryID: UUID) -> Bool {
         do {
             try FileManager.default.createDirectory(at: directory,
                                                     withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             try encoder.encode(series).write(to: url(for: entryID), options: .atomic)
+            return true
         } catch {
             // Losing one chart is not worth crashing a just-finished workout.
             print("HeartRateSeriesStore save failed: \(error.localizedDescription)")
+            return false
         }
     }
 

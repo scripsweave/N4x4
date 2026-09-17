@@ -56,10 +56,13 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.intervalDuration:       interval?.duration ?? 0.0,
             WatchMessageKey.phase:                  vm.currentWorkoutPhase.rawValue,
             WatchMessageKey.highIntensityCount:     vm.highIntensityCount,
-            WatchMessageKey.totalIntervals:         vm.numberOfIntervals,
+            WatchMessageKey.totalIntervals:         vm.sessionIntervalCount,
             WatchMessageKey.hrLow:                  hrLow,
             WatchMessageKey.hrHigh:                 hrHigh,
-            WatchMessageKey.workoutComplete:        vm.showPostWorkoutSummary,
+            WatchMessageKey.workoutComplete:        vm.workoutCompletionDate != nil,
+            WatchMessageKey.workoutID:              vm.activeWorkoutID?.uuidString ?? "",
+            WatchMessageKey.workoutSaved:           vm.completedWorkoutEntryID != nil && !vm.hasPendingWorkoutSave,
+            WatchMessageKey.endedEarly:             vm.sessionEndedEarly,
             WatchMessageKey.sessionStarted:         vm.workoutStartDate != nil,
             WatchMessageKey.zoneHapticEnabled:      vm.zoneHapticAlertsEnabled,
             WatchMessageKey.intervalHapticsEnabled: vm.hapticsEnabled,
@@ -172,8 +175,14 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             if vm.isRunning { vm.pause() } else { vm.startTimer() }
         case WatchMessageKey.cmdSkip:
             vm.skip()
+        case WatchMessageKey.cmdFinish, WatchMessageKey.cmdDiscard, WatchMessageKey.cmdDeleteCompleted:
+            if let rawID = message[WatchMessageKey.workoutID] as? String, let id = UUID(uuidString: rawID) {
+                vm.handleWorkoutCommand(type, workoutID: id)
+            }
         case WatchMessageKey.cmdReset:
-            vm.deleteCurrentWorkoutAndResetSession()
+            // An older Watch sends an unbound reset for both End and Delete.
+            // Never let that ambiguous command remove saved or newer work.
+            sendStateUpdate(to: vm)
         case WatchMessageKey.cmdRequestState:
             sendStateUpdate(to: vm)
         case WatchMessageKey.heartRate:
@@ -194,18 +203,18 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
 
     // MARK: - Standalone Watch workouts
 
-    /// Import (idempotent) and always ack by id — an already-imported or
-    /// discarded record still needs acking so the Watch can clear its queue.
-    /// A record that fails to decode is not acked; the Watch keeps it and the
-    /// next app build can try again.
+    /// Ack durable imports and already-imported/discarded IDs. Decode or save
+    /// failures leave the Watch’s persisted copy pending for a later retry.
     private func handleCompletedWatchWorkout(_ message: [String: Any], vm: TimerViewModel) {
         guard let idString = message[WatchMessageKey.workoutID] as? String,
               let data = message[WatchMessageKey.workoutRecord] as? Data,
               let record = CompletedWatchWorkout.decode(data),
               record.id.uuidString == idString else { return }
         vm.importWatchWorkout(record)
-        ackWatchWorkout(id: idString)
+        if vm.canAcknowledgeWatchWorkout(record.id) { ackWatchWorkout(id: idString) }
     }
+
+    func acknowledgeStoredWatchWorkout(_ id: UUID) { ackWatchWorkout(id: id.uuidString) }
 
     private func ackWatchWorkout(id: String) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }

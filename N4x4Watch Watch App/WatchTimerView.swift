@@ -17,6 +17,7 @@ struct WatchTimerView: View {
 
     @State private var page: Int
     @State private var showEndAlert = false
+    @State private var finishingWorkoutID: UUID?
     @State private var showSkipAlert = false
 
     /// `initialPage` 1 opens on the controls page (used by the DEBUG demo mode).
@@ -37,13 +38,16 @@ struct WatchTimerView: View {
             controlsPage.tag(1)
         }
         .tabViewStyle(.verticalPage)
-        .alert(offline ? "Stop showing this workout?" : "End workout?", isPresented: $showEndAlert) {
-            Button(offline ? "Stop" : "End", role: .destructive) { sessionManager.endWorkout() }
+        .alert(offline ? "Stop showing this workout?" : "Finish workout?", isPresented: $showEndAlert) {
+            Button(offline ? "Stop Showing" : "Finish & Save") { sessionManager.endWorkout(for: finishingWorkoutID) }
+            if !offline {
+                Button("Discard Workout", role: .destructive) { sessionManager.discardActiveWorkout(for: finishingWorkoutID) }
+            }
             Button("Keep Going", role: .cancel) {}
         } message: {
             Text(offline
-                 ? "Your iPhone is out of range. The workout continues on the iPhone and is saved there."
-                 : "This ends the current session. Your progress so far won't be logged.")
+                 ? "Check your iPhone to finish and save. This only hides the workout on your Watch."
+                 : "Save your progress, or discard this workout.")
         }
         .alert("End workout now?", isPresented: $showSkipAlert) {
             Button("End Now", role: .destructive) { sessionManager.skip() }
@@ -266,10 +270,13 @@ struct WatchTimerView: View {
                 .disabled(!state.isRunning || !canControl)
                 .opacity(state.isRunning && canControl ? 1 : 0.45)
 
-                Button { showEndAlert = true } label: {
-                    Text("END")
+                Button {
+                    finishingWorkoutID = sessionManager.currentWorkoutID
+                    showEndAlert = true
+                } label: {
+                    Text("FINISH")
                 }
-                .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.danger, outlined: true))
+                .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.electricBlue, outlined: true))
             }
             .padding(.leading, 6)
             // Clear the vertical page indicator / scroll bar on the right.

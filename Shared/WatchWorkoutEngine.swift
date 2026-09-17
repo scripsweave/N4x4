@@ -135,6 +135,7 @@ struct CompletedWatchWorkout: Codable, Equatable, Identifiable {
     let cooldownSkipped: Bool
     let samples: [Sample]
     let spans: [Span]
+    var endedEarly: Bool? = nil
 
     var totalSeconds: TimeInterval {
         warmupSeconds + highIntensitySeconds + recoverySeconds + cooldownSeconds
@@ -181,6 +182,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
     private(set) var samples: [CompletedWatchWorkout.Sample]
     private(set) var spans: [CompletedWatchWorkout.Span]
     private var openSpanStart: TimeInterval
+    private(set) var endedEarly: Bool? = nil
 
     /// Kept sample cadence, matching the phone's recorder (one per 2 s).
     static let sampleBucketSeconds: Double = 2
@@ -262,6 +264,20 @@ struct WatchWorkoutEngine: Codable, Equatable {
         advance(at: now)
     }
 
+    /// Finish and retain actual elapsed work, including a shortened session.
+    mutating func finish(now: Date) {
+        reconcile(now: now)
+        guard !isComplete else { return }
+        closeSegment(at: now)
+        closeSpan(at: now)
+        cooldownSkipped = elapsed(for: .cooldown) < plan.steps.filter { $0.phase == .cooldown }.reduce(0) { $0 + $1.duration }
+        endedEarly = elapsed(for: .highIntensity) + 0.01 < plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
+        isRunning = false
+        isComplete = true
+        completionDate = now
+        segmentStart = nil
+    }
+
     /// Records a heart-rate reading. Ignored while paused (charts show the
     /// gap) and thinned to one sample per bucket, like the phone's recorder.
     mutating func record(bpm: Double, now: Date) {
@@ -283,7 +299,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
             recoverySeconds: elapsed(for: .rest),
             cooldownSeconds: elapsed(for: .cooldown),
             cooldownSkipped: cooldownSkipped,
-            samples: samples, spans: spans
+            samples: samples, spans: spans, endedEarly: endedEarly
         )
     }
 
@@ -294,6 +310,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         closeSpan(at: time)
         let next = currentIndex + 1
         guard next < plan.steps.count else {
+            endedEarly = elapsed(for: .highIntensity) + 0.01 < plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
             isRunning = false
             isComplete = true
             completionDate = time

@@ -191,6 +191,9 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     /// Inline heart-rate stats; the full series lives in HeartRateSeriesStore
     /// keyed by `id`. Optional for the same backward-compat reason as above.
     let hrSummary: HRSessionSummary?
+    /// Missing on older records, which retain their original streak eligibility.
+    let endedEarly: Bool?
+    var countsTowardStreak: Bool { endedEarly != true }
 
     init(
         id: UUID = UUID(),
@@ -200,7 +203,8 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         sessionBreakdown: WorkoutSessionBreakdown? = nil,
         modality: TrainingModality? = nil,
         intervalPerformances: [IntervalPerformance]? = nil,
-        hrSummary: HRSessionSummary? = nil
+        hrSummary: HRSessionSummary? = nil,
+        endedEarly: Bool? = nil
     ) {
         self.id = id
         self.completedAt = completedAt
@@ -210,6 +214,7 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         self.modality = modality
         self.intervalPerformances = intervalPerformances
         self.hrSummary = hrSummary
+        self.endedEarly = endedEarly
     }
 
     /// Average of the logged primary values for this entry, ignoring blanks.
@@ -229,18 +234,6 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         // causing year-boundary streaks to break.
         Calendar.current.component(.yearForWeekOfYear, from: completedAt)
     }
-}
-
-private struct LegacyWorkoutLogEntryV1: Decodable {
-    let id: UUID?
-    let completedAt: Date
-}
-
-private struct LegacyWorkoutLogEntryV2: Decodable {
-    let id: UUID?
-    let completedAt: Date
-    let workoutType: String?
-    let notes: String?
 }
 
 struct VO2DataPoint: Identifiable {
@@ -495,31 +488,31 @@ class TimerViewModel: ObservableObject {
                 return
             }
             guard oldValue != numberOfIntervals else { return }
-            reset()
+            updatePlanForNextWorkout()
         }
     }
     @AppStorage("warmupDuration") var warmupDuration: TimeInterval = 5 * 60 {
         didSet {
             guard oldValue != warmupDuration else { return }
-            reset()
+            updatePlanForNextWorkout()
         }
     }
     @AppStorage("highIntensityDuration") var highIntensityDuration: TimeInterval = 4 * 60 {
         didSet {
             guard oldValue != highIntensityDuration else { return }
-            reset()
+            updatePlanForNextWorkout()
         }
     }
     @AppStorage("restDuration") var restDuration: TimeInterval = 3 * 60 {
         didSet {
             guard oldValue != restDuration else { return }
-            reset()
+            updatePlanForNextWorkout()
         }
     }
     @AppStorage("cooldownEnabled") var cooldownEnabled: Bool = true {
         didSet {
             guard oldValue != cooldownEnabled else { return }
-            reset()
+            updatePlanForNextWorkout()
         }
     }
     @AppStorage("cooldownDuration") var cooldownDuration: TimeInterval = 3 * 60 {
@@ -530,7 +523,7 @@ class TimerViewModel: ObservableObject {
                 return
             }
             guard oldValue != cooldownDuration else { return }
-            reset()
+            updatePlanForNextWorkout()
         }
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
@@ -925,20 +918,49 @@ class TimerViewModel: ObservableObject {
     @AppStorage("workoutLogEntriesData") private var workoutLogEntriesData: String = "[]"
     @AppStorage("shownMilestonesData") private var shownMilestonesData: String = "[]"
     @Published var workoutLogEntries: [WorkoutLogEntry] = []
-    @Published var selectedWorkoutType: WorkoutType = .other
-    @Published var workoutNotesDraft: String = ""
+    @Published var selectedWorkoutType: WorkoutType = .other {
+        didSet {
+            guard oldValue != selectedWorkoutType else { return }
+            if !isRestoringOrResetting, completedWorkoutEntryID != nil { preparePerformanceDraft() }
+            saveReviewEditsIfNeeded()
+        }
+    }
+    @Published var workoutNotesDraft: String = "" {
+        didSet { saveReviewEditsIfNeeded() }
+    }
 
     // Performance logging draft (post-workout summary, Phase 2). Values are in
     // the user's DISPLAY units; converted to canonical only at save time.
     /// "Set all" value that stamps every work interval.
     @Published var performanceSetAll: Double? = nil
     /// Free-text note per work interval, parallel to performanceDraft.
-    @Published var performanceNotesDraft: [String] = []
+    @Published var performanceNotesDraft: [String] = [] {
+        didSet { saveReviewEditsIfNeeded() }
+    }
     /// One slot per work interval (1..numberOfIntervals). nil = left blank.
-    @Published var performanceDraft: [Double?] = []
+    @Published var performanceDraft: [Double?] = [] {
+        didSet { saveReviewEditsIfNeeded() }
+    }
     @Published var showPostWorkoutSummary: Bool = false
     /// Stable identity from automatic completion save through summary review.
-    private(set) var completedWorkoutEntryID: UUID?
+    @Published private(set) var completedWorkoutEntryID: UUID?
+    @Published private(set) var activeWorkoutID: UUID?
+    @Published var showWorkoutRecovery = false
+    @Published private(set) var workoutSaveError: String?
+    @Published private(set) var historyRecoveryNotice: String?
+    @Published private(set) var hasPendingWorkoutSave = false
+    @Published private(set) var sessionEndedEarly = false
+    private var isRestoringOrResetting = false
+    private var preparedPerformanceType: WorkoutType?
+    private var sessionWorkoutType: WorkoutType?
+    private var completedSeriesNeedsSave = false
+    private var lastCheckpointDate: Date?
+    private var lastProgressDate: Date?
+    private var unreadableLogData: String?
+    private var unreadableCheckpointData: Data?
+    var pendingWatchImports: [UUID: CompletedWatchWorkout] = [:]
+    private let checkpointURL: URL
+    let seriesSaver: (HeartRateSeries, UUID) -> Bool
     private var showHistoryAfterSummaryDismissal = false
     @Published var showWeeklyStreaks: Bool = false
     @Published var showMilestoneCelebration: Bool = false
@@ -1028,7 +1050,7 @@ class TimerViewModel: ObservableObject {
             hasSeenHRSourcesAnnouncement = true
             return
         }
-        guard !isRunning else { return }            // never pop over a workout
+        guard workoutStartDate == nil else { return } // never pop over an active or recovered workout
         guard !showWatchUpgradePrompt else { return } // one prompt per launch
         showHRSourcesAnnouncement = true
     }
@@ -1130,7 +1152,7 @@ class TimerViewModel: ObservableObject {
         guard UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") else { return }
         // One prompt per launch — the HR-sources announcement wins ties and
         // covers the Watch pitch anyway; this one can fire on a later launch.
-        guard !showHRSourcesAnnouncement else { return }
+        guard !showHRSourcesAnnouncement, workoutStartDate == nil else { return }
         if watchPaired && !watchAppInstalled {
             showWatchUpgradePrompt = true
         }
@@ -1150,7 +1172,7 @@ class TimerViewModel: ObservableObject {
     }
 
     private func checkForMilestone() {
-        let count = workoutLogEntries.count
+        let count = workoutLogEntries.filter(\.countsTowardStreak).count
         guard Self.milestones.contains(count), !shownMilestones.contains(count) else { return }
         var shown = shownMilestones
         shown.insert(count)
@@ -1311,7 +1333,7 @@ class TimerViewModel: ObservableObject {
 
         // Get unique weeks from workout entries using a Hashable key
         struct WeekKey: Hashable { let year: Int; let week: Int }
-        let uniqueWeeks: Set<WeekKey> = Set(workoutLogEntries.map { WeekKey(year: $0.year, week: $0.weekOfYear) })
+        let uniqueWeeks: Set<WeekKey> = Set(workoutLogEntries.filter(\.countsTowardStreak).map { WeekKey(year: $0.year, week: $0.weekOfYear) })
         let sortedWeeks = uniqueWeeks.sorted { lhs, rhs in
             if lhs.year != rhs.year { return lhs.year > rhs.year }
             return lhs.week > rhs.week
@@ -1543,7 +1565,11 @@ class TimerViewModel: ObservableObject {
     }
 
     init(intervalNotificationCenter: any IntervalNotificationCenter = UNUserNotificationCenter.current(),
-         liveActivityProvider: any WorkoutLiveActivityProvider = SystemWorkoutLiveActivityProvider()) {
+         liveActivityProvider: any WorkoutLiveActivityProvider = SystemWorkoutLiveActivityProvider(),
+         checkpointURL: URL = TimerViewModel.defaultCheckpointURL,
+         seriesSaver: @escaping (HeartRateSeries, UUID) -> Bool = { HeartRateSeriesStore.save($0, for: $1) }) {
+        self.checkpointURL = checkpointURL
+        self.seriesSaver = seriesSaver
         self.intervalNotificationCenter = intervalNotificationCenter
         self.liveActivityProvider = liveActivityProvider
         // Migrate the legacy single-weekday setting to the multi-day format.
@@ -1627,6 +1653,9 @@ class TimerViewModel: ObservableObject {
             $currentIntervalIndex.map { _ in () }.eraseToAnyPublisher(),
             $highIntensityCount.map { _ in () }.eraseToAnyPublisher(),
             $showPostWorkoutSummary.map { _ in () }.eraseToAnyPublisher(),
+            $completedWorkoutEntryID.map { _ in () }.eraseToAnyPublisher(),
+            $activeWorkoutID.map { _ in () }.eraseToAnyPublisher(),
+            $hasPendingWorkoutSave.map { _ in () }.eraseToAnyPublisher(),
         ]
         watchBroadcastCancellable = Publishers.MergeMany(watchTriggers)
             .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
@@ -1654,10 +1683,11 @@ class TimerViewModel: ObservableObject {
                 self.updateLiveActivity(isRunning: true)
             }
 
-        // This app does not restore a phone-led timer after relaunch. Capture
-        // orphan activities now, before an async task could see a new workout.
+        // Recovery starts paused, so abandon old system surfaces before restoring.
+        // Capture activities now before async cleanup could see a new workout.
         endLiveActivity()
         cancelIntervalNotifications()
+        restoreSessionCheckpoint()
 
         // Sync the stored streak value immediately on launch (S1).
         // Previously currentStreak was only ever increased, so a missed-week streak
@@ -1689,6 +1719,13 @@ class TimerViewModel: ObservableObject {
                 requestHealthKitAuthorizationIfNeeded()
             }
         }
+    }
+
+    var sessionIntervalCount: Int { intervals.filter { $0.type == .highIntensity }.count }
+
+    private func updatePlanForNextWorkout() {
+        guard workoutStartDate == nil, completedWorkoutEntryID == nil else { return }
+        setupIntervals()
     }
 
     func setupIntervals() {
@@ -1735,7 +1772,7 @@ class TimerViewModel: ObservableObject {
         restCount = traversed.filter { $0.type == .rest }.count
     }
 
-    func startTimer() {
+    func startTimer(now: Date = Date()) {
         guard workoutCompletionDate == nil, !intervals.isEmpty,
               intervals.indices.contains(currentIntervalIndex) else { return }
 
@@ -1743,30 +1780,34 @@ class TimerViewModel: ObservableObject {
         timer = nil
 
         cancelRecoveryNudge()
+        showWorkoutRecovery = false
         isRunning = true
         // Keep the audio session (and the app) alive while the phone is
         // locked so voice prompts fire on time. Idempotent across resumes.
         SpeechManager.shared.beginWorkoutAudio()
         if workoutStartDate == nil {
-            workoutStartDate = Date()
+            workoutStartDate = now
+            activeWorkoutID = UUID()
+            sessionWorkoutType = resolvedDefaultWorkoutType
             // Fresh workout: start the fine-grained HR recording.
-            hrRecorder = HeartRateSeriesRecorder()
+            hrRecorder = HeartRateSeriesRecorder(startedAt: now)
             completedSeries = nil
-            recorderBeginCurrentInterval()
-            // AirPods et al. stream via an iPhone workout session (iOS 26+).
-            startPhoneWorkoutSessionIfNeeded()
+            recorderBeginCurrentInterval(at: now)
         }
+        // Also restart streaming after restoring a paused session on relaunch.
+        startPhoneWorkoutSessionIfNeeded()
         startLiveActivity()
         if intervalEndTime == nil {
-            intervalEndTime = Date().addingTimeInterval(timeRemaining)
+            intervalEndTime = now.addingTimeInterval(timeRemaining)
         }
 
-        reconcileTimerState(now: Date(), playAlarm: false)
+        reconcileTimerState(now: now, playAlarm: false)
         guard isRunning else { return }
 
         speakIntervalCueIfNeeded()
         speakWarmupStartIfNeeded()
 
+        saveSessionCheckpoint(now: now, force: true)
         scheduleNextIntervalNotification()
 
         timer = Timer.publish(every: 1, on: .main, in: .common)
@@ -1790,6 +1831,8 @@ class TimerViewModel: ObservableObject {
 
     func reconcileTimerState(now: Date = Date(), playAlarm: Bool) {
         guard isRunning else { return }
+        lastProgressDate = now
+        defer { if workoutCompletionDate == nil { saveSessionCheckpoint(now: now) } }
         guard !intervals.isEmpty, intervals.indices.contains(currentIntervalIndex) else {
             stopTimer()
             endLiveActivity()
@@ -1849,11 +1892,12 @@ class TimerViewModel: ObservableObject {
             if cursor + 1 >= intervals.count {
                 currentIntervalIndex = cursor
                 updateCounts()
-                finishWorkout()
+                finishWorkout(at: intervalEndCursor)
                 return
             }
 
             cursor += 1
+            recorderBeginInterval(at: cursor, time: intervalEndCursor)
             let intervalDuration = intervals[cursor].duration
             intervalEndCursor = intervalEndCursor.addingTimeInterval(intervalDuration)
 
@@ -1878,7 +1922,7 @@ class TimerViewModel: ObservableObject {
             // (previously only manual skips buzzed).
             resetPromptFlags()
             triggerIntervalHaptic()
-            recorderBeginCurrentInterval()
+            saveSessionCheckpoint(now: now, force: true)
             if playAlarm {
                 playAlarmIfNeeded()
             }
@@ -1892,7 +1936,7 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    func finishWorkout() {
+    func finishWorkout(at completionTime: Date = Date()) {
         // Timer reconciliation and Watch commands can both reach completion.
         // Save the workout (and Apple Health record) only once per session.
         guard workoutCompletionDate == nil else { return }
@@ -1902,12 +1946,15 @@ class TimerViewModel: ObservableObject {
         stopPhoneWorkoutSessionIfActive()
         // Seal the HR recording before HR state is cleared; the post-workout
         // summary charts render from completedSeries.
-        if let recorder = hrRecorder, let offset = recorderOffset {
-            completedSeries = recorder.finish(at: offset)
+        if let recorder = hrRecorder, let start = workoutStartDate {
+            completedSeries = recorder.finish(at: max(0, completionTime.timeIntervalSince(start)))
         }
+        completedSeriesNeedsSave = completedSeries != nil
         hrRecorder = nil
         clearHeartRateState()
-        workoutCompletionDate = Date()
+        workoutCompletionDate = completionTime
+        showWorkoutRecovery = false
+        sessionEndedEarly = elapsedHighIntensityTime + 0.01 < intervals.filter { $0.type == .highIntensity }.reduce(0) { $0 + $1.duration }
         speakWorkoutComplete()
         // Safe while the completion phrase is speaking: teardown defers to
         // the speech-finished callback.
@@ -1916,11 +1963,14 @@ class TimerViewModel: ObservableObject {
         timeRemaining = 0
         showCompletionMessage = false
 
-        selectedWorkoutType = resolvedDefaultWorkoutType
+        isRestoringOrResetting = true
+        selectedWorkoutType = sessionWorkoutType ?? resolvedDefaultWorkoutType
         workoutNotesDraft = ""
         performanceDraft = []
         performanceNotesDraft = []
         performanceSetAll = nil
+        preparedPerformanceType = nil
+        isRestoringOrResetting = false
         persistCompletedWorkout()
 
         let finishedOnCooldown = intervals.indices.contains(currentIntervalIndex) && intervals[currentIntervalIndex].type == .cooldown
@@ -1949,7 +1999,7 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    func moveToNextInterval() {
+    func moveToNextInterval(now: Date = Date()) {
         // The long buzz belongs to a NEW interval starting — skipping the last
         // interval goes straight to completion, which has its own (taps-only)
         // haptic in finishWorkout.
@@ -1960,44 +2010,47 @@ class TimerViewModel: ObservableObject {
         if currentIntervalIndex + 1 < intervals.count {
             currentIntervalIndex += 1
             timeRemaining = intervals[currentIntervalIndex].duration
-            intervalEndTime = isRunning ? Date().addingTimeInterval(timeRemaining) : nil
+            intervalEndTime = isRunning ? now.addingTimeInterval(timeRemaining) : nil
 
             cancelIntervalNotifications()
             updateCounts()
-            recorderBeginCurrentInterval()
+            recorderBeginCurrentInterval(at: now)
+            saveSessionCheckpoint(now: now, force: true)
             if isRunning {
                 scheduleNextIntervalNotification()
                 updateLiveActivity(isRunning: true)
             }
         } else {
-            finishWorkout()
+            finishWorkout(at: now)
         }
     }
 
-    func pause() {
+    func pause(now: Date = Date()) {
         if isRunning {
             // Reconcile once at tap time so elapsed accounting remains accurate between ticks.
-            reconcileTimerState(now: Date(), playAlarm: false)
+            reconcileTimerState(now: now, playAlarm: false)
             guard isRunning else { return }
 
             SpeechManager.shared.stopSpeaking()
-            timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
+            timeRemaining = max(0, intervalEndTime?.timeIntervalSince(now) ?? timeRemaining)
             stopTimer()
             SpeechManager.shared.endWorkoutAudio()
             updateLiveActivity(isRunning: false)
+            saveSessionCheckpoint(now: now, force: true)
         } else {
-            intervalEndTime = Date().addingTimeInterval(timeRemaining)
-            startTimer()
+            intervalEndTime = now.addingTimeInterval(timeRemaining)
+            startTimer(now: now)
             updateLiveActivity(isRunning: true)
         }
     }
 
-    func skip() {
-        guard intervals.indices.contains(currentIntervalIndex) else { return }
+    func skip(now: Date = Date()) {
+        guard workoutStartDate != nil, workoutCompletionDate == nil,
+              intervals.indices.contains(currentIntervalIndex) else { return }
 
         if isRunning {
             // Reconcile once at tap time so elapsed accounting remains accurate between ticks.
-            reconcileTimerState(now: Date(), playAlarm: false)
+            reconcileTimerState(now: now, playAlarm: false)
             guard isRunning, intervals.indices.contains(currentIntervalIndex) else { return }
         }
 
@@ -2012,14 +2065,27 @@ class TimerViewModel: ObservableObject {
             skippedCooldownThisSession = true
         }
         let wasRunning = isRunning
-        moveToNextInterval()
+        moveToNextInterval(now: now)
 
         if wasRunning, !showPostWorkoutSummary {
-            startTimer()
+            startTimer(now: now)
         }
     }
 
     func reset() {
+        guard !hasPendingWorkoutSave else { return }
+        if let id = activeWorkoutID, workoutCompletionDate == nil { rememberDiscardedPhoneWorkout(id) }
+        removeSessionCheckpoint()
+        isRestoringOrResetting = true
+        defer { isRestoringOrResetting = false }
+        activeWorkoutID = nil
+        sessionWorkoutType = nil
+        showWorkoutRecovery = false
+        sessionEndedEarly = false
+        preparedPerformanceType = nil
+        completedSeriesNeedsSave = false
+        lastCheckpointDate = nil
+        lastProgressDate = nil
         SpeechManager.shared.stopSpeaking()
         SpeechManager.shared.endWorkoutAudio()
         stopPhoneWorkoutSessionIfActive()
@@ -2211,32 +2277,21 @@ class TimerViewModel: ObservableObject {
 
     /// Saves the completed workout before presenting its review, then updates
     /// that same entry when the user finishes editing optional details.
-    private func persistCompletedWorkout() {
-        let trimmedNotes = workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        let completionDate = workoutCompletionDate ?? Date()
-        let modality = selectedWorkoutType.trainingModality
-
-        // Persist the fine-grained HR series (own file, keyed by entry id)
-        // and keep only the small summary inline on the entry.
+    @discardableResult
+    private func persistCompletedWorkout() -> Bool {
+        guard let completionDate = workoutCompletionDate else { return false }
         let isNewEntry = completedWorkoutEntryID == nil
-        let entryID = completedWorkoutEntryID ?? UUID()
+        let entryID = completedWorkoutEntryID ?? activeWorkoutID ?? UUID()
         // A deleted workout must never be resurrected by a late review action.
-        guard isNewEntry || workoutLogEntries.contains(where: { $0.id == entryID }) else { return }
-        var hrSummary: HRSessionSummary?
-        if let series = completedSeries {
-            if isNewEntry { HeartRateSeriesStore.save(series, for: entryID) }
-            hrSummary = HeartRateSeriesAnalytics.summary(for: series)
-        }
-
+        guard isNewEntry || workoutLogEntries.contains(where: { $0.id == entryID }) else { return false }
+        let modality = selectedWorkoutType.trainingModality
         let entry = WorkoutLogEntry(
-            id: entryID,
-            completedAt: completionDate,
-            workoutType: selectedWorkoutType,
-            notes: trimmedNotes,
-            sessionBreakdown: currentSessionBreakdown,
-            modality: modality,
+            id: entryID, completedAt: completionDate, workoutType: selectedWorkoutType,
+            notes: workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines),
+            sessionBreakdown: currentSessionBreakdown, modality: modality,
             intervalPerformances: builtPerformances(for: modality),
-            hrSummary: hrSummary
+            hrSummary: completedSeries.flatMap { HeartRateSeriesAnalytics.summary(for: $0) },
+            endedEarly: sessionEndedEarly
         )
         if let index = workoutLogEntries.firstIndex(where: { $0.id == entryID }) {
             workoutLogEntries[index] = entry
@@ -2244,29 +2299,55 @@ class TimerViewModel: ObservableObject {
             workoutLogEntries.append(entry)
         }
         workoutLogEntries.sort { $0.completedAt > $1.completedAt }
-        persistWorkoutLogEntries()
+        activeWorkoutID = entryID
         completedWorkoutEntryID = entryID
-
+        hasPendingWorkoutSave = true
+        // Keep a recoverable copy until both the log and series have been written.
+        saveSessionCheckpoint(force: true)
+        if completedSeriesNeedsSave, let series = completedSeries {
+            completedSeriesNeedsSave = !seriesSaver(series, entryID)
+        }
+        let logSaved = persistWorkoutLogEntries()
+        hasPendingWorkoutSave = !logSaved || completedSeriesNeedsSave
+        if hasPendingWorkoutSave {
+            workoutSaveError = "Your workout hasn't finished saving. Keep it here and try again."
+        } else {
+            if pendingWatchImports.isEmpty { workoutSaveError = nil }
+            removeSessionCheckpoint()
+        }
         if isNewEntry {
             updateStreakOnWorkoutComplete()
-            cancelMissedWorkoutFollowUpIfCompletedToday()
-            scheduleRecoveryNudge(afterCount: workoutLogEntries.count)
+            if entry.countsTowardStreak {
+                cancelMissedWorkoutFollowUpIfCompletedToday()
+                scheduleRecoveryNudge(afterCount: workoutLogEntries.filter(\.countsTowardStreak).count)
+            }
         }
+        return !hasPendingWorkoutSave
     }
 
-    func completeWorkoutReview() {
-        guard let id = completedWorkoutEntryID,
-              workoutLogEntries.contains(where: { $0.id == id }) else { return }
+    private func saveReviewEditsIfNeeded() {
+        guard !isRestoringOrResetting, completedWorkoutEntryID != nil else { return }
         persistCompletedWorkout()
+    }
+
+    @discardableResult
+    func completeWorkoutReview() -> Bool {
+        guard let id = completedWorkoutEntryID,
+              workoutLogEntries.contains(where: { $0.id == id }),
+              persistCompletedWorkout() else { return false }
         showHistoryAfterSummaryDismissal = true
         reset()
+        return true
     }
 
     /// Wait until the summary has actually closed before presenting another
     /// sheet or the milestone celebration.
     func postWorkoutSummaryDidDismiss() {
         // Swiping the saved summary away is equivalent to Done.
-        if completedWorkoutEntryID != nil { completeWorkoutReview() }
+        if completedWorkoutEntryID != nil, !completeWorkoutReview() {
+            DispatchQueue.main.async { [weak self] in self?.showPostWorkoutSummary = true }
+            return
+        }
         guard showHistoryAfterSummaryDismissal else { return }
         showHistoryAfterSummaryDismissal = false
         checkForMilestone()
@@ -2301,6 +2382,9 @@ class TimerViewModel: ObservableObject {
     /// Also handles abandoning an unfinished workout, which has no log entry.
     func deleteCurrentWorkoutAndResetSession() {
         showHistoryAfterSummaryDismissal = false
+        hasPendingWorkoutSave = false
+        workoutSaveError = nil
+        removeSessionCheckpoint()
         if let id = completedWorkoutEntryID {
             deleteWorkoutLogEntry(id: id)
         }
@@ -2310,14 +2394,15 @@ class TimerViewModel: ObservableObject {
     /// Permanently removes a saved workout and its persisted heart-rate series.
     func deleteWorkoutLogEntry(id: UUID) {
         guard workoutLogEntries.contains(where: { $0.id == id }) else { return }
+        rememberDiscardedPhoneWorkout(id)
         workoutLogEntries.removeAll { $0.id == id }
         HeartRateSeriesStore.delete(for: id)
         persistWorkoutLogEntries()
         refreshStreak()
     }
 
-    /// The most recent logged performance set for a given modality, used to
-    /// pre-fill the post-workout summary so a typical session is one tap to save.
+    /// The most recent logged performance set for a modality, available for
+    /// comparisons without treating old values as this workout’s performance.
     /// `workoutLogEntries` is kept newest-first, so the first match wins.
     func lastLoggedPerformance(for modality: TrainingModality) -> [IntervalPerformance]? {
         workoutLogEntries.first {
@@ -2354,13 +2439,15 @@ class TimerViewModel: ObservableObject {
         return PerformanceUnits.mphToKmh(display)
     }
 
-    /// Build the per-interval draft when the summary appears: size it to the work
-    /// intervals and pre-fill from the last session of the same modality (so a
-    /// repeat session is one tap to save). Call again if the type changes.
+    /// Size the review to this session’s frozen plan. Start with blank values:
+    /// live autosaving must never turn last session’s performance into new data.
+    /// Repeated appearances preserve edits; a new workout type clears values.
     func preparePerformanceDraft() {
-        let count = max(0, numberOfIntervals)
-        let modality = selectedWorkoutType.trainingModality
-
+        guard preparedPerformanceType != selectedWorkoutType else { return }
+        preparedPerformanceType = selectedWorkoutType
+        isRestoringOrResetting = true
+        defer { isRestoringOrResetting = false; saveReviewEditsIfNeeded() }
+        let count = max(0, sessionIntervalCount)
         // Notes are session-specific — never prefilled from history. Preserve
         // anything already typed this session (the draft is re-prepared when
         // the workout type changes).
@@ -2368,26 +2455,8 @@ class TimerViewModel: ObservableObject {
             performanceNotesDraft = Array(repeating: "", count: count)
         }
 
-        guard let last = lastLoggedPerformance(for: modality) else {
-            performanceSetAll = nil
-            performanceDraft = Array(repeating: nil, count: count)
-            return
-        }
-
-        // Map last session's canonical values (by interval number) into display units.
-        var byInterval: [Int: Double] = [:]
-        for p in last {
-            if let v = p.primary { byInterval[p.intervalNumber] = displayValue(v, for: modality) }
-        }
-        performanceDraft = (1...max(1, count)).prefix(count).map { byInterval[$0] }
-
-        // Only seed "Set all" when every filled interval shares one value. An
-        // average across heterogeneous intervals matches no actual interval and,
-        // combined with stampAllIntervals, would let a stray edit flatten the
-        // pre-filled per-interval values to a meaningless number.
-        let filled = performanceDraft.compactMap { $0 }
-        let allEqual = filled.dropFirst().allSatisfy { $0 == filled.first }
-        performanceSetAll = (filled.isEmpty || !allEqual) ? nil : filled.first
+        performanceSetAll = nil
+        performanceDraft = Array(repeating: nil, count: count)
     }
 
     /// Stamp every work interval with the current "set all" value (the default
@@ -2418,60 +2487,67 @@ class TimerViewModel: ObservableObject {
     }
 
     private func loadWorkoutLogEntries() {
-        guard let data = workoutLogEntriesData.data(using: .utf8) else {
-            workoutLogEntries = []
-            return
-        }
-
+        let raw = workoutLogEntriesData
+        guard let data = raw.data(using: .utf8) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-
         if let decoded = try? decoder.decode([WorkoutLogEntry].self, from: data) {
-            workoutLogEntries = decoded.sorted { $0.completedAt > $1.completedAt }
+            workoutLogEntries = decoded.filter { !isDiscardedPhoneWorkout($0.id) }.sorted { $0.completedAt > $1.completedAt }
             return
         }
-
-        if let legacyV2 = try? decoder.decode([LegacyWorkoutLogEntryV2].self, from: data) {
-            workoutLogEntries = legacyV2
-                .map {
-                    WorkoutLogEntry(
-                        id: $0.id ?? UUID(),
-                        completedAt: $0.completedAt,
-                        workoutType: WorkoutType(rawValue: $0.workoutType ?? "") ?? .norwegian4x4,
-                        notes: ($0.notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                    )
-                }
-                .sorted { $0.completedAt > $1.completedAt }
-            persistWorkoutLogEntries()
-            return
+        // Recover one row/field at a time. A bad HR summary must not erase
+        // another workout's notes, breakdown or performance values.
+        unreadableLogData = raw
+        let rows = (try? JSONSerialization.jsonObject(with: data)) as? [Any] ?? []
+        workoutLogEntries = rows.compactMap { value -> WorkoutLogEntry? in
+            guard let row = value as? [String: Any],
+                  let rowData = try? JSONSerialization.data(withJSONObject: row) else { return nil }
+            if let entry = try? decoder.decode(WorkoutLogEntry.self, from: rowData) { return entry }
+            func field<T: Decodable>(_ key: String, as type: T.Type) -> T? {
+                guard let value = row[key], !(value is NSNull),
+                      let fieldData = try? JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed) else { return nil }
+                return try? decoder.decode(type, from: fieldData)
+            }
+            guard let date = field("completedAt", as: Date.self) else { return nil }
+            return WorkoutLogEntry(
+                id: field("id", as: UUID.self) ?? UUID(), completedAt: date,
+                workoutType: field("workoutType", as: WorkoutType.self) ?? .norwegian4x4,
+                notes: (field("notes", as: String.self) ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+                sessionBreakdown: field("sessionBreakdown", as: WorkoutSessionBreakdown.self),
+                modality: field("modality", as: TrainingModality.self),
+                intervalPerformances: field("intervalPerformances", as: [IntervalPerformance].self),
+                hrSummary: field("hrSummary", as: HRSessionSummary.self),
+                endedEarly: field("endedEarly", as: Bool.self)
+            )
+        }.filter { !isDiscardedPhoneWorkout($0.id) }.sorted { $0.completedAt > $1.completedAt }
+        // Never replace unreadable storage until its original bytes are safe.
+        if persistWorkoutLogEntries() {
+            historyRecoveryNotice = "Some older workout details needed recovery. The original data has been kept on this iPhone."
         }
-
-        if let legacyV1 = try? decoder.decode([LegacyWorkoutLogEntryV1].self, from: data) {
-            workoutLogEntries = legacyV1
-                .map {
-                    WorkoutLogEntry(
-                        id: $0.id ?? UUID(),
-                        completedAt: $0.completedAt,
-                        workoutType: .norwegian4x4,
-                        notes: ""
-                    )
-                }
-                .sorted { $0.completedAt > $1.completedAt }
-            persistWorkoutLogEntries()
-            return
-        }
-
-        workoutLogEntries = []
     }
 
-    func persistWorkoutLogEntries() {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        if let data = try? encoder.encode(workoutLogEntries), let json = String(data: data, encoding: .utf8) {
-            workoutLogEntriesData = json
-        } else {
-            // G5: surface encode failures so they're visible in logs rather than silently losing data.
-            print("[N4x4] Warning: Failed to persist workout log entries — workout data may not be saved.")
+    func isWorkoutPersistedInLog(_ id: UUID) -> Bool {
+        guard let data = workoutLogEntriesData.data(using: .utf8) else { return false }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([WorkoutLogEntry].self, from: data))?.contains { $0.id == id } == true
+    }
+
+    @discardableResult
+    func persistWorkoutLogEntries() -> Bool {
+        do {
+            if let raw = unreadableLogData {
+                try preserveRecoveryData(Data(raw.utf8), name: "workout-history")
+                unreadableLogData = nil
+            }
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(workoutLogEntries)
+            workoutLogEntriesData = String(decoding: data, as: UTF8.self)
+            return true
+        } catch {
+            workoutSaveError = "Workout history couldn't be saved. Your existing data has been kept. Try again after freeing some storage."
+            return false
         }
     }
 
@@ -2743,9 +2819,14 @@ class TimerViewModel: ObservableObject {
 
     /// Close the previous span and open one for the current interval. Call at
     /// workout start and after every interval advance.
-    func recorderBeginCurrentInterval() {
-        guard let recorder = hrRecorder, let offset = recorderOffset,
-              let d = recorderSpanDescriptor(for: currentIntervalIndex) else { return }
+    func recorderBeginCurrentInterval(at time: Date = Date()) {
+        recorderBeginInterval(at: currentIntervalIndex, time: time)
+    }
+
+    private func recorderBeginInterval(at index: Int, time: Date) {
+        guard let recorder = hrRecorder, let start = workoutStartDate,
+              let d = recorderSpanDescriptor(for: index) else { return }
+        let offset = max(0, time.timeIntervalSince(start))
         recorder.beginInterval(kind: d.kind, workNumber: d.work,
                                targetLo: d.lo, targetHi: d.hi, at: offset)
     }
@@ -2857,7 +2938,7 @@ class TimerViewModel: ObservableObject {
                 intervalEndTime: Date(),
                 isRunning: false,
                 currentInterval: 1,
-                totalIntervals: numberOfIntervals,
+                totalIntervals: sessionIntervalCount,
                 hrLow: 0, hrHigh: 0
             )
         }
@@ -3387,7 +3468,7 @@ class TimerViewModel: ObservableObject {
     }
 
     func saveCompletedWorkoutToHealthKit() {
-        let endDate = Date()
+        let endDate = workoutCompletionDate ?? Date()
         let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())
         saveWorkoutToHealthKit(start: startDate, end: endDate)
     }
@@ -3435,6 +3516,7 @@ class TimerViewModel: ObservableObject {
         } else if !isRunning {
             cancelIntervalNotifications()
         }
+        if hasPendingWorkoutSave || !pendingWatchImports.isEmpty { retryWorkoutSave() }
         // S1: keep the stored streak in sync with the log (it was previously only ever increased).
         refreshStreak()
 
@@ -3596,4 +3678,237 @@ enum AudioPrompts {
         "That's the N4x4 way. Feel that — that's progress.",
         "Odin counted every second. He's impressed."
     ]
+}
+
+// MARK: - Durable phone-session recovery
+
+private struct PhoneWorkoutCheckpoint: Codable {
+    let version: Int
+    let id: UUID
+    let startedAt: Date
+    let savedAt: Date
+    let progressAt: Date
+    let intervals: [Interval]
+    let currentIndex: Int
+    let remaining: Double
+    let breakdown: WorkoutSessionBreakdown
+    let workoutType: WorkoutType
+    let recorder: HeartRateSeriesRecorder?
+    let completedSeries: HeartRateSeries?
+    let completedEntry: WorkoutLogEntry?
+}
+
+extension TimerViewModel {
+    static var defaultCheckpointURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("PhoneWorkout/current.json")
+    }
+
+    /// Save the work actually done, whether running, paused or recovered.
+    func finishAndSaveWorkout(for expectedID: UUID? = nil, now: Date = Date()) {
+        if let expectedID, expectedID != activeWorkoutID { return }
+        guard workoutStartDate != nil, workoutCompletionDate == nil else { return }
+        if isRunning { reconcileTimerState(now: now, playAlarm: false) }
+        guard workoutCompletionDate == nil else { return }
+        if intervals.contains(where: { $0.type == .cooldown }),
+           elapsedCooldownTime < intervals.filter({ $0.type == .cooldown }).reduce(0, { $0 + $1.duration }) {
+            skippedCooldownThisSession = true
+        }
+        finishWorkout(at: isRunning ? now : (lastProgressDate ?? now))
+    }
+
+    func discardActiveWorkout(for expectedID: UUID? = nil) {
+        if let expectedID, expectedID != activeWorkoutID { return }
+        // A delayed discard of an active session must never delete a completion.
+        guard workoutCompletionDate == nil else { return }
+        reset()
+    }
+
+    func reportWorkoutSaveFailure(_ message: String) { workoutSaveError = message }
+
+    func didSaveWatchImport(_ id: UUID) {
+        pendingWatchImports.removeValue(forKey: id)
+        if pendingWatchImports.isEmpty, !hasPendingWorkoutSave, workoutStartDate == nil { workoutSaveError = nil }
+    }
+
+    func retryWorkoutSave() {
+        for record in Array(pendingWatchImports.values) {
+            importWatchWorkout(record)
+            if canAcknowledgeWatchWorkout(record.id) { phoneSessionManager.acknowledgeStoredWatchWorkout(record.id) }
+        }
+        if workoutCompletionDate != nil {
+            persistCompletedWorkout()
+        } else if workoutStartDate != nil {
+            if isRunning { reconcileTimerState(now: Date(), playAlarm: false) }
+            saveSessionCheckpoint(force: true)
+        } else if pendingWatchImports.isEmpty, persistWorkoutLogEntries() {
+            workoutSaveError = nil
+        }
+    }
+
+    /// Called on background entry as well as on timer boundaries and controls.
+    func checkpointOnBackground() {
+        if isRunning { reconcileTimerState(now: Date(), playAlarm: false) }
+        if workoutCompletionDate == nil { saveSessionCheckpoint(force: true) }
+        else if hasPendingWorkoutSave { persistCompletedWorkout() }
+    }
+
+    @discardableResult
+    private func saveSessionCheckpoint(now: Date = Date(), force: Bool = false) -> Bool {
+        guard let id = activeWorkoutID, let start = workoutStartDate else { return false }
+        if !force, let last = lastCheckpointDate, (0..<5).contains(now.timeIntervalSince(last)) { return true }
+        let snapshot = PhoneWorkoutCheckpoint(
+            version: 1, id: id, startedAt: start, savedAt: now,
+            progressAt: lastProgressDate ?? start, intervals: intervals,
+            currentIndex: currentIntervalIndex, remaining: timeRemaining,
+            breakdown: currentSessionBreakdown, workoutType: sessionWorkoutType ?? selectedWorkoutType,
+            recorder: hrRecorder, completedSeries: completedSeries,
+            completedEntry: completedWorkoutEntryID.flatMap { id in workoutLogEntries.first { $0.id == id } }
+        )
+        do {
+            if let unreadableCheckpointData {
+                try preserveRecoveryData(unreadableCheckpointData, name: "phone-session")
+                self.unreadableCheckpointData = nil
+            }
+            try FileManager.default.createDirectory(at: checkpointURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(snapshot).write(to: checkpointURL, options: .atomic)
+            lastCheckpointDate = now
+            if workoutCompletionDate == nil, pendingWatchImports.isEmpty { workoutSaveError = nil }
+            return true
+        } catch {
+            workoutSaveError = "Your latest progress couldn't be saved. Free some storage and try again."
+            return false
+        }
+    }
+
+    private func restoreSessionCheckpoint() {
+        guard FileManager.default.fileExists(atPath: checkpointURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: checkpointURL)
+            let snapshot: PhoneWorkoutCheckpoint
+            do {
+                snapshot = try JSONDecoder().decode(PhoneWorkoutCheckpoint.self, from: data)
+                guard snapshot.version == 1, !snapshot.intervals.isEmpty,
+                      snapshot.intervals.indices.contains(snapshot.currentIndex),
+                      snapshot.remaining.isFinite, snapshot.remaining >= 0,
+                      snapshot.intervals.allSatisfy({ $0.duration.isFinite && $0.duration >= 0 }) else {
+                    throw CocoaError(.coderReadCorrupt)
+                }
+            } catch {
+                unreadableCheckpointData = data
+                try preserveRecoveryData(data, name: "phone-session")
+                unreadableCheckpointData = nil
+                removeSessionCheckpoint()
+                historyRecoveryNotice = "An interrupted workout couldn't be read. Its original data has been kept for recovery."
+                return
+            }
+            if isDiscardedPhoneWorkout(snapshot.id) {
+                removeSessionCheckpoint()
+                return
+            }
+            if let entry = snapshot.completedEntry,
+               workoutLogEntries.contains(where: { stored in
+                   stored.id == entry.id && abs(stored.completedAt.timeIntervalSince(entry.completedAt)) < 1
+                       && stored.workoutType == entry.workoutType && stored.notes == entry.notes
+                       && stored.sessionBreakdown == entry.sessionBreakdown && stored.modality == entry.modality
+                       && stored.intervalPerformances == entry.intervalPerformances && stored.hrSummary == entry.hrSummary
+                       && stored.endedEarly == entry.endedEarly
+               }),
+               snapshot.completedSeries == nil || HeartRateSeriesStore.load(for: entry.id) == snapshot.completedSeries {
+                // A crash after committing History but before removing the checkpoint.
+                removeSessionCheckpoint()
+                return
+            }
+            isRestoringOrResetting = true
+            activeWorkoutID = snapshot.id
+            workoutStartDate = snapshot.startedAt
+            sessionWorkoutType = snapshot.workoutType
+            selectedWorkoutType = snapshot.workoutType
+            intervals = snapshot.intervals
+            currentIntervalIndex = snapshot.currentIndex
+            timeRemaining = snapshot.remaining
+            elapsedWarmupTime = snapshot.breakdown.warmupDuration
+            elapsedHighIntensityTime = snapshot.breakdown.highIntensityDuration
+            elapsedRecoveryTime = snapshot.breakdown.recoveryDuration
+            elapsedCooldownTime = snapshot.breakdown.cooldownDuration
+            skippedCooldownThisSession = snapshot.breakdown.cooldownSkipped
+            hrRecorder = snapshot.recorder
+            lastProgressDate = snapshot.progressAt
+            // Do not invent exercise while the process was absent. Resume from
+            // the last checkpoint, paused, with the original plan and identity.
+            isRunning = false
+            intervalEndTime = nil
+            updateCounts()
+            if let entry = snapshot.completedEntry {
+                workoutCompletionDate = entry.completedAt
+                completedSeries = snapshot.completedSeries
+                hrRecorder = nil
+                completedSeriesNeedsSave = completedSeries != nil
+                selectedWorkoutType = entry.workoutType
+                workoutNotesDraft = entry.notes
+                sessionEndedEarly = entry.endedEarly == true
+                performanceDraft = (1...max(1, sessionIntervalCount)).map { number in
+                    entry.intervalPerformances?.first { $0.intervalNumber == number }?.primary
+                        .map { displayValue($0, for: entry.workoutType.trainingModality) }
+                }
+                performanceNotesDraft = (1...max(1, sessionIntervalCount)).map { number in
+                    entry.intervalPerformances?.first { $0.intervalNumber == number }?.note ?? ""
+                }
+                preparedPerformanceType = selectedWorkoutType
+                // Upsert under the original ID, including when a previous log
+                // write succeeded but its series write failed.
+                completedWorkoutEntryID = nil
+                isRestoringOrResetting = false
+                persistCompletedWorkout()
+                showPostWorkoutSummary = true
+            } else {
+                isRestoringOrResetting = false
+                showWorkoutRecovery = true
+            }
+        } catch {
+            isRestoringOrResetting = false
+            workoutSaveError = "Your interrupted workout couldn't be opened. Its saved data is still on this iPhone."
+        }
+    }
+
+    private func removeSessionCheckpoint() {
+        guard FileManager.default.fileExists(atPath: checkpointURL.path) else { return }
+        try? FileManager.default.removeItem(at: checkpointURL)
+    }
+
+    private func preserveRecoveryData(_ data: Data, name: String) throws {
+        let directory = checkpointURL.deletingLastPathComponent().appendingPathComponent("Recovery", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("\(name)-\(UUID().uuidString).json")
+        try data.write(to: url, options: .atomic)
+    }
+
+    private func rememberDiscardedPhoneWorkout(_ id: UUID) {
+        var ids = Set(UserDefaults.standard.stringArray(forKey: "discardedPhoneWorkoutIDs") ?? [])
+        ids.insert(id.uuidString)
+        UserDefaults.standard.set(Array(ids), forKey: "discardedPhoneWorkoutIDs")
+    }
+
+    func isDiscardedPhoneWorkout(_ id: UUID) -> Bool {
+        (UserDefaults.standard.stringArray(forKey: "discardedPhoneWorkoutIDs") ?? []).contains(id.uuidString)
+    }
+
+    /// Separate, ID-bound commands prevent an old finish/discard from deleting
+    /// a just-saved workout or affecting a newer session.
+    func handleWorkoutCommand(_ command: String, workoutID: UUID) {
+        switch command {
+        case WatchMessageKey.cmdFinish:
+            guard workoutID == activeWorkoutID else { return }
+            finishAndSaveWorkout()
+        case WatchMessageKey.cmdDiscard:
+            guard workoutID == activeWorkoutID, workoutCompletionDate == nil else { return }
+            discardActiveWorkout()
+        case WatchMessageKey.cmdDeleteCompleted:
+            guard workoutLogEntries.contains(where: { $0.id == workoutID }) else { return }
+            if workoutID == completedWorkoutEntryID { deleteCurrentWorkoutAndResetSession() }
+            else { deleteWorkoutLogEntry(id: workoutID) }
+        default:
+            break
+        }
+    }
 }

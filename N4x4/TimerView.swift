@@ -10,6 +10,7 @@ struct TimerView: View {
     @State private var showSettings = false
     @State private var showHistory = false
     @State private var showResetAlert = false
+    @State private var finishingWorkoutID: UUID?
     @State private var showSkipConfirmation = false
     @State private var skipConfirmationForCooldown = false
     @State private var showWatchHelp = false
@@ -56,7 +57,7 @@ struct TimerView: View {
         }
 
         let interval = viewModel.intervals[viewModel.currentIntervalIndex]
-        let totalIntervals = viewModel.numberOfIntervals
+        let totalIntervals = viewModel.sessionIntervalCount
 
         switch interval.type {
         case .warmup:
@@ -218,9 +219,10 @@ struct TimerView: View {
             .navigationBarTitle("", displayMode: .inline)
             .navigationBarItems(
                 leading: Button(action: {
+                    finishingWorkoutID = viewModel.activeWorkoutID
                     showResetAlert = true
                 }) {
-                    Image(systemName: "arrow.counterclockwise")
+                    Image(systemName: "stop.circle")
                         .font(.title2)
                 },
                 trailing: HStack(spacing: 16) {
@@ -273,15 +275,17 @@ struct TimerView: View {
             .sheet(isPresented: $viewModel.showWeeklyStreaks) {
                 StreakHistoryView(viewModel: viewModel)
             }
-            .alert(isPresented: $showResetAlert) {
-                Alert(
-                    title: Text("Reset Session"),
-                    message: Text("Are you sure you want to reset the session?"),
-                    primaryButton: .destructive(Text("Reset")) {
-                        viewModel.reset()
-                    },
-                    secondaryButton: .cancel()
-                )
+            .workoutRecovery(viewModel: viewModel)
+            .alert("Finish workout?", isPresented: $showResetAlert) {
+                Button("Finish & Save") {
+                    if let id = finishingWorkoutID { viewModel.finishAndSaveWorkout(for: id) }
+                }
+                Button("Discard Workout", role: .destructive) {
+                    if let id = finishingWorkoutID { viewModel.discardActiveWorkout(for: id) }
+                }
+                Button("Keep Going", role: .cancel) {}
+            } message: {
+                Text("Save your progress, or discard this workout.")
             }
             .alert(skipConfirmationForCooldown ? "End workout now?" : "Skip interval now?", isPresented: $showSkipConfirmation) {
                 Button(skipConfirmationForCooldown ? "End Now" : "Skip Now", role: .destructive) {
@@ -303,6 +307,8 @@ struct TimerView: View {
                     if viewModel.isRunning {
                         viewModel.reconcileTimerState(now: Date(), playAlarm: false)
                     }
+                } else if newPhase == .background {
+                    viewModel.checkpointOnBackground()
                 }
             }
             .onDisappear {
@@ -466,8 +472,7 @@ struct PostWorkoutSummaryView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        viewModel.completeWorkoutReview()
-                        dismiss()
+                        if viewModel.completeWorkoutReview() { dismiss() }
                     }
                 }
             }

@@ -20,6 +20,18 @@ final class N4x4UITests: XCTestCase {
 
     override func tearDownWithError() throws {
         XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        if app.state == .runningForeground {
+            if app.alerts["Workout recovered"].exists {
+                app.alerts["Workout recovered"].buttons["Discard Workout"].tap()
+            }
+            if app.tabBars.buttons["Home"].isHittable { app.tabBars.buttons["Home"].tap() }
+            if app.buttons["FINISH"].isHittable {
+                app.buttons["FINISH"].tap()
+                app.alerts["Finish workout?"].buttons["Discard Workout"].tap()
+            }
+        }
+        app.terminate()
     }
 
     func testExample() throws {
@@ -53,7 +65,7 @@ final class N4x4UITests: XCTestCase {
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 {
             let tabBar = app.tabBars.firstMatch
-            let bottom = tabBar.exists ? tabBar.frame.minY : app.frame.maxY
+            let bottom = tabBar.exists && tabBar.isHittable ? tabBar.frame.minY : app.frame.maxY
             if element.exists && element.isHittable && element.frame.minY >= 0 && element.frame.maxY <= bottom {
                 return
             }
@@ -120,8 +132,8 @@ final class N4x4UITests: XCTestCase {
         XCTAssertEqual(reading.value as? String, "166 beats per minute")
         XCTAssertGreaterThanOrEqual(reading.frame.height, 50)
         keepScreenshot("Workout portrait", app: app)
-        app.buttons["END"].tap()
-        app.alerts["End workout?"].buttons["End"].tap()
+        app.buttons["FINISH"].tap()
+        app.alerts["Finish workout?"].buttons["Discard Workout"].tap()
         assertVisible(app.buttons["START"], in: app)
     }
 
@@ -253,5 +265,94 @@ final class N4x4UITests: XCTestCase {
         XCTAssertFalse(second.exists)
         first.tap()
         XCTAssertTrue(app.staticTexts["First workout"].waitForExistence(timeout: 5))
+    }
+}
+
+extension N4x4UITests {
+    func testFinishInCooldownSavesAndOpensHistory() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-numberOfIntervals", "1", "-warmupDuration", "0", "-highIntensityDuration", "1", "-cooldownEnabled", "YES", "-cooldownDuration", "60", "-workoutLogEntriesData", "\"[]\""]
+        app.launch()
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.staticTexts["COOL DOWN"].waitForExistence(timeout: 10))
+        app.buttons["FINISH"].tap()
+        keepScreenshot("Finish offers saving and explicit discard", app: app)
+        app.alerts["Finish workout?"].buttons["Finish & Save"].tap()
+        XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Norwegian 4×4 complete"].exists)
+        app.navigationBars.buttons["Done"].tap()
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workout-"))
+        reveal(rows.firstMatch, in: app)
+        XCTAssertEqual(rows.count, 1)
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.navigationBars.buttons["Delete"].waitForExistence(timeout: 5))
+        keepScreenshot("Saved cooldown finish in History", app: app)
+    }
+
+    func testEarlyFinishSavesAndImmediateReviewNotesSurviveTermination() {
+        let app = XCUIApplication()
+        let timerArguments = ["-numberOfIntervals", "1", "-warmupDuration", "0", "-highIntensityDuration", "240", "-cooldownEnabled", "NO"]
+        app.launchArguments = reviewLaunchArguments + timerArguments + ["-workoutLogEntriesData", "\"[]\""]
+        app.launch()
+        app.buttons["START"].tap()
+        app.buttons["FINISH"].tap()
+        app.alerts["Finish workout?"].buttons["Finish & Save"].tap()
+        XCTAssertTrue(app.staticTexts["Workout ended early"].waitForExistence(timeout: 10))
+        let notes = app.textFields["workout-notes"]
+        reveal(notes, in: app)
+        notes.tap()
+        notes.typeText("Saved without Done")
+        app.terminate()
+        app.launchArguments = reviewLaunchArguments + timerArguments
+        app.launch()
+        app.tabBars.buttons["History"].tap()
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workout-"))
+        reveal(rows.firstMatch, in: app)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(app.staticTexts["Ended early"].exists)
+        rows.firstMatch.tap()
+        let savedNotes = app.staticTexts["Saved without Done"]
+        reveal(savedNotes, in: app)
+        XCTAssertTrue(savedNotes.exists)
+        keepScreenshot("Review notes survive termination before Done", app: app)
+    }
+
+    func testInterruptedWorkoutRecoversPausedAndCanBeFinished() {
+        let app = XCUIApplication()
+        let timerArguments = ["-numberOfIntervals", "1", "-warmupDuration", "0", "-highIntensityDuration", "240", "-cooldownEnabled", "NO"]
+        app.launchArguments = reviewLaunchArguments + timerArguments + ["-workoutLogEntriesData", "\"[]\""]
+        app.launch()
+        app.buttons["START"].tap()
+        app.buttons["PAUSE"].tap() // Forces a checkpoint without timing a disk write.
+        let remaining = app.staticTexts["workout-countdown"].value as? String
+        app.terminate()
+        app.launchArguments = reviewLaunchArguments + timerArguments
+        app.launch()
+        XCTAssertTrue(app.alerts["Workout recovered"].waitForExistence(timeout: 10))
+        keepScreenshot("Recovered workout choices", app: app)
+        app.alerts["Workout recovered"].buttons["Keep Paused"].tap()
+        XCTAssertTrue(app.buttons["RESUME"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["workout-countdown"].value as? String, remaining)
+        app.buttons["RESUME"].tap()
+        app.buttons["FINISH"].tap()
+        app.alerts["Finish workout?"].buttons["Finish & Save"].tap()
+        XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
+        keepScreenshot("Recovered workout saved", app: app)
+    }
+
+    func testExplicitDiscardDoesNotReturnAfterRelaunch() {
+        let app = XCUIApplication()
+        let timerArguments = ["-warmupDuration", "0", "-highIntensityDuration", "240"]
+        app.launchArguments = reviewLaunchArguments + timerArguments + ["-workoutLogEntriesData", "\"[]\""]
+        app.launch()
+        app.buttons["START"].tap()
+        app.buttons["FINISH"].tap()
+        app.alerts["Finish workout?"].buttons["Discard Workout"].tap()
+        XCTAssertTrue(app.buttons["START"].waitForExistence(timeout: 5))
+        app.terminate()
+        app.launchArguments = reviewLaunchArguments + timerArguments
+        app.launch()
+        XCTAssertTrue(app.buttons["START"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.alerts["Workout recovered"].exists)
     }
 }

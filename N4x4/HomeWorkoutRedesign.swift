@@ -244,6 +244,7 @@ struct RedesignRootView: View {
                 .tag(3)
         }
         .tint(Palette.electricBlue)
+        .workoutRecovery(viewModel: viewModel)
         .preferredColorScheme(.dark)
         .onChange(of: isSessionActive) { _, active in
             if !active { workoutMinimized = false }
@@ -277,6 +278,8 @@ struct RedesignRootView: View {
                 if viewModel.isRunning {
                     viewModel.reconcileTimerState(now: Date(), playAlarm: false)
                 }
+            } else if phase == .background {
+                viewModel.checkpointOnBackground()
             }
         }
         .sheet(isPresented: $viewModel.showPostWorkoutSummary,
@@ -515,7 +518,7 @@ struct HomeScreen: View {
     private var planSummary: String {
         let total = viewModel.intervals.reduce(0) { $0 + $1.duration }
         let mins = Int((total / 60).rounded())
-        return "\(viewModel.numberOfIntervals) intervals · ~\(mins) min total"
+        return "\(viewModel.sessionIntervalCount) intervals · ~\(mins) min total"
     }
 }
 
@@ -884,6 +887,7 @@ struct WorkoutScreen: View {
     var onMinimize: () -> Void = {}
 
     @State private var showEndAlert = false
+    @State private var finishingWorkoutID: UUID?
     @State private var showSkipConfirmation = false
     @State private var skipIsForCooldown = false
 
@@ -901,11 +905,16 @@ struct WorkoutScreen: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
-        .alert("End workout?", isPresented: $showEndAlert) {
-            Button("End", role: .destructive) { viewModel.reset() }
+        .alert("Finish workout?", isPresented: $showEndAlert) {
+            Button("Finish & Save") {
+                if let id = finishingWorkoutID { viewModel.finishAndSaveWorkout(for: id) }
+            }
+            Button("Discard Workout", role: .destructive) {
+                if let id = finishingWorkoutID { viewModel.discardActiveWorkout(for: id) }
+            }
             Button("Keep Going", role: .cancel) {}
         } message: {
-            Text("This ends the current session. Your progress so far won't be logged.")
+            Text("Save your progress, or discard this workout.")
         }
         .alert(skipIsForCooldown ? "End workout now?" : "Skip interval now?", isPresented: $showSkipConfirmation) {
             Button(skipIsForCooldown ? "End Now" : "Skip Now", role: .destructive) { viewModel.skip() }
@@ -976,13 +985,16 @@ struct WorkoutScreen: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Minimize workout")
-                Button { showEndAlert = true } label: {
-                    Text("END")
+                Button {
+                    finishingWorkoutID = viewModel.activeWorkoutID
+                    showEndAlert = true
+                } label: {
+                    Text("FINISH")
                         .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(Palette.danger)
+                        .foregroundStyle(Palette.electricBlue)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 44)
-                        .overlay(Capsule().stroke(Palette.danger.opacity(0.6), lineWidth: 1.5))
+                        .overlay(Capsule().stroke(Palette.electricBlue.opacity(0.6), lineWidth: 1.5))
                 }
                 .buttonStyle(.plain)
             }
@@ -992,8 +1004,8 @@ struct WorkoutScreen: View {
     private var roundText: String {
         switch viewModel.currentIntervalType {
         case .warmup:        return "WARM UP"
-        case .highIntensity: return "ROUND \(viewModel.highIntensityCount) OF \(viewModel.numberOfIntervals)"
-        case .rest:          return "RECOVERY \(viewModel.restCount) OF \(viewModel.numberOfIntervals)"
+        case .highIntensity: return "ROUND \(viewModel.highIntensityCount) OF \(viewModel.sessionIntervalCount)"
+        case .rest:          return "RECOVERY \(viewModel.restCount) OF \(viewModel.sessionIntervalCount)"
         case .cooldown:      return "COOL DOWN"
         case .none:          return ""
         }
@@ -1409,6 +1421,9 @@ struct RedesignHistoryView: View {
         ScrollView {
             VStack(spacing: 16) {
                 header
+                if let notice = viewModel.historyRecoveryNotice {
+                    Text(notice).font(.callout).foregroundStyle(Palette.textSecondary)
+                }
                 streakHero
                 statTiles
                 calendarCard
@@ -1470,6 +1485,9 @@ struct RedesignHistoryView: View {
                             Text(workout.completedAt.formatted(date: .abbreviated, time: .shortened))
                                 .font(.system(size: 12))
                                 .foregroundStyle(Palette.textSecondary)
+                            if workout.endedEarly == true {
+                                Text("Ended early").font(.caption).foregroundStyle(Palette.amber)
+                            }
                             if let breakdown = workout.sessionBreakdown {
                                 Text(formatMinutes(breakdown.totalDuration))
                                     .font(.system(size: 12))
@@ -1567,7 +1585,7 @@ struct RedesignHistoryView: View {
 
     private var last8Weeks: [Bool] {
         let now = Date()
-        let entryWeeks = Set(viewModel.workoutLogEntries.map { WeekKey(year: $0.year, week: $0.weekOfYear) })
+        let entryWeeks = Set(viewModel.workoutLogEntries.filter(\.countsTowardStreak).map { WeekKey(year: $0.year, week: $0.weekOfYear) })
         return (0..<8).reversed().map { i in
             guard let d = cal.date(byAdding: .weekOfYear, value: -i, to: now) else { return false }
             let key = WeekKey(year: cal.component(.yearForWeekOfYear, from: d),

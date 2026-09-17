@@ -1,10 +1,18 @@
 # N4x4 — Session Handoff
 
-> **Current state (5.2, 2026-09-17):** landscape layouts, a larger live
+> **Current state (5.3, 2026-09-17):** Finish & Save, interrupted-session
+> recovery, continuous review saving, complete interval timelines and safer
+> Watch commands/imports. Read
+> [`SESSION-HANDOFF-2026-09-17-RECOVERY.md`](SESSION-HANDOFF-2026-09-17-RECOVERY.md)
+> first. The preceding investigation is in
+> [`WORKOUT-COMPLETION-AUDIT-2026-09-17.md`](WORKOUT-COMPLETION-AUDIT-2026-09-17.md);
+> it describes 5.2 behavior before these fixes.
+
+> **Previous release (5.2, 2026-09-17):** landscape layouts, a larger live
 > heart-rate display, and cleanup of Live Activities / interval notifications
 > when workouts end. See
 > [`SESSION-HANDOFF-2026-09-17-LANDSCAPE.md`](SESSION-HANDOFF-2026-09-17-LANDSCAPE.md)
-> first. The preceding autosave release is documented in
+> for that release. The preceding autosave release is documented in
 > [`SESSION-HANDOFF-2026-09-17.md`](SESSION-HANDOFF-2026-09-17.md).
 > The older handoffs below describe earlier releases.
 

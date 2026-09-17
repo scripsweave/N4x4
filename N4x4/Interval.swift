@@ -2,14 +2,14 @@
 
 import Foundation
 
-enum IntervalType: Equatable {
+enum IntervalType: String, Codable, Equatable {
     case warmup
     case highIntensity
     case rest
     case cooldown
 }
 
-struct Interval {
+struct Interval: Codable, Equatable {
     let name: String
     let duration: TimeInterval
     let type: IntervalType

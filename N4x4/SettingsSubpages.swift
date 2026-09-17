@@ -171,6 +171,12 @@ struct IntervalSettingsView: View {
 
     var body: some View {
         Form {
+            if viewModel.workoutStartDate != nil {
+                Section {
+                    Text("Changes apply to your next workout. Your current session keeps its original plan.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            }
             Section(
                 header: Text("Structure"),
                 footer: Text("The classic protocol is 4 × 4 minutes. Start with 2 and build up.")
