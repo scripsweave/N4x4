@@ -114,7 +114,9 @@ struct SessionStripChart: View {
     var height: CGFloat = 190
     var showsAxes: Bool = true
 
-    private var duration: Double { series.samples.last?.t ?? series.spans.last?.end ?? 60 }
+    private var duration: Double {
+        max(1, max(series.samples.last?.t ?? 0, series.spans.last?.end ?? 0))
+    }
 
     var body: some View {
         Chart {
@@ -449,8 +451,16 @@ struct IntervalCard: View {
                     .foregroundStyle(Palette.textSecondary)
                 Spacer()
                 TextField("—", value: Binding(
-                    get: { viewModel.performanceDraft[index] },
-                    set: { viewModel.performanceDraft[index] = $0 }
+                    // SwiftUI can read a retained binding during dismissal,
+                    // after reset has cleared the session's draft arrays.
+                    get: {
+                        guard viewModel.performanceDraft.indices.contains(index) else { return nil }
+                        return viewModel.performanceDraft[index]
+                    },
+                    set: {
+                        guard viewModel.performanceDraft.indices.contains(index) else { return }
+                        viewModel.performanceDraft[index] = $0
+                    }
                 ), format: .number)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
@@ -624,6 +634,7 @@ struct PostWorkoutSummaryRedesignView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var ghost: HeartRateSeries?
     @State private var shareImage: UIImage?
+    @State private var showDeleteConfirmation = false
 
     private var series: HeartRateSeries? { viewModel.completedSeries }
     private var summary: HRSessionSummary? {
@@ -664,10 +675,7 @@ struct PostWorkoutSummaryRedesignView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Discard") {
-                        viewModel.closePostWorkoutSummaryWithoutSaving()
-                        dismiss()
-                    }
+                    Button("Delete", role: .destructive) { showDeleteConfirmation = true }
                     .foregroundStyle(Palette.danger)
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -680,7 +688,7 @@ struct PostWorkoutSummaryRedesignView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        viewModel.saveWorkoutLogEntryAndResetSession()
+                        viewModel.completeWorkoutReview()
                         dismiss()
                     }
                     .fontWeight(.bold)
@@ -696,7 +704,15 @@ struct PostWorkoutSummaryRedesignView: View {
                 loadGhost()
             }
         }
-        .interactiveDismissDisabled(true)
+        .alert("Delete workout?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteCurrentWorkoutAndResetSession()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the workout from N4x4 history.")
+        }
     }
 
     private var hero: some View {
@@ -712,6 +728,9 @@ struct PostWorkoutSummaryRedesignView: View {
                     Text(Date.now, style: .date)
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.textSecondary)
+                    Text("Saved to History")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Palette.recovery)
                 }
                 Spacer()
             }
@@ -786,7 +805,8 @@ struct PostWorkoutSummaryRedesignView: View {
     private func loadGhost() {
         let modality = viewModel.selectedWorkoutType.trainingModality
         guard let previous = viewModel.workoutLogEntries.first(where: {
-            $0.modality == modality && $0.hrSummary != nil
+            $0.id != viewModel.completedWorkoutEntryID
+                && $0.modality == modality && $0.hrSummary != nil
         }) else {
             ghost = nil
             return
@@ -819,6 +839,7 @@ struct SessionDetailSheet: View {
     @State private var series: HeartRateSeries?
     @State private var ghost: HeartRateSeries?
     @State private var shareImage: UIImage?
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         NavigationView {
@@ -843,8 +864,38 @@ struct SessionDetailSheet: View {
                                       savedPerformances: entry.intervalPerformances,
                                       modality: entry.modality,
                                       viewModel: viewModel)
-                    } else if entry.hrSummary == nil {
-                        Text("No heart-rate data was recorded for this session.")
+                    } else {
+                        // Older logs may have interval settings but no series.
+                        // Keep those details accessible through the same screen.
+                        if let breakdown = entry.sessionBreakdown {
+                            sectionTitle("SESSION")
+                            VStack(spacing: 8) {
+                                LabeledContent("Warmup", value: mmss(breakdown.warmupDuration))
+                                LabeledContent("High intensity", value: mmss(breakdown.highIntensityDuration))
+                                LabeledContent("Recovery", value: mmss(breakdown.recoveryDuration))
+                                LabeledContent("Cooldown", value: breakdown.cooldownSkipped ? "Skipped" : mmss(breakdown.cooldownDuration))
+                            }
+                            .font(.system(size: 14))
+                            .foregroundStyle(Palette.textSecondary)
+                        }
+                        if let performances = entry.intervalPerformances, !performances.isEmpty {
+                            sectionTitle("INTERVALS")
+                            ForEach(performances) { performance in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Interval \(performance.intervalNumber)")
+                                        .font(.system(size: 14, weight: .semibold))
+                                    if let value = performance.primary {
+                                        Text(savedPerformanceText(value))
+                                    }
+                                    if let note = performance.note, !note.isEmpty { Text(note) }
+                                }
+                                .font(.system(size: 13))
+                                .foregroundStyle(Palette.textSecondary)
+                            }
+                        }
+                        Text(entry.hrSummary == nil
+                             ? "No heart-rate data was recorded for this session."
+                             : "The heart-rate chart for this session is unavailable.")
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.textSecondary)
                     }
@@ -867,6 +918,10 @@ struct SessionDetailSheet: View {
             .navigationTitle(entry.completedAt.formatted(date: .abbreviated, time: .shortened))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Delete", role: .destructive) { showDeleteConfirmation = true }
+                        .foregroundStyle(Palette.danger)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     if let image = shareImage {
                         ShareLink(item: Image(uiImage: image),
@@ -881,6 +936,15 @@ struct SessionDetailSheet: View {
             }
             .onAppear { load() }
         }
+        .alert("Delete workout?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteWorkoutLogEntry(id: entry.id)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the workout from N4x4 history.")
+        }
     }
 
     private func sectionTitle(_ text: String) -> some View {
@@ -888,6 +952,15 @@ struct SessionDetailSheet: View {
             .font(.system(size: 12, weight: .bold))
             .foregroundStyle(Palette.textSecondary)
             .tracking(1)
+    }
+
+    private func savedPerformanceText(_ value: Double) -> String {
+        let modality = entry.modality ?? entry.workoutType.trainingModality
+        let metric = modality.performanceMetric
+        let unit = metric.localeConverted && viewModel.usesImperialUnits
+            ? (metric.imperialUnit ?? metric.unit) : metric.unit
+        let displayed = viewModel.displayValue(value, for: modality)
+        return "\(displayed.formatted(.number.precision(.fractionLength(metric.step < 1 ? 1 : 0)))) \(unit)"
     }
 
     private func load() {

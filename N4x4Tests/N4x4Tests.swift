@@ -33,7 +33,9 @@ final class N4x4Tests: XCTestCase {
             "reminderFamilyFlagsSynced",
             "workoutReminderWeekdays",
             "appleSensorHREnabled",
-            "hrSourcePriorityRaw"
+            "hrSourcePriorityRaw",
+            "cooldownEnabled", "audioModeRaw", "hapticsEnabled", "shownMilestonesData",
+            "hasRequestedAppReview"
         ].forEach { defaults.removeObject(forKey: $0) }
     }
 
@@ -114,6 +116,7 @@ final class N4x4Tests: XCTestCase {
         XCTAssertTrue(vm.showPostWorkoutSummary)
         XCTAssertFalse(vm.isRunning)
         XCTAssertEqual(vm.timeRemaining, 0)
+        XCTAssertEqual(vm.workoutLogEntries.count, 1, "Timer catch-up must autosave before review")
     }
 
     func testPauseAndResumeMaintainsRunningState() {
@@ -282,13 +285,16 @@ final class N4x4Tests: XCTestCase {
 
     func testSavingWorkoutLogEntryPersistsAndResets() {
         let vm = TimerViewModel()
+        vm.finishWorkout()
+        let savedID = vm.workoutLogEntries.first?.id
         vm.selectedWorkoutType = .cycle
         vm.workoutNotesDraft = "Felt strong"
         vm.showPostWorkoutSummary = true
 
-        vm.saveWorkoutLogEntryAndResetSession()
+        vm.completeWorkoutReview()
 
         XCTAssertEqual(vm.workoutLogEntries.count, 1)
+        XCTAssertEqual(vm.workoutLogEntries.first?.id, savedID)
         XCTAssertEqual(vm.workoutLogEntries.first?.workoutType, .cycle)
         XCTAssertEqual(vm.workoutLogEntries.first?.notes, "Felt strong")
         XCTAssertFalse(vm.showPostWorkoutSummary)
@@ -621,10 +627,11 @@ final class N4x4Tests: XCTestCase {
         let vm = TimerViewModel()
         vm.unitPreference = .metric              // display == canonical (km/h)
         vm.numberOfIntervals = 2
+        vm.finishWorkout()
         vm.selectedWorkoutType = .treadmill
         vm.preparePerformanceDraft()
         vm.performanceDraft = [12.0, 13.0]
-        vm.saveWorkoutLogEntryAndResetSession()
+        vm.completeWorkoutReview()
 
         let entry = vm.workoutLogEntries.first
         XCTAssertEqual(entry?.modality, .treadmill)
@@ -636,10 +643,11 @@ final class N4x4Tests: XCTestCase {
         let vm = TimerViewModel()
         vm.unitPreference = .imperial            // entered mph -> stored km/h
         vm.numberOfIntervals = 1
+        vm.finishWorkout()
         vm.selectedWorkoutType = .treadmill
         vm.preparePerformanceDraft()
         vm.performanceDraft = [6.21371]          // mph ≈ 10 km/h
-        vm.saveWorkoutLogEntryAndResetSession()
+        vm.completeWorkoutReview()
 
         let stored = vm.workoutLogEntries.first?.intervalPerformances?.first?.primary
         XCTAssertEqual(stored ?? 0, 10.0, accuracy: 0.001)
@@ -648,11 +656,131 @@ final class N4x4Tests: XCTestCase {
     func testBlankDraftStoresNoPerformances() {
         let vm = TimerViewModel()
         vm.numberOfIntervals = 3
+        vm.finishWorkout()
         vm.selectedWorkoutType = .treadmill
         vm.preparePerformanceDraft()             // all nil (no prior data)
-        vm.saveWorkoutLogEntryAndResetSession()
+        vm.completeWorkoutReview()
 
         XCTAssertNil(vm.workoutLogEntries.first?.intervalPerformances)
+    }
+
+    // MARK: - Automatic completion saving
+
+    private func completedWorkout(sampleCount: Int = 5) -> TimerViewModel {
+        let vm = TimerViewModel()
+        vm.audioMode = .silent
+        vm.hapticsEnabled = false
+        vm.cooldownEnabled = false
+        vm.unitPreference = .metric
+        vm.setDefaultWorkoutType(.treadmill)
+        vm.workoutStartDate = Date(timeIntervalSince1970: 1_800_000_000)
+        vm.elapsedHighIntensityTime = 240
+        vm.completedSeries = HeartRateSeries(
+            samples: (0..<sampleCount).map { .init(t: Double($0 * 2), bpm: 150) },
+            spans: [.init(kind: "work", workNumber: 1, start: 0, end: 240,
+                          targetLo: 140, targetHi: 170)],
+            startedAt: vm.workoutStartDate!
+        )
+        vm.finishWorkout()
+        return vm
+    }
+
+    func testCompletionPersistsWorkoutAndSeriesBeforeReview() throws {
+        let vm = completedWorkout()
+        let entry = try XCTUnwrap(vm.workoutLogEntries.first)
+        defer { HeartRateSeriesStore.delete(for: entry.id) }
+        XCTAssertTrue(vm.showPostWorkoutSummary)
+        XCTAssertNotNil(vm.completedSeries)
+        XCTAssertEqual(vm.currentStreak, 1)
+        XCTAssertNil(entry.intervalPerformances, "Autosave must not copy prior workout settings")
+
+        let reloaded = TimerViewModel()
+        XCTAssertEqual(reloaded.workoutLogEntries.first?.id, entry.id)
+        XCTAssertEqual(reloaded.workoutLogEntries.first?.sessionBreakdown?.totalDuration, 240)
+        XCTAssertEqual(HeartRateSeriesStore.load(for: entry.id), vm.completedSeries)
+    }
+
+    func testCompletionPreservesTimelineWithSparseOrNoHeartRate() throws {
+        for sampleCount in [0, 4] {
+            let vm = completedWorkout(sampleCount: sampleCount)
+            let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+            let saved = try XCTUnwrap(HeartRateSeriesStore.load(for: id))
+            XCTAssertEqual(saved.spans.count, 1)
+            XCTAssertEqual(saved.samples.count, sampleCount)
+            XCTAssertNil(vm.workoutLogEntries.first { $0.id == id }?.hrSummary)
+            HeartRateSeriesStore.delete(for: id)
+        }
+    }
+
+    func testRepeatedCompletionAndDoneDoNotDuplicateWorkout() throws {
+        let vm = completedWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        defer { HeartRateSeriesStore.delete(for: id) }
+        vm.finishWorkout()
+        vm.workoutNotesDraft = "  Saved after review  "
+        vm.preparePerformanceDraft()
+        vm.performanceDraft[0] = 12
+        vm.completeWorkoutReview()
+        vm.completeWorkoutReview()
+
+        let reloaded = TimerViewModel()
+        XCTAssertEqual(reloaded.workoutLogEntries.count, 1)
+        XCTAssertEqual(reloaded.workoutLogEntries.first?.id, id)
+        XCTAssertEqual(reloaded.workoutLogEntries.first?.notes, "Saved after review")
+        XCTAssertEqual(reloaded.workoutLogEntries.first?.intervalPerformances?.first?.primary, 12)
+        XCTAssertNotNil(HeartRateSeriesStore.load(for: id))
+        XCTAssertNil(vm.completedSeries)
+        XCTAssertFalse(vm.showPostWorkoutSummary)
+    }
+
+    func testDismissingSummaryKeepsWorkoutAndSavesReview() throws {
+        let vm = completedWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        defer { HeartRateSeriesStore.delete(for: id) }
+        vm.workoutNotesDraft = "Swipe to close"
+        vm.postWorkoutSummaryDidDismiss()
+
+        XCTAssertFalse(vm.showPostWorkoutSummary)
+        XCTAssertNil(vm.workoutStartDate)
+        XCTAssertEqual(TimerViewModel().workoutLogEntries.first?.notes, "Swipe to close")
+    }
+
+    func testDeletingCompletedWorkoutRemovesPersistedEntryAndSeries() throws {
+        let vm = completedWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        vm.deleteCurrentWorkoutAndResetSession()
+        vm.postWorkoutSummaryDidDismiss()
+        vm.completeWorkoutReview()
+
+        XCTAssertTrue(TimerViewModel().workoutLogEntries.isEmpty)
+        XCTAssertNil(HeartRateSeriesStore.load(for: id))
+        XCTAssertEqual(vm.currentStreak, 0)
+        XCTAssertFalse(vm.showPostWorkoutSummary)
+        XCTAssertFalse(vm.showMilestoneCelebration)
+        XCTAssertFalse(vm.showWeeklyStreaks)
+    }
+
+    func testResetKeepsCompletedWorkoutButDoesNotLogUnfinishedOne() throws {
+        let vm = completedWorkout()
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        defer { HeartRateSeriesStore.delete(for: id) }
+        vm.reset()
+        vm.startTimer()
+        vm.reset()
+
+        XCTAssertEqual(TimerViewModel().workoutLogEntries.map(\.id), [id])
+    }
+
+    func testDeletingOneOfTwoSameDayWorkoutsKeepsTheOther() throws {
+        let vm = completedWorkout()
+        let firstID = try XCTUnwrap(vm.completedWorkoutEntryID)
+        defer { HeartRateSeriesStore.delete(for: firstID) }
+        vm.reset()
+        vm.finishWorkout()
+        let secondID = try XCTUnwrap(vm.completedWorkoutEntryID)
+        XCTAssertNotEqual(firstID, secondID)
+        vm.deleteWorkoutLogEntry(id: secondID)
+        XCTAssertEqual(TimerViewModel().workoutLogEntries.map(\.id), [firstID])
     }
 
 }

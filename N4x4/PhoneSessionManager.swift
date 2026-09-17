@@ -173,7 +173,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
         case WatchMessageKey.cmdSkip:
             vm.skip()
         case WatchMessageKey.cmdReset:
-            vm.closePostWorkoutSummaryWithoutSaving()
+            vm.deleteCurrentWorkoutAndResetSession()
         case WatchMessageKey.cmdRequestState:
             sendStateUpdate(to: vm)
         case WatchMessageKey.heartRate:

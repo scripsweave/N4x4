@@ -886,6 +886,9 @@ class TimerViewModel: ObservableObject {
     /// One slot per work interval (1..numberOfIntervals). nil = left blank.
     @Published var performanceDraft: [Double?] = []
     @Published var showPostWorkoutSummary: Bool = false
+    /// Stable identity from automatic completion save through summary review.
+    private(set) var completedWorkoutEntryID: UUID?
+    private var showHistoryAfterSummaryDismissal = false
     @Published var showWeeklyStreaks: Bool = false
     @Published var showMilestoneCelebration: Bool = false
     @Published var pendingMilestoneCount: Int = 0
@@ -1823,6 +1826,9 @@ class TimerViewModel: ObservableObject {
     }
 
     func finishWorkout() {
+        // Timer reconciliation and Watch commands can both reach completion.
+        // Save the workout (and Apple Health record) only once per session.
+        guard workoutCompletionDate == nil else { return }
         triggerCompletionHaptic()
         endLiveActivity()
         stopTimer()
@@ -1846,15 +1852,22 @@ class TimerViewModel: ObservableObject {
 
         selectedWorkoutType = resolvedDefaultWorkoutType
         workoutNotesDraft = ""
+        performanceDraft = []
+        performanceNotesDraft = []
+        performanceSetAll = nil
+        persistCompletedWorkout()
 
         let finishedOnCooldown = intervals.indices.contains(currentIntervalIndex) && intervals[currentIntervalIndex].type == .cooldown
         let showCooldownMoment = finishedOnCooldown && !skippedCooldownThisSession
         if showCooldownMoment {
             cooldownCompletionNotice = true
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let completedID = completedWorkoutEntryID
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-                self?.showPostWorkoutSummary = true
-                self?.cooldownCompletionNotice = false
+                guard let self, self.completedWorkoutEntryID == completedID,
+                      self.workoutCompletionDate != nil else { return }
+                self.showPostWorkoutSummary = true
+                self.cooldownCompletionNotice = false
             }
         } else {
             showPostWorkoutSummary = true
@@ -1948,6 +1961,11 @@ class TimerViewModel: ObservableObject {
         stopPhoneWorkoutSessionIfActive()
         hrRecorder = nil
         completedSeries = nil
+        completedWorkoutEntryID = nil
+        workoutNotesDraft = ""
+        performanceDraft = []
+        performanceNotesDraft = []
+        performanceSetAll = nil
         resetPromptFlags()
         endLiveActivity()
         stopTimer()
@@ -2127,19 +2145,23 @@ class TimerViewModel: ObservableObject {
 
 
 
-    func saveWorkoutLogEntryAndResetSession() {
+    /// Saves the completed workout before presenting its review, then updates
+    /// that same entry when the user finishes editing optional details.
+    private func persistCompletedWorkout() {
         let trimmedNotes = workoutNotesDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         let completionDate = workoutCompletionDate ?? Date()
         let modality = selectedWorkoutType.trainingModality
 
         // Persist the fine-grained HR series (own file, keyed by entry id)
         // and keep only the small summary inline on the entry.
-        let entryID = UUID()
+        let isNewEntry = completedWorkoutEntryID == nil
+        let entryID = completedWorkoutEntryID ?? UUID()
+        // A deleted workout must never be resurrected by a late review action.
+        guard isNewEntry || workoutLogEntries.contains(where: { $0.id == entryID }) else { return }
         var hrSummary: HRSessionSummary?
-        if let series = completedSeries,
-           let summary = HeartRateSeriesAnalytics.summary(for: series) {
-            HeartRateSeriesStore.save(series, for: entryID)
-            hrSummary = summary
+        if let series = completedSeries {
+            if isNewEntry { HeartRateSeriesStore.save(series, for: entryID) }
+            hrSummary = HeartRateSeriesAnalytics.summary(for: series)
         }
 
         let entry = WorkoutLogEntry(
@@ -2152,21 +2174,42 @@ class TimerViewModel: ObservableObject {
             intervalPerformances: builtPerformances(for: modality),
             hrSummary: hrSummary
         )
-        workoutLogEntries.insert(entry, at: 0)
+        if let index = workoutLogEntries.firstIndex(where: { $0.id == entryID }) {
+            workoutLogEntries[index] = entry
+        } else {
+            workoutLogEntries.append(entry)
+        }
+        workoutLogEntries.sort { $0.completedAt > $1.completedAt }
         persistWorkoutLogEntries()
+        completedWorkoutEntryID = entryID
 
-        // Update streak only after the completed workout has been added to the log.
-        updateStreakOnWorkoutComplete()
+        if isNewEntry {
+            updateStreakOnWorkoutComplete()
+            cancelMissedWorkoutFollowUpIfCompletedToday()
+            scheduleRecoveryNudge(afterCount: workoutLogEntries.count)
+        }
+    }
 
-        cancelMissedWorkoutFollowUpIfCompletedToday()
-        scheduleRecoveryNudge(afterCount: workoutLogEntries.count)
+    func completeWorkoutReview() {
+        guard let id = completedWorkoutEntryID,
+              workoutLogEntries.contains(where: { $0.id == id }) else { return }
+        persistCompletedWorkout()
+        showHistoryAfterSummaryDismissal = true
+        reset()
+    }
+
+    /// Wait until the summary has actually closed before presenting another
+    /// sheet or the milestone celebration.
+    func postWorkoutSummaryDidDismiss() {
+        // Swiping the saved summary away is equivalent to Done.
+        if completedWorkoutEntryID != nil { completeWorkoutReview() }
+        guard showHistoryAfterSummaryDismissal else { return }
+        showHistoryAfterSummaryDismissal = false
         checkForMilestone()
-        showPostWorkoutSummary = false
         if !showMilestoneCelebration {
             showWeeklyStreaks = true
         }
         maybeRequestAppReview()
-        reset()
     }
 
     /// Flag so the App Store rating prompt is only ever requested once.
@@ -2191,8 +2234,12 @@ class TimerViewModel: ObservableObject {
         }
     }
 
-    func closePostWorkoutSummaryWithoutSaving() {
-        showPostWorkoutSummary = false
+    /// Also handles abandoning an unfinished workout, which has no log entry.
+    func deleteCurrentWorkoutAndResetSession() {
+        showHistoryAfterSummaryDismissal = false
+        if let id = completedWorkoutEntryID {
+            deleteWorkoutLogEntry(id: id)
+        }
         reset()
     }
 
@@ -2210,7 +2257,8 @@ class TimerViewModel: ObservableObject {
     /// `workoutLogEntries` is kept newest-first, so the first match wins.
     func lastLoggedPerformance(for modality: TrainingModality) -> [IntervalPerformance]? {
         workoutLogEntries.first {
-            $0.modality == modality && !($0.intervalPerformances ?? []).isEmpty
+            $0.id != completedWorkoutEntryID && $0.modality == modality
+                && !($0.intervalPerformances ?? []).isEmpty
         }?.intervalPerformances
     }
 
@@ -2603,9 +2651,7 @@ class TimerViewModel: ObservableObject {
 
     /// Records the live HR stream + interval timeline for the running workout.
     private var hrRecorder: HeartRateSeriesRecorder?
-    /// The finished series, held from workout completion until the summary is
-    /// saved (written to HeartRateSeriesStore) or discarded. The post-workout
-    /// charts render from this.
+    /// Saved at completion and retained in memory while the summary is open.
     @Published var completedSeries: HeartRateSeries?
 
     /// Seconds since the workout started, nil when no workout is in progress.

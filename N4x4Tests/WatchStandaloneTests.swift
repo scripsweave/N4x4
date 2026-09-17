@@ -249,6 +249,20 @@ final class WatchStandaloneTests: XCTestCase {
         let vm = TimerViewModel()
         let record = makeRecord(samples: 2)
         vm.importWatchWorkout(record)
+        defer { HeartRateSeriesStore.delete(for: record.id) }
         XCTAssertNil(vm.workoutLogEntries.first { $0.id == record.id }?.hrSummary)
+        XCTAssertEqual(HeartRateSeriesStore.load(for: record.id)?.spans.count, record.spans.count)
+        XCTAssertEqual(HeartRateSeriesStore.load(for: record.id)?.samples.count, 2)
+    }
+
+    func testImportWithoutHeartRateKeepsTimelineAndCanBeDeletedFromHistory() {
+        let vm = TimerViewModel()
+        let record = makeRecord(samples: 0)
+        vm.importWatchWorkout(record)
+        XCTAssertEqual(HeartRateSeriesStore.load(for: record.id)?.spans.count, record.spans.count)
+        vm.deleteWorkoutLogEntry(id: record.id)
+        XCTAssertNil(HeartRateSeriesStore.load(for: record.id))
+        XCTAssertFalse(vm.importWatchWorkout(record), "A deleted import must not return on redelivery")
+        XCTAssertTrue(TimerViewModel().workoutLogEntries.isEmpty)
     }
 }

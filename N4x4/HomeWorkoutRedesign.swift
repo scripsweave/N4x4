@@ -276,7 +276,8 @@ struct RedesignRootView: View {
                 }
             }
         }
-        .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
+        .sheet(isPresented: $viewModel.showPostWorkoutSummary,
+               onDismiss: viewModel.postWorkoutSummaryDidDismiss) {
             PostWorkoutSummaryRedesignView(viewModel: viewModel)
         }
         .fullScreenCover(isPresented: $viewModel.showMilestoneCelebration) {
@@ -286,7 +287,6 @@ struct RedesignRootView: View {
         }
         .sheet(isPresented: $viewModel.showWeeklyStreaks) {
             RedesignHistoryView(viewModel: viewModel)
-                .onDisappear { viewModel.showWeeklyStreaks = false }
         }
     }
 }
@@ -1314,8 +1314,6 @@ struct RedesignHistoryView: View {
     @ObservedObject var viewModel: TimerViewModel
     var embedded: Bool = false
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedWorkout: WorkoutLogEntry?
-    @State private var workoutPendingDeletion: WorkoutLogEntry?
     /// Entry opened in the full-session detail sheet (charts + intervals).
     @State private var detailedWorkout: WorkoutLogEntry?
     @State private var selectedPerfModality: TrainingModality?
@@ -1335,10 +1333,8 @@ struct RedesignHistoryView: View {
                 streakHero
                 statTiles
                 calendarCard
+                workoutList
                 performanceCard
-                if let workout = selectedWorkout {
-                    workoutDetailCard(workout)
-                }
             }
             .padding(20)
             .padding(.bottom, 24)
@@ -1348,19 +1344,6 @@ struct RedesignHistoryView: View {
         .preferredColorScheme(.dark)
         .sheet(item: $detailedWorkout) { workout in
             SessionDetailSheet(entry: workout, viewModel: viewModel)
-        }
-        .alert("Delete workout?", isPresented: Binding(
-            get: { workoutPendingDeletion != nil },
-            set: { if !$0 { workoutPendingDeletion = nil } }
-        ), presenting: workoutPendingDeletion) { workout in
-            Button("Delete", role: .destructive) {
-                viewModel.deleteWorkoutLogEntry(id: workout.id)
-                workoutPendingDeletion = nil
-                selectedWorkout = nil
-            }
-            Button("Cancel", role: .cancel) { workoutPendingDeletion = nil }
-        } message: { workout in
-            Text("This removes the \(workout.workoutType.rawValue) session from N4x4 history.")
         }
     }
 
@@ -1379,6 +1362,54 @@ struct RedesignHistoryView: View {
                         .background(Circle().fill(Palette.surfaceRaised))
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var workoutList: some View {
+        LazyVStack(alignment: .leading, spacing: 12) {
+            Text("WORKOUTS")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Palette.textSecondary)
+                .tracking(0.5)
+            if viewModel.workoutLogEntries.isEmpty {
+                Text("Completed workouts are saved here automatically.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            ForEach(viewModel.workoutLogEntries) { workout in
+                Button {
+                    detailedWorkout = workout
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Palette.recovery)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(workout.workoutType.rawValue)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Palette.textPrimary)
+                            Text(workout.completedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Palette.textSecondary)
+                            if let breakdown = workout.sessionBreakdown {
+                                Text(formatMinutes(breakdown.totalDuration))
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Palette.textSecondary)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Palette.textTertiary)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Palette.surface))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("View workout details and deletion options")
+                .accessibilityIdentifier("workout-\(workout.id.uuidString)")
             }
         }
     }
@@ -1548,7 +1579,7 @@ struct RedesignHistoryView: View {
         let today = isToday(day)
         let future = isFutureDay(day)
         return Button {
-            if let w = workout { selectedWorkout = w }
+            if let w = workout { detailedWorkout = w }
         } label: {
             ZStack {
                 if workout != nil {
@@ -1638,7 +1669,7 @@ struct RedesignHistoryView: View {
                 }
                 if let nearest = candidates.min(by: {
                     abs($0.completedAt.timeIntervalSince(date)) < abs($1.completedAt.timeIntervalSince(date))
-                }) { selectedWorkout = nearest }
+                }) { detailedWorkout = nearest }
             }
         } else {
             Text("Log at least two \(modality.rawValue) sessions to see your trend.")
@@ -1649,111 +1680,6 @@ struct RedesignHistoryView: View {
         Text("Trend chart requires iOS Charts support.")
             .font(.footnote).foregroundStyle(Palette.textSecondary)
 #endif
-    }
-
-    // MARK: Workout detail
-
-    private func workoutDetailCard(_ workout: WorkoutLogEntry) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.recovery)
-                Text(workout.workoutType.rawValue).font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.textPrimary)
-                Spacer()
-                Text(workout.completedAt, style: .date).font(.system(size: 12)).foregroundStyle(Palette.textSecondary)
-                Button { selectedWorkout = nil } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.textTertiary)
-                }.buttonStyle(.plain)
-            }
-            if let b = workout.sessionBreakdown {
-                Divider().overlay(Palette.hairline)
-                VStack(alignment: .leading, spacing: 4) {
-                    detailRow("Total", formatMinutes(b.totalDuration))
-                    detailRow("High intensity", formatMinutes(b.highIntensityDuration))
-                    detailRow("Recovery", formatMinutes(b.recoveryDuration))
-                    detailRow("Cooldown", b.cooldownSkipped ? "Skipped" : formatMinutes(b.cooldownDuration))
-                }
-            }
-            if let summary = workout.hrSummary, !summary.sparkline.isEmpty {
-                Divider().overlay(Palette.hairline)
-                HStack(spacing: 12) {
-                    HRSparklineView(points: summary.sparkline)
-                        .frame(height: 34)
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("\(summary.avgBPM) avg · \(summary.maxBPM) peak")
-                            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.textPrimary)
-                        if let z = summary.workInZonePct {
-                            Text("\(z)% in zone")
-                                .font(.system(size: 11)).foregroundStyle(Palette.textSecondary)
-                        }
-                    }
-                }
-            }
-            if let perfs = workout.intervalPerformances, !perfs.isEmpty, let modality = workout.modality {
-                Divider().overlay(Palette.hairline)
-                Text("\(modality.performanceMetric.label) per interval")
-                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.textTertiary)
-                ForEach(perfs) { perf in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text("Interval \(perf.intervalNumber)").font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
-                            Spacer()
-                            if let v = perf.primary {
-                                Text("\(formatPerf(viewModel.displayValue(v, for: modality), for: modality)) \(unitLabel(for: modality))")
-                                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textPrimary)
-                            } else {
-                                Text("—").font(.system(size: 13)).foregroundStyle(Palette.textTertiary)
-                            }
-                        }
-                        if let note = perf.note, !note.isEmpty {
-                            Text(note).font(.system(size: 12)).foregroundStyle(Palette.textTertiary)
-                        }
-                    }
-                }
-            }
-            if !workout.notes.isEmpty {
-                Divider().overlay(Palette.hairline)
-                Text(workout.notes).font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
-            }
-            Button(role: .destructive) {
-                workoutPendingDeletion = workout
-            } label: {
-                Label("Delete workout", systemImage: "trash")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.bordered)
-            if workout.hrSummary != nil {
-                Button {
-                    detailedWorkout = workout
-                } label: {
-                    HStack {
-                        Image(systemName: "chart.xyaxis.line")
-                        Text("View full session")
-                            .font(.system(size: 14, weight: .bold))
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .bold))
-                    }
-                    .foregroundStyle(Palette.electricBlue)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 12)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Palette.electricBlue.opacity(0.12)))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
-        .transition(.opacity)
-    }
-
-    private func detailRow(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label).font(.system(size: 13)).foregroundStyle(Palette.textSecondary)
-            Spacer()
-            Text(value).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.textPrimary)
-        }
     }
 
     // MARK: Data helpers
@@ -1820,8 +1746,5 @@ struct RedesignHistoryView: View {
         let m = modality.performanceMetric
         if m.localeConverted, viewModel.usesImperialUnits, let imp = m.imperialUnit { return imp }
         return m.unit
-    }
-    private func formatPerf(_ v: Double, for modality: TrainingModality) -> String {
-        String(format: "%.\(modality.performanceMetric.step < 1 ? 1 : 0)f", v)
     }
 }

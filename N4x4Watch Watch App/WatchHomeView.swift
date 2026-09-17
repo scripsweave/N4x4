@@ -142,7 +142,7 @@ struct WatchCompleteView: View {
                     .buttonStyle(WatchControlButtonStyle())
                     .padding(.top, 2)
                 } else {
-                    Text("Review and save it on your iPhone.")
+                    Text("Review your workout on your iPhone.")
                         .font(.system(size: 11))
                         .foregroundStyle(WatchPalette.textSecondary)
                         .multilineTextAlignment(.center)
@@ -152,7 +152,7 @@ struct WatchCompleteView: View {
                 Button { showDiscardAlert = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "trash").font(.system(size: 12, weight: .bold))
-                        Text("DISCARD")
+                        Text("DELETE")
                     }
                 }
                 .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.danger, outlined: true))
@@ -162,14 +162,14 @@ struct WatchCompleteView: View {
             }
             .padding(.horizontal, 8)
         }
-        .alert("Discard workout?", isPresented: $showDiscardAlert) {
-            Button("Discard", role: .destructive) {
+        .alert("Delete workout?", isPresented: $showDiscardAlert) {
+            Button("Delete", role: .destructive) {
                 if isLocal { sessionManager.discardCompletedLocalWorkout() }
                 else { sessionManager.discardPhoneWorkout() }
             }
-            Button("Keep", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("It won't be logged on your iPhone.")
+            Text("This removes the workout from N4x4 history.")
         }
     }
 

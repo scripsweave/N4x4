@@ -213,6 +213,7 @@ To verify:
 | Only incrementing stored streak | Always recalculate from scratch; call `refreshStreak()` on launch and foreground |
 | Disabling user toggles on `.unknown` permission | Only disable on `.denied` / `.unavailable` |
 | Using `@ViewBuilder` on non-View functions | `@ViewBuilder` is only for `some View`-returning functions |
+| Indexing a session draft array inside a SwiftUI `Binding` after reset | Guard the index inside BOTH the getter and setter. SwiftUI retains bindings during sheet dismissal even after the view's outer index check stops passing (autosave review tests caught an `IntervalCard` crash on Done) |
 | Re-adding manual `broadcastStateToWatch()` calls | The broadcast is reactive (see Apple Watch below) — don't hand-place it |
 | A particle cap checked as `count < cap` before appending a whole burst | Check `count + n <= cap`. The old birthday firework guard admitted a burst that then appended up to 210 sparks, so the documented 2600 ceiling was really 2809 (found 2026-07-25 by `testSparkCapHoldsUnderAContinuousShow`) |
 | Additive "light spill" layers drawn over the object throwing the light | Clip the source out (`clip(to:options: .inverse)`). Laying the ball's own bloom over the ball washed the facets pale and the sphere lost its dark base |
@@ -371,7 +372,16 @@ To verify:
   `recorderBeginCurrentInterval()` on every interval advance (start +
   `moveToNextInterval` + the multi-advance path in `reconcileTimerState`),
   sealed into `completedSeries` in `finishWorkout`, saved in
-  `saveWorkoutLogEntryAndResetSession`, cleared in `reset`.
+  that same completion path before showing the summary, cleared in `reset`.
+- **Completed workouts save automatically.** `completedWorkoutEntryID` keeps
+  review edits attached to the original entry; `completeWorkoutReview()` must
+  never insert a second workout. `reset()` keeps saved workouts. Only an
+  explicit deletion (`deleteCurrentWorkoutAndResetSession()` or
+  `deleteWorkoutLogEntry(id:)`) removes them.
+- Always persist the series, even without enough HR samples for
+  `HRSessionSummary`. The interval timeline is useful without a monitor.
+- Both summary sheets call `postWorkoutSummaryDidDismiss()` so swipe dismissal
+  preserves review edits and follow-up sheets wait until dismissal completes.
 - UI is `N4x4/SessionDetailViews.swift` (charts, interval pager, share card),
   shared by `PostWorkoutSummaryRedesignView` and history's `SessionDetailSheet`.
 - Pure logic is unit-tested in `N4x4Tests` (`HeartRateSeriesTests`).

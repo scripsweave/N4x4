@@ -1,5 +1,10 @@
 # N4x4 — Session Handoff
 
+> **Current state (5.1, 2026-09-17):** completed workouts
+> now save automatically, with deletion and a full workout list in History.
+> See [`SESSION-HANDOFF-2026-09-17.md`](SESSION-HANDOFF-2026-09-17.md) first.
+> The older handoffs below describe earlier releases.
+
 > **Current state (4.13, pushed 2026-07-25 as `25ee1bb`):** the birthday
 > easter egg's polish round — haptics, pendulum sway, room light spill, and
 > the egg now firing on the user's own birthday too — is in

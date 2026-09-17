@@ -261,7 +261,8 @@ struct TimerView: View {
             .sheet(isPresented: $showHistory) {
                 StreakHistoryView(viewModel: viewModel)
             }
-            .sheet(isPresented: $viewModel.showPostWorkoutSummary) {
+            .sheet(isPresented: $viewModel.showPostWorkoutSummary,
+                   onDismiss: viewModel.postWorkoutSummaryDidDismiss) {
                 PostWorkoutSummaryView(viewModel: viewModel)
             }
             .fullScreenCover(isPresented: $viewModel.showMilestoneCelebration) {
@@ -271,9 +272,6 @@ struct TimerView: View {
             }
             .sheet(isPresented: $viewModel.showWeeklyStreaks) {
                 StreakHistoryView(viewModel: viewModel)
-                    .onDisappear {
-                        viewModel.showWeeklyStreaks = false
-                    }
             }
             .alert(isPresented: $showResetAlert) {
                 Alert(
@@ -382,11 +380,12 @@ struct TimerView: View {
 struct PostWorkoutSummaryView: View {
     @ObservedObject var viewModel: TimerViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showDeleteConfirmation = false
 
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Log this session")) {
+                Section(header: Text("Saved to History")) {
                     Picker("Type", selection: $viewModel.selectedWorkoutType) {
                         ForEach(WorkoutType.selectableCases) { type in
                             Text(type.rawValue).tag(type)
@@ -463,20 +462,25 @@ struct PostWorkoutSummaryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Discard") {
-                        viewModel.closePostWorkoutSummaryWithoutSaving()
-                        dismiss()
-                    }
+                    Button("Delete", role: .destructive) { showDeleteConfirmation = true }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        viewModel.saveWorkoutLogEntryAndResetSession()
+                        viewModel.completeWorkoutReview()
                         dismiss()
                     }
                 }
             }
         }
-        .interactiveDismissDisabled(true)
+        .alert("Delete workout?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteCurrentWorkoutAndResetSession()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the workout from N4x4 history.")
+        }
     }
 
     private var currentFact: ScienceFact {

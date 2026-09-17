@@ -32,7 +32,8 @@ extension TimerViewModel {
         let type = record.workoutTypeRaw.flatMap(WorkoutType.init(rawValue:)) ?? resolvedDefaultWorkoutType
 
         // Full series to its own file (charts), small summary inline — the
-        // same split saveWorkoutLogEntryAndResetSession uses.
+        // same split the phone's automatic completion save uses. Keep the
+        // timeline even when there are too few samples for HR statistics.
         let series = HeartRateSeries(
             samples: record.samples.map { .init(t: $0.t, bpm: $0.bpm) },
             spans: record.spans.map {
@@ -41,11 +42,8 @@ extension TimerViewModel {
             },
             startedAt: record.startedAt
         )
-        var hrSummary: HRSessionSummary?
-        if let summary = HeartRateSeriesAnalytics.summary(for: series) {
-            HeartRateSeriesStore.save(series, for: record.id)
-            hrSummary = summary
-        }
+        HeartRateSeriesStore.save(series, for: record.id)
+        let hrSummary = HeartRateSeriesAnalytics.summary(for: series)
 
         let entry = WorkoutLogEntry(
             id: record.id,
