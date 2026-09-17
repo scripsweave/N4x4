@@ -19,7 +19,7 @@ final class N4x4UITests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
+        XCUIDevice.shared.orientation = .portrait
     }
 
     func testExample() throws {
@@ -51,15 +51,121 @@ final class N4x4UITests: XCTestCase {
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<6 {
-            if element.exists && element.isHittable { return }
-            app.swipeUp()
+        for _ in 0..<8 {
+            let tabBar = app.tabBars.firstMatch
+            let bottom = tabBar.exists ? tabBar.frame.minY : app.frame.maxY
+            if element.exists && element.isHittable && element.frame.minY >= 0 && element.frame.maxY <= bottom {
+                return
+            }
+            // Small swipes avoid scrolling straight past a large text control.
+            app.swipeUp(velocity: .slow)
         }
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
+        keepScreenshot("Could not reveal control", app: app)
         print(app.debugDescription)
-        XCTAssertTrue(element.isHittable)
+        XCTFail("Could not fully reveal \(element)")
+    }
+
+    private func keepScreenshot(_ name: String, app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func assertVisible(_ element: XCUIElement, in app: XCUIApplication,
+                               file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5), file: file, line: line)
+        if !element.isHittable {
+            keepScreenshot("Control not hittable", app: app)
+            print(app.debugDescription)
+        }
+        XCTAssertTrue(element.isHittable, file: file, line: line)
+        // XCTest reports the app's portrait frame on some landscape simulators.
+        // Use the screen capture for visual clipping checks, plus hit testing.
+        XCTAssertGreaterThan(element.frame.width, 0, file: file, line: line)
+    }
+
+    func testWorkoutRotatesWithLargeHeartRateAndPreservesPausedTimer() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-warmupDuration", "0", "-highIntensityDuration", "240"]
+        app.launchEnvironment["N4X4_DEMO_HEART_RATE"] = "166"
+        XCUIDevice.shared.orientation = .portrait
+        app.launch()
+        assertVisible(app.buttons["START"], in: app)
+        keepScreenshot("Home portrait", app: app)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        assertVisible(app.buttons["START"], in: app)
+        keepScreenshot("Home landscape", app: app)
+        app.buttons["START"].tap()
+
+        let reading = app.otherElements["live-heart-rate"]
+        let countdown = app.staticTexts["workout-countdown"]
+        assertVisible(app.buttons["PAUSE"], in: app)
+        assertVisible(reading, in: app)
+        XCTAssertEqual(reading.value as? String, "166 beats per minute")
+        XCTAssertGreaterThanOrEqual(reading.frame.height, 60)
+        keepScreenshot("Workout landscape left", app: app)
+        app.buttons["PAUSE"].tap()
+        assertVisible(app.buttons["RESUME"], in: app)
+        let pausedTime = countdown.value as? String
+        XCUIDevice.shared.orientation = .landscapeRight
+        assertVisible(app.buttons["RESUME"], in: app)
+        XCTAssertEqual(countdown.value as? String, pausedTime)
+        keepScreenshot("Paused landscape right", app: app)
+        XCUIDevice.shared.orientation = .portrait
+        assertVisible(app.buttons["RESUME"], in: app)
+        XCTAssertEqual(countdown.value as? String, pausedTime)
+        app.buttons["RESUME"].tap()
+        assertVisible(reading, in: app)
+        XCTAssertEqual(reading.value as? String, "166 beats per minute")
+        XCTAssertGreaterThanOrEqual(reading.frame.height, 50)
+        keepScreenshot("Workout portrait", app: app)
+        app.buttons["END"].tap()
+        app.alerts["End workout?"].buttons["End"].tap()
+        assertVisible(app.buttons["START"], in: app)
+    }
+
+    func testLargeTextKeepsHeartRateAndControlsAccessible() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-warmupDuration", "0", "-highIntensityDuration", "240",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launchEnvironment["N4X4_DEMO_HEART_RATE"] = "166"
+        XCUIDevice.shared.orientation = .portrait
+        app.launch()
+        app.buttons["START"].tap()
+        let reading = app.otherElements["live-heart-rate"]
+        reveal(reading, in: app)
+        XCTAssertEqual(reading.value as? String, "166 beats per minute")
+        keepScreenshot("Largest text portrait", app: app)
+        reveal(app.buttons["PAUSE"], in: app)
+        app.buttons["PAUSE"].tap()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        reveal(app.buttons["RESUME"], in: app)
+        keepScreenshot("Largest text landscape", app: app)
+        app.buttons["RESUME"].tap()
+    }
+
+    func testLandscapeWithoutHeartRateAndCompletion() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-numberOfIntervals", "1", "-warmupDuration", "0",
+                                                       "-highIntensityDuration", "240", "-cooldownEnabled", "NO"]
+        XCUIDevice.shared.orientation = .landscapeRight
+        app.launch()
+        app.buttons["START"].tap()
+        assertVisible(app.buttons["PAUSE"], in: app)
+        let reading = app.otherElements["live-heart-rate"]
+        assertVisible(reading, in: app)
+        XCTAssertEqual(reading.value as? String, "No reading")
+        keepScreenshot("Landscape without HR", app: app)
+        app.buttons["SKIP"].tap()
+        if app.alerts["Skip interval now?"].exists {
+            app.alerts["Skip interval now?"].buttons["Skip Now"].tap()
+        }
+        XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
+        assertVisible(app.navigationBars.buttons["Done"], in: app)
+        keepScreenshot("Landscape saved summary", app: app)
+        app.navigationBars.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["History"].waitForExistence(timeout: 5))
     }
 
     func testCompletedWorkoutSurvivesRelaunchWithoutDoneAndCanBeDeleted() throws {
@@ -72,7 +178,7 @@ final class N4x4UITests: XCTestCase {
         XCTAssertTrue(start.waitForExistence(timeout: 10))
         start.tap()
         XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
-        let summaryScreenshot = XCTAttachment(screenshot: app.screenshot())
+        let summaryScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         summaryScreenshot.name = "Automatically saved summary"
         summaryScreenshot.lifetime = .keepAlways
         add(summaryScreenshot)
@@ -132,7 +238,7 @@ final class N4x4UITests: XCTestCase {
         let second = app.buttons["workout-\(secondID)"]
         reveal(second, in: app)
         XCTAssertTrue(first.exists)
-        let historyScreenshot = XCTAttachment(screenshot: app.screenshot())
+        let historyScreenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         historyScreenshot.name = "Two workouts on the same day"
         historyScreenshot.lifetime = .keepAlways
         add(historyScreenshot)

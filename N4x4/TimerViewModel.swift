@@ -12,6 +12,49 @@ import StoreKit
 import UIKit
 #endif
 
+// Small system boundaries let tests hold an in-flight add/update open and prove
+// that End wins the race. All workout lifecycle decisions remain in the VM.
+protocol IntervalNotificationCenter {
+    func add(_ request: UNNotificationRequest) async throws
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String])
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String])
+}
+
+extension UNUserNotificationCenter: IntervalNotificationCenter {}
+
+protocol WorkoutLiveActivityHandle {
+    var id: String { get }
+    func updateWorkout(_ state: N4x4LiveActivityAttributes.ContentState) async
+    func endWorkout() async
+}
+
+extension Activity: WorkoutLiveActivityHandle where Attributes == N4x4LiveActivityAttributes {
+    func updateWorkout(_ state: N4x4LiveActivityAttributes.ContentState) async {
+        await update(.init(state: state, staleDate: nil))
+    }
+
+    func endWorkout() async {
+        await end(nil, dismissalPolicy: .immediate)
+    }
+}
+
+protocol WorkoutLiveActivityProvider {
+    var activities: [any WorkoutLiveActivityHandle] { get }
+    var areActivitiesEnabled: Bool { get }
+    func request(start: Date, state: N4x4LiveActivityAttributes.ContentState) throws -> any WorkoutLiveActivityHandle
+}
+
+struct SystemWorkoutLiveActivityProvider: WorkoutLiveActivityProvider {
+    var activities: [any WorkoutLiveActivityHandle] { Activity<N4x4LiveActivityAttributes>.activities }
+    var areActivitiesEnabled: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
+
+    func request(start: Date, state: N4x4LiveActivityAttributes.ContentState) throws -> any WorkoutLiveActivityHandle {
+        try Activity<N4x4LiveActivityAttributes>.request(
+            attributes: .init(workoutStartTime: start),
+            content: .init(state: state, staleDate: nil), pushType: nil)
+    }
+}
+
 enum PermissionState: Equatable {
     case unknown
     case notDetermined
@@ -510,7 +553,16 @@ class TimerViewModel: ObservableObject {
     @AppStorage("hapticsEnabled") var hapticsEnabled: Bool = true {
         didSet { broadcastStateToWatch() }
     }
-    @AppStorage("liveActivitiesEnabled") var liveActivitiesEnabled: Bool = true
+    @AppStorage("liveActivitiesEnabled") var liveActivitiesEnabled: Bool = true {
+        didSet {
+            guard oldValue != liveActivitiesEnabled else { return }
+            if liveActivitiesEnabled {
+                startLiveActivity()
+            } else {
+                endLiveActivity()
+            }
+        }
+    }
 
     // Heart-rate zone alerts (require a paired Apple Watch streaming HR).
     // Visual = colour-code the HR readout; Haptic = wrist taps on the Watch;
@@ -707,8 +759,7 @@ class TimerViewModel: ObservableObject {
             if notificationsEnabled {
                 ensureNotificationPermissionForToggles()
             } else {
-                // Interval cues share the same notification channel as recovery nudges,
-                // so clearing this toggle should also clear any pending nudge requests.
+                cancelIntervalNotifications()
                 cancelRecoveryNudge()
             }
         }
@@ -1383,7 +1434,13 @@ class TimerViewModel: ObservableObject {
     private var skippedCooldownThisSession: Bool = false
 
     // Live Activity
-    private var liveActivity: Activity<N4x4LiveActivityAttributes>?
+    private var liveActivity: (any WorkoutLiveActivityHandle)?
+    private let liveActivityProvider: any WorkoutLiveActivityProvider
+    private(set) var liveActivityTask: Task<Void, Never>?
+    private let intervalNotificationCenter: any IntervalNotificationCenter
+    private var intervalNotificationGeneration = UUID()
+    private(set) var intervalNotificationTask: Task<Void, Never>?
+    private static let intervalNotificationID = "nextInterval"
 
     // Voice prompt state — reset on every interval change, reset, and skip
     private var halfwayPromptFired = false
@@ -1485,7 +1542,10 @@ class TimerViewModel: ObservableObject {
         elapsedCooldownTime = 0
     }
 
-    init() {
+    init(intervalNotificationCenter: any IntervalNotificationCenter = UNUserNotificationCenter.current(),
+         liveActivityProvider: any WorkoutLiveActivityProvider = SystemWorkoutLiveActivityProvider()) {
+        self.intervalNotificationCenter = intervalNotificationCenter
+        self.liveActivityProvider = liveActivityProvider
         // Migrate the legacy single-weekday setting to the multi-day format.
         // @AppStorage loads a persisted value WITHOUT firing didSet, so the
         // migration in workoutReminderWeekday.didSet never runs at launch for
@@ -1594,14 +1654,10 @@ class TimerViewModel: ObservableObject {
                 self.updateLiveActivity(isRunning: true)
             }
 
-        // End any Live Activities that were left running from a previous session
-        // (e.g. after a force-quit). Without this they persist on the Dynamic Island
-        // and can even survive a device reboot within the 8-hour ActivityKit window.
-        Task {
-            for activity in Activity<N4x4LiveActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
-        }
+        // This app does not restore a phone-led timer after relaunch. Capture
+        // orphan activities now, before an async task could see a new workout.
+        endLiveActivity()
+        cancelIntervalNotifications()
 
         // Sync the stored streak value immediately on launch (S1).
         // Previously currentStreak was only ever increased, so a missed-week streak
@@ -1680,7 +1736,8 @@ class TimerViewModel: ObservableObject {
     }
 
     func startTimer() {
-        guard !intervals.isEmpty, intervals.indices.contains(currentIntervalIndex) else { return }
+        guard workoutCompletionDate == nil, !intervals.isEmpty,
+              intervals.indices.contains(currentIntervalIndex) else { return }
 
         timer?.cancel()
         timer = nil
@@ -1710,7 +1767,6 @@ class TimerViewModel: ObservableObject {
         speakIntervalCueIfNeeded()
         speakWarmupStartIfNeeded()
 
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
         scheduleNextIntervalNotification()
 
         timer = Timer.publish(every: 1, on: .main, in: .common)
@@ -1724,6 +1780,7 @@ class TimerViewModel: ObservableObject {
         isRunning = false
         timer?.cancel()
         timer = nil
+        cancelIntervalNotifications()
     }
 
     func tick() {
@@ -1735,8 +1792,18 @@ class TimerViewModel: ObservableObject {
         guard isRunning else { return }
         guard !intervals.isEmpty, intervals.indices.contains(currentIntervalIndex) else {
             stopTimer()
+            endLiveActivity()
             return
         }
+
+        #if DEBUG && targetEnvironment(simulator)
+        // Opt-in simulator fixture for layout tests; never compiled into device
+        // or release builds. Use the real funnel so zone colour and expiry match.
+        if let value = ProcessInfo.processInfo.environment["N4X4_DEMO_HEART_RATE"],
+           let bpm = Double(value), (40...210).contains(bpm) {
+            ingestHeartRate(bpm, from: .watch)
+        }
+        #endif
 
         if intervalEndTime == nil {
             intervalEndTime = now.addingTimeInterval(timeRemaining)
@@ -1815,7 +1882,7 @@ class TimerViewModel: ObservableObject {
             if playAlarm {
                 playAlarmIfNeeded()
             }
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+            cancelIntervalNotifications()
             scheduleNextIntervalNotification()
             // Push the new interval to the Dynamic Island / Live Activity. The
             // natural (countdown-driven) advance happens here, not in
@@ -1830,8 +1897,8 @@ class TimerViewModel: ObservableObject {
         // Save the workout (and Apple Health record) only once per session.
         guard workoutCompletionDate == nil else { return }
         triggerCompletionHaptic()
-        endLiveActivity()
         stopTimer()
+        endLiveActivity()
         stopPhoneWorkoutSessionIfActive()
         // Seal the HR recording before HR state is cleared; the post-workout
         // summary charts render from completedSeries.
@@ -1848,7 +1915,6 @@ class TimerViewModel: ObservableObject {
         intervalEndTime = nil
         timeRemaining = 0
         showCompletionMessage = false
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
 
         selectedWorkoutType = resolvedDefaultWorkoutType
         workoutNotesDraft = ""
@@ -1896,7 +1962,7 @@ class TimerViewModel: ObservableObject {
             timeRemaining = intervals[currentIntervalIndex].duration
             intervalEndTime = isRunning ? Date().addingTimeInterval(timeRemaining) : nil
 
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+            cancelIntervalNotifications()
             updateCounts()
             recorderBeginCurrentInterval()
             if isRunning {
@@ -1918,11 +1984,9 @@ class TimerViewModel: ObservableObject {
             timeRemaining = max(0, intervalEndTime?.timeIntervalSinceNow ?? timeRemaining)
             stopTimer()
             SpeechManager.shared.endWorkoutAudio()
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
             updateLiveActivity(isRunning: false)
         } else {
             intervalEndTime = Date().addingTimeInterval(timeRemaining)
-            scheduleNextIntervalNotification()
             startTimer()
             updateLiveActivity(isRunning: true)
         }
@@ -1943,7 +2007,7 @@ class TimerViewModel: ObservableObject {
         if audioMode != .voice {
             playAlarmIfNeeded()
         }
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
+        cancelIntervalNotifications()
         if intervals[currentIntervalIndex].type == .cooldown {
             skippedCooldownThisSession = true
         }
@@ -1967,8 +2031,8 @@ class TimerViewModel: ObservableObject {
         performanceNotesDraft = []
         performanceSetAll = nil
         resetPromptFlags()
-        endLiveActivity()
         stopTimer()
+        endLiveActivity()
         setupIntervals()
         loadWorkoutLogEntries()
         isRunning = false
@@ -1980,12 +2044,12 @@ class TimerViewModel: ObservableObject {
         cooldownCompletionNotice = false
         skippedCooldownThisSession = false
         clearHeartRateState()
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["nextInterval"])
     }
 
     func scheduleNextIntervalNotification() {
-        guard notificationsEnabled else { return }
-        guard currentIntervalIndex + 1 < intervals.count else { return }
+        guard isRunning, workoutCompletionDate == nil, notificationsEnabled,
+              intervals.indices.contains(currentIntervalIndex),
+              currentIntervalIndex + 1 < intervals.count else { return }
 
         let nextInterval = intervals[currentIntervalIndex + 1]
         let timeInterval = max(1, timeRemaining)
@@ -2838,17 +2902,12 @@ class TimerViewModel: ObservableObject {
     }
 
     func startLiveActivity() {
-        guard liveActivitiesEnabled else { return }
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        guard liveActivity == nil else { return }
-        let attributes = N4x4LiveActivityAttributes(workoutStartTime: workoutStartDate ?? Date())
-        let state = liveActivityContentState(isRunning: true)
+        guard isRunning, workoutStartDate != nil, workoutCompletionDate == nil,
+              liveActivitiesEnabled, liveActivityProvider.areActivitiesEnabled,
+              liveActivity == nil else { return }
         do {
-            liveActivity = try Activity.request(
-                attributes: attributes,
-                content: .init(state: state, staleDate: nil),
-                pushType: nil
-            )
+            liveActivity = try liveActivityProvider.request(
+                start: workoutStartDate ?? Date(), state: liveActivityContentState(isRunning: true))
         } catch {
             print("Live Activity start failed: \(error)")
         }
@@ -2857,20 +2916,29 @@ class TimerViewModel: ObservableObject {
     func updateLiveActivity(isRunning: Bool) {
         guard let activity = liveActivity else { return }
         let state = liveActivityContentState(isRunning: isRunning)
-        Task {
-            await activity.update(.init(state: state, staleDate: nil))
+        let previous = liveActivityTask
+        liveActivityTask = Task { @MainActor [weak self] in
+            await previous?.value
+            // An update queued before End must never follow the end request.
+            guard self?.liveActivity?.id == activity.id else { return }
+            await activity.updateWorkout(state)
         }
     }
 
     func endLiveActivity() {
-        guard let activity = liveActivity else { return }
+        // The in-memory reference can be lost after relaunch or an interrupted
+        // request. End every activity for this app, including any orphan.
+        var activities = liveActivityProvider.activities
+        if let liveActivity, !activities.contains(where: { $0.id == liveActivity.id }) {
+            activities.append(liveActivity)
+        }
         liveActivity = nil
-        let finalState = liveActivityContentState(isRunning: false)
-        Task {
-            await activity.end(
-                .init(state: finalState, staleDate: Date.now.addingTimeInterval(10)),
-                dismissalPolicy: .immediate
-            )
+        let previous = liveActivityTask
+        liveActivityTask = Task { @MainActor in
+            await previous?.value
+            for activity in activities {
+                await activity.endWorkout()
+            }
         }
     }
 
@@ -3144,22 +3212,52 @@ class TimerViewModel: ObservableObject {
     // N6 fix: guard only on notificationsEnabled. The old guard also passed when
     // workoutRemindersEnabled was true, which caused interval cues to fire even when
     // the user had explicitly disabled them.
+    /// Interval cues only. Reminders and birthday nudges have separate owners.
     func scheduleNotification(identifier: String, title: String, body: String, in timeInterval: TimeInterval, repeats: Bool) {
-        guard notificationsEnabled else { return }
-        guard notificationPermissionState == .granted else { return }
+        guard identifier == Self.intervalNotificationID, isRunning, workoutCompletionDate == nil,
+              notificationsEnabled, notificationPermissionState == .granted else { return }
 
+        cancelIntervalNotifications()
+        let generation = intervalNotificationGeneration
+        let previous = intervalNotificationTask
+        let center = intervalNotificationCenter
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
-
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, timeInterval), repeats: repeats)
         let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
 
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
+        intervalNotificationTask = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, self.intervalNotificationGeneration == generation,
+                  self.isRunning, self.workoutCompletionDate == nil else { return }
+            do {
+                try await center.add(request)
+            } catch {
                 print("Error scheduling notification: \(error.localizedDescription)")
             }
+            // End/pause may have happened while add was suspended. Drain this
+            // request before allowing a subsequent workout's add to proceed.
+            if self.intervalNotificationGeneration != generation || !self.isRunning {
+                center.removePendingNotificationRequests(withIdentifiers: [identifier])
+                center.removeDeliveredNotifications(withIdentifiers: [identifier])
+            }
+        }
+    }
+
+    private func cancelIntervalNotifications() {
+        intervalNotificationGeneration = UUID()
+        let ids = [Self.intervalNotificationID]
+        let center = intervalNotificationCenter
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+        center.removeDeliveredNotifications(withIdentifiers: ids)
+        let previous = intervalNotificationTask
+        intervalNotificationTask = Task { @MainActor in
+            await previous?.value
+            // removePending alone can run before an in-flight add is accepted.
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+            center.removeDeliveredNotifications(withIdentifiers: ids)
         }
     }
 
@@ -3331,6 +3429,12 @@ class TimerViewModel: ObservableObject {
     /// Called when the app returns to the foreground. Refreshes streaks, permissions,
     /// and reschedules one-shot daily follow-up notifications.
     func refreshOnForeground() {
+        if workoutStartDate == nil || workoutCompletionDate != nil {
+            endLiveActivity()
+            cancelIntervalNotifications()
+        } else if !isRunning {
+            cancelIntervalNotifications()
+        }
         // S1: keep the stored streak in sync with the log (it was previously only ever increased).
         refreshStreak()
 

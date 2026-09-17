@@ -115,6 +115,23 @@ The shared `scheduleNotification(identifier:title:body:in:repeats:)` helper guar
 
 ---
 
+## Workout system cleanup (5.2+)
+
+- All `nextInterval` add/cancel operations go through TimerViewModel's serialized
+  task and generation token. Never call `UNUserNotificationCenter.add` directly
+  for interval cues: an in-flight add can otherwise outlive End or pause.
+- `stopTimer()` cancels interval cues; End/reset/completion also end Live
+  Activities. Cancel pending **and delivered** interval alerts, without touching
+  weekly reminders or birthday nudges.
+- Live Activity updates/end requests are ordered. End captures **all current
+  app activities synchronously**, including orphans, before awaiting anything.
+  Enumerating activities inside a launch cleanup task can accidentally capture
+  and end a newly started workout. Pause retains a paused activity.
+- Tests inject system boundaries and suspend adds/updates to exercise these
+  races; keep lifecycle logic in TimerViewModel.
+
+---
+
 ## Streak Calculation
 
 ### Use `.yearForWeekOfYear`, not `.year`

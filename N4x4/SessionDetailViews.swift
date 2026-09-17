@@ -642,7 +642,7 @@ struct PostWorkoutSummaryRedesignView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     hero
@@ -842,7 +842,7 @@ struct SessionDetailSheet: View {
     @State private var showDeleteConfirmation = false
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     SessionHeroStats(

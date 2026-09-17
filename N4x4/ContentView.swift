@@ -105,92 +105,98 @@ private struct OnboardingView: View {
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                HStack {
-                    if flow.currentStep != .welcome && !flow.isLastStep {
-                        Button(action: { flow.back() }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text("Back")
-                                    .font(.subheadline.weight(.semibold))
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        HStack {
+                            if flow.currentStep != .welcome && !flow.isLastStep {
+                                Button(action: { flow.back() }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 13, weight: .semibold))
+                                        Text("Back")
+                                            .font(.subheadline.weight(.semibold))
+                                    }
+                                    .foregroundStyle(.white.opacity(0.8))
+                                }
+                            } else {
+                                Color.clear.frame(width: 50, height: 20)
                             }
-                            .foregroundStyle(.white.opacity(0.8))
+
+                            Spacer()
+
+                            Text(flow.progressText)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.white.opacity(0.8))
                         }
-                    } else {
-                        Color.clear.frame(width: 50, height: 20)
-                    }
 
-                    Spacer()
+                        Spacer(minLength: 0)
 
-                    Text(flow.progressText)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-
-                Spacer(minLength: 0)
-
-                Group {
-                    switch flow.currentStep {
-                    case .welcome:
-                        welcomeCard
-                    case .basics:
-                        basicsCard
-                    case .modality:
-                        modalityCard
-                    case .age:
-                        ageCard
-                    case .audioMode:
-                        audioModeCard
-                    case .notifications:
-                        permissionCard(
-                            icon: "bell.badge.fill",
-                            title: "Get interval cues + comeback reminders",
-                            body: "We'll alert you when each interval changes and can send gentle reminder nudges so momentum never fades.",
-                            primaryTitle: "Enable Notifications",
-                            secondaryTitle: "Not now",
-                            primaryAction: requestNotifications,
-                            secondaryAction: flow.next
-                        )
-                    case .reminderDay:
-                        reminderDayCard
-                    case .health:
-                        permissionCard(
-                            icon: "heart.text.square.fill",
-                            title: "Connect to Apple Health",
-                            body: "Automatically save your N4x4 workouts to Apple Health and track your VO₂ max over time. Great for seeing your cardio fitness gains.",
-                            primaryTitle: "Connect & Log Workouts",
-                            secondaryTitle: "Maybe later",
-                            primaryAction: requestHealth,
-                            secondaryAction: flow.next
-                        )
-                    case .vo2Goal:
-                        vo2GoalCard
-                    case .heartRate:
-                        heartRateSourceCard
-                    case .launch:
-                        permissionCard(
-                            icon: "bolt.heart.fill",
-                            title: "Let's crush workout #1",
-                            body: "Everything's ready. Start your first guided interval session now.",
-                            primaryTitle: "Start First Workout",
-                            secondaryTitle: "Finish",
-                            primaryAction: {
-                                onStartWorkout()
-                                dismiss()
-                            },
-                            secondaryAction: {
-                                onComplete()
-                                dismiss()
+                        Group {
+                            switch flow.currentStep {
+                            case .welcome:
+                                welcomeCard
+                            case .basics:
+                                basicsCard
+                            case .modality:
+                                modalityCard
+                            case .age:
+                                ageCard
+                            case .audioMode:
+                                audioModeCard
+                            case .notifications:
+                                permissionCard(
+                                    icon: "bell.badge.fill",
+                                    title: "Get interval cues + comeback reminders",
+                                    body: "We'll alert you when each interval changes and can send gentle reminder nudges so momentum never fades.",
+                                    primaryTitle: "Enable Notifications",
+                                    secondaryTitle: "Not now",
+                                    primaryAction: requestNotifications,
+                                    secondaryAction: flow.next
+                                )
+                            case .reminderDay:
+                                reminderDayCard
+                            case .health:
+                                permissionCard(
+                                    icon: "heart.text.square.fill",
+                                    title: "Connect to Apple Health",
+                                    body: "Automatically save your N4x4 workouts to Apple Health and track your VO₂ max over time. Great for seeing your cardio fitness gains.",
+                                    primaryTitle: "Connect & Log Workouts",
+                                    secondaryTitle: "Maybe later",
+                                    primaryAction: requestHealth,
+                                    secondaryAction: flow.next
+                                )
+                            case .vo2Goal:
+                                vo2GoalCard
+                            case .heartRate:
+                                heartRateSourceCard
+                            case .launch:
+                                permissionCard(
+                                    icon: "bolt.heart.fill",
+                                    title: "Let's crush workout #1",
+                                    body: "Everything's ready. Start your first guided interval session now.",
+                                    primaryTitle: "Start First Workout",
+                                    secondaryTitle: "Finish",
+                                    primaryAction: {
+                                        onStartWorkout()
+                                        dismiss()
+                                    },
+                                    secondaryAction: {
+                                        onComplete()
+                                        dismiss()
+                                    }
+                                )
                             }
-                        )
+                        }
+
+                        Spacer(minLength: 0)
+
                     }
+                    .padding(24)
+                    .frame(minHeight: geometry.size.height)
                 }
-
-                Spacer(minLength: 0)
-
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(24)
         }
     }
 

@@ -1,5 +1,66 @@
 import XCTest
+import UserNotifications
 @testable import N4x4
+
+private final class TestIntervalNotificationCenter: IntervalNotificationCenter {
+    var pending: [String: UNNotificationRequest] = [:]
+    var delivered: Set<String> = []
+    var holdNextAdd = false
+    var onAddStarted: (() -> Void)?
+    var addContinuation: CheckedContinuation<Void, Never>?
+
+    func add(_ request: UNNotificationRequest) async throws {
+        if holdNextAdd {
+            holdNextAdd = false
+            await withCheckedContinuation { continuation in
+                addContinuation = continuation
+                onAddStarted?()
+            }
+        }
+        pending[request.identifier] = request
+    }
+
+    func removePendingNotificationRequests(withIdentifiers identifiers: [String]) {
+        for identifier in identifiers { pending.removeValue(forKey: identifier) }
+    }
+
+    func removeDeliveredNotifications(withIdentifiers identifiers: [String]) {
+        delivered.subtract(identifiers)
+    }
+}
+
+private final class TestWorkoutActivity: WorkoutLiveActivityHandle {
+    let id = UUID().uuidString
+    var events: [String] = []
+    var holdNextUpdate = false
+    var onUpdateStarted: (() -> Void)?
+    var updateContinuation: CheckedContinuation<Void, Never>?
+
+    func updateWorkout(_ state: N4x4LiveActivityAttributes.ContentState) async {
+        if holdNextUpdate {
+            holdNextUpdate = false
+            await withCheckedContinuation { continuation in
+                updateContinuation = continuation
+                onUpdateStarted?()
+            }
+        }
+        events.append(state.isRunning ? "running" : "paused")
+    }
+
+    func endWorkout() async { events.append("end") }
+}
+
+private final class TestWorkoutActivityProvider: WorkoutLiveActivityProvider {
+    var stored: [TestWorkoutActivity] = []
+    var activities: [any WorkoutLiveActivityHandle] { stored }
+    var areActivitiesEnabled = true
+
+    func request(start: Date, state: N4x4LiveActivityAttributes.ContentState) throws -> any WorkoutLiveActivityHandle {
+        let activity = TestWorkoutActivity()
+        stored.append(activity)
+        return activity
+    }
+}
 
 final class N4x4Tests: XCTestCase {
 
@@ -35,8 +96,174 @@ final class N4x4Tests: XCTestCase {
             "appleSensorHREnabled",
             "hrSourcePriorityRaw",
             "cooldownEnabled", "audioModeRaw", "hapticsEnabled", "shownMilestonesData",
-            "hasRequestedAppReview"
+            "hasRequestedAppReview", "liveActivitiesEnabled"
         ].forEach { defaults.removeObject(forKey: $0) }
+    }
+
+    @MainActor
+    private func effectsViewModel(center: TestIntervalNotificationCenter,
+                                  activities: TestWorkoutActivityProvider) -> TimerViewModel {
+        UserDefaults.standard.set(false, forKey: "healthKitEnabled")
+        UserDefaults.standard.set(true, forKey: "healthKitUserOptedOut")
+        UserDefaults.standard.set(false, forKey: "workoutRemindersEnabled")
+        UserDefaults.standard.set(true, forKey: "notificationsEnabled")
+        let vm = TimerViewModel(intervalNotificationCenter: center, liveActivityProvider: activities)
+        vm.audioMode = .silent
+        vm.hapticsEnabled = false
+        vm.warmupDuration = 600
+        vm.numberOfIntervals = 2
+        vm.notificationPermissionState = .granted
+        vm.notificationsEnabled = true
+        vm.workoutStartDate = Date()
+        vm.isRunning = true
+        vm.intervalEndTime = Date().addingTimeInterval(600)
+        return vm
+    }
+
+    @MainActor
+    func testEndingDuringNotificationAddDrainsOldCueBeforeNewWorkout() async throws {
+        let center = TestIntervalNotificationCenter()
+        let activities = TestWorkoutActivityProvider()
+        let vm = effectsViewModel(center: center, activities: activities)
+        let addStarted = expectation(description: "Old workout notification add is in flight")
+        center.holdNextAdd = true
+        center.onAddStarted = { addStarted.fulfill() }
+        vm.scheduleNextIntervalNotification()
+        await fulfillment(of: [addStarted], timeout: 3)
+
+        vm.reset()
+        vm.workoutStartDate = Date()
+        vm.isRunning = true
+        vm.currentIntervalIndex = 1
+        // The real authorization refresh may have completed during the await;
+        // this fake scheduler deliberately tests an authorized notification flow.
+        vm.notificationPermissionState = .granted
+        vm.notificationsEnabled = true
+        vm.scheduleNextIntervalNotification()
+        center.addContinuation?.resume()
+        await vm.intervalNotificationTask?.value
+
+        XCTAssertEqual(center.pending.count, 1)
+        XCTAssertTrue(center.pending["nextInterval"]?.content.body.contains("Recovery") == true,
+                      "Cleanup from the old workout must not remove the new workout's cue")
+        vm.reset()
+        await vm.intervalNotificationTask?.value
+        XCTAssertTrue(center.pending.isEmpty)
+    }
+
+    @MainActor
+    func testPauseResetAndCompletionRemovePendingAndDeliveredIntervalCuesOnly() async throws {
+        for action in ["pause", "reset", "complete"] {
+            let center = TestIntervalNotificationCenter()
+            let vm = effectsViewModel(center: center, activities: TestWorkoutActivityProvider())
+            let reminder = UNNotificationRequest(identifier: "workoutReminder_2",
+                                                 content: UNMutableNotificationContent(), trigger: nil)
+            center.pending[reminder.identifier] = reminder
+            center.delivered = ["nextInterval", reminder.identifier, "birthdayNudge_0802"]
+            vm.scheduleNextIntervalNotification()
+            await vm.intervalNotificationTask?.value
+            XCTAssertNotNil(center.pending["nextInterval"])
+
+            switch action {
+            case "pause": vm.pause()
+            case "reset": vm.reset()
+            default: vm.finishWorkout()
+            }
+            // A delayed caller cannot queue cues after a workout stops.
+            vm.scheduleNextIntervalNotification()
+            await vm.intervalNotificationTask?.value
+            XCTAssertEqual(Set(center.pending.keys), [reminder.identifier], action)
+            XCTAssertEqual(center.delivered, [reminder.identifier, "birthdayNudge_0802"], action)
+            vm.reset()
+        }
+    }
+
+    @MainActor
+    func testLaunchCleansOrphanActivityWithoutEndingNewWorkout() async {
+        let center = TestIntervalNotificationCenter()
+        let activities = TestWorkoutActivityProvider()
+        let orphan = TestWorkoutActivity()
+        activities.stored = [orphan]
+        let vm = effectsViewModel(center: center, activities: activities)
+        vm.startLiveActivity()
+        let newActivity = activities.stored.last!
+        await vm.liveActivityTask?.value
+        XCTAssertTrue(orphan.events.contains("end"))
+        XCTAssertFalse(newActivity.events.contains("end"), "Launch cleanup must capture activities before yielding")
+        vm.reset()
+        await vm.liveActivityTask?.value
+        XCTAssertEqual(newActivity.events.last, "end")
+    }
+
+    @MainActor
+    func testEndingWaitsForInFlightActivityUpdateAndAlsoEndsOrphans() async {
+        let activities = TestWorkoutActivityProvider()
+        let vm = effectsViewModel(center: TestIntervalNotificationCenter(), activities: activities)
+        await vm.liveActivityTask?.value
+        vm.startLiveActivity()
+        let live = activities.stored.last!
+        let updateStarted = expectation(description: "Activity update suspended")
+        live.holdNextUpdate = true
+        live.onUpdateStarted = { updateStarted.fulfill() }
+        vm.updateLiveActivity(isRunning: true)
+        await fulfillment(of: [updateStarted], timeout: 3)
+        let orphan = TestWorkoutActivity()
+        activities.stored.append(orphan)
+
+        vm.reset()
+        vm.updateLiveActivity(isRunning: true)
+        vm.startLiveActivity()
+        live.updateContinuation?.resume()
+        await vm.liveActivityTask?.value
+        XCTAssertEqual(live.events, ["running", "end"])
+        XCTAssertEqual(orphan.events, ["end"])
+        XCTAssertEqual(activities.stored.count, 2, "Reset cannot restart a Live Activity")
+    }
+
+    @MainActor
+    func testCompletionEndsActivityAndCannotRestartUntilReviewIsDismissed() async {
+        let activities = TestWorkoutActivityProvider()
+        let vm = effectsViewModel(center: TestIntervalNotificationCenter(), activities: activities)
+        await vm.liveActivityTask?.value
+        vm.startLiveActivity()
+        let live = activities.stored.last!
+        vm.finishWorkout()
+        vm.startTimer()
+        await vm.liveActivityTask?.value
+        XCTAssertEqual(live.events.last, "end")
+        XCTAssertFalse(vm.isRunning)
+        XCTAssertEqual(activities.stored.count, 1)
+        XCTAssertNotNil(vm.completedWorkoutEntryID)
+        vm.reset()
+    }
+
+    @MainActor
+    func testDisablingIntervalCuesWhileAddIsInFlightRemovesThem() async {
+        let center = TestIntervalNotificationCenter()
+        let vm = effectsViewModel(center: center, activities: TestWorkoutActivityProvider())
+        let addStarted = expectation(description: "Notification add suspended")
+        center.holdNextAdd = true
+        center.onAddStarted = { addStarted.fulfill() }
+        vm.scheduleNextIntervalNotification()
+        await fulfillment(of: [addStarted], timeout: 3)
+        vm.notificationsEnabled = false
+        center.addContinuation?.resume()
+        await vm.intervalNotificationTask?.value
+        XCTAssertTrue(center.pending.isEmpty)
+        vm.reset()
+    }
+
+    @MainActor
+    func testLaunchRemovesOldIntervalCuesAndRetainsReminders() async {
+        let center = TestIntervalNotificationCenter()
+        for id in ["nextInterval", "workoutReminder_2", "birthdayNudge_0802"] {
+            center.pending[id] = UNNotificationRequest(identifier: id, content: UNMutableNotificationContent(), trigger: nil)
+            center.delivered.insert(id)
+        }
+        let vm = TimerViewModel(intervalNotificationCenter: center, liveActivityProvider: TestWorkoutActivityProvider())
+        await vm.intervalNotificationTask?.value
+        XCTAssertEqual(Set(center.pending.keys), ["workoutReminder_2", "birthdayNudge_0802"])
+        XCTAssertEqual(center.delivered, ["workoutReminder_2", "birthdayNudge_0802"])
     }
 
     func testSetupIntervalsIncludesWarmupAndCorrectPattern() {

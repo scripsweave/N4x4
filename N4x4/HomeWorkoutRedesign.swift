@@ -72,6 +72,7 @@ struct PulsingHeart: View {
     var bpm: Double
     var size: CGFloat
     @State private var big = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Seconds per beat, clamped to a sane range so extreme/garbage BPM can't
     /// produce a strobing or frozen heart.
@@ -81,9 +82,11 @@ struct PulsingHeart: View {
         Image(systemName: "heart.fill")
             .font(.system(size: size))
             .foregroundStyle(Palette.danger)
-            .scaleEffect(big ? 1.0 : 0.72)
-            .shadow(color: Palette.danger.opacity(0.7), radius: big ? size * 0.4 : 0)
+            .scaleEffect(reduceMotion || big ? 1.0 : 0.72)
+            .shadow(color: Palette.danger.opacity(0.7), radius: !reduceMotion && big ? size * 0.4 : 0)
+            .accessibilityHidden(true)
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: beatPeriod / 2).repeatForever(autoreverses: true)) {
                     big = true
                 }
@@ -299,12 +302,7 @@ struct HomeScreen: View {
     /// Dismisses the "connect your Watch" banner for this app session; it
     /// reappears next launch if the Watch app is still not installed.
     @State private var watchBannerDismissed = false
-    /// True when there is enough history to draw the trend line. Drives layout
-    /// only — the card itself renders on `showVO2Card` so that users with no
-    /// readings get the card's empty state instead of blank space.
-    private var hasVO2Data: Bool {
-        viewModel.healthKitEnabled && viewModel.vo2DataPoints.count >= 2
-    }
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var showVO2Card: Bool { viewModel.healthKitEnabled }
 
     // 2 August easter egg (see BirthdayEasterEgg.swift).
@@ -375,56 +373,77 @@ struct HomeScreen: View {
     }
 
     private var homeContent: some View {
-        VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-            // Suppressed for users already covered by a Bluetooth monitor —
-            // nagging them about the Watch app would be noise.
-            if viewModel.watchAppMissingOnPairedWatch, !watchBannerDismissed,
-               !viewModel.bleHeartRateManager.hasRememberedMonitor {
-                watchConnectBanner
+        GeometryReader { geometry in
+            let wide = geometry.size.width > geometry.size.height && !dynamicTypeSize.isAccessibilitySize
+            ScrollView {
+                if wide {
+                    HStack(spacing: 24) {
+                        startRing(side: min(340, max(200, geometry.size.height - 24), geometry.size.width * 0.44))
+                            .frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 16) {
+                            header
+                            connectBannerIfNeeded
+                            Text("Norwegian 4×4")
+                                .font(.title2.bold())
+                                .foregroundStyle(Palette.textPrimary)
+                            planAndFitness
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
                     .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-
-            // Top flex expands only when the tall VO₂ card is present (to balance
-            // it); with no card it stays small so content sits higher.
-            Spacer(minLength: 8)
-                .frame(maxHeight: hasVO2Data ? .infinity : 28)
-
-            if isBirthday {
-                DiscoBallStartButton(side: 340, controller: birthday) { viewModel.startTimer() }
-                    .background(GeometryReader { geo in
-                        Color.clear.preference(key: BirthdayBallFrameKey.self,
-                                               value: geo.frame(in: .named("birthdayHome")))
-                    })
-            } else {
-                StartRingButton(title: "START", side: 340) { viewModel.startTimer() }
-            }
-
-            // Interval plan + VO₂ trend, always sitting clearly below the ring.
-            // The bottom-anchored layout means this block's height pushes the ring
-            // upward, so a positive gap here keeps the timeline off the ring.
-            VStack(spacing: 14) {
-                VStack(spacing: 6) {
-                    IntervalTimelineBar(viewModel: viewModel, showProgress: false)
-                    Text(planSummary)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Palette.textTertiary)
-                }
-                .padding(.horizontal, 8)
-
-                if showVO2Card {
-                    VO2HistoryCard(viewModel: viewModel)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: geometry.size.height)
+                } else {
+                    VStack(spacing: 16) {
+                        header
+                        connectBannerIfNeeded
+                        startRing(side: min(340, max(220, geometry.size.height * 0.48), geometry.size.width - 40))
+                        planAndFitness
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+                    .frame(minHeight: geometry.size.height)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
 
-            Spacer(minLength: 0)
+    @ViewBuilder
+    private func startRing(side: CGFloat) -> some View {
+        if isBirthday {
+            DiscoBallStartButton(side: side, controller: birthday) { viewModel.startTimer() }
+                .background(GeometryReader { geo in
+                    Color.clear.preference(key: BirthdayBallFrameKey.self,
+                                           value: geo.frame(in: .named("birthdayHome")))
+                })
+        } else {
+            StartRingButton(title: "START", side: side) { viewModel.startTimer() }
+        }
+    }
+
+    @ViewBuilder
+    private var connectBannerIfNeeded: some View {
+        if viewModel.watchAppMissingOnPairedWatch, !watchBannerDismissed,
+           !viewModel.bleHeartRateManager.hasRememberedMonitor {
+            watchConnectBanner
+        }
+    }
+
+    private var planAndFitness: some View {
+        VStack(spacing: 14) {
+            VStack(spacing: 6) {
+                IntervalTimelineBar(viewModel: viewModel, showProgress: false)
+                Text(planSummary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Palette.textSecondary)
+            }
+            .padding(.horizontal, 8)
+            if showVO2Card {
+                VO2HistoryCard(viewModel: viewModel)
+            }
         }
     }
 
@@ -620,8 +639,11 @@ struct StartRingButton: View {
                     .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
             }
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
     }
 }
 
@@ -865,35 +887,19 @@ struct WorkoutScreen: View {
     @State private var showSkipConfirmation = false
     @State private var skipIsForCooldown = false
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
-
-            IntervalTimelineBar(viewModel: viewModel, showProgress: true)
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-
-            Spacer(minLength: 4)
-
-            WorkoutRing(viewModel: viewModel, side: 300)
-
-            zoneCue
-                .padding(.top, 10)
-                .frame(height: 28)
-
-            Spacer(minLength: 8)
-
-            controls
-                .padding(.horizontal, 24)
-
-            Spacer(minLength: 12)
-
-            HRZoneBar(viewModel: viewModel,
-                      onMissingHeartRateTap: { showWatchHelp = true })
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
+        GeometryReader { geometry in
+            let wide = geometry.size.width > geometry.size.height && !dynamicTypeSize.isAccessibilitySize
+            ScrollView {
+                if wide {
+                    landscapeWorkout(size: geometry.size)
+                } else {
+                    portraitWorkout(size: geometry.size)
+                }
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
         .alert("End workout?", isPresented: $showEndAlert) {
             Button("End", role: .destructive) { viewModel.reset() }
@@ -907,34 +913,79 @@ struct WorkoutScreen: View {
         }
     }
 
+    private func portraitWorkout(size: CGSize) -> some View {
+        let compact = size.height < 650 && !dynamicTypeSize.isAccessibilitySize
+        return VStack(spacing: compact ? 8 : 12) {
+            header
+            IntervalTimelineBar(viewModel: viewModel, showProgress: !compact)
+            WorkoutRing(viewModel: viewModel,
+                        side: min(300, max(180, size.height - (compact ? 365 : 390)), size.width - 40))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HRZoneBar(viewModel: viewModel, compact: compact,
+                      onMissingHeartRateTap: { showWatchHelp = true })
+            controls
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .frame(minHeight: size.height)
+    }
+
+    private func landscapeWorkout(size: CGSize) -> some View {
+        HStack(spacing: 24) {
+            VStack(spacing: 8) {
+                WorkoutRing(viewModel: viewModel,
+                            side: min(300, max(200, size.height - 64), size.width * 0.38))
+                IntervalTimelineBar(viewModel: viewModel)
+            }
+            .frame(width: min(320, size.width * 0.38))
+            VStack(spacing: 10) {
+                header
+                HRZoneBar(viewModel: viewModel, landscape: true,
+                          onMissingHeartRateTap: { showWatchHelp = true })
+                controls
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .frame(minHeight: size.height)
+    }
+
     private var header: some View {
-        HStack(alignment: .top) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 8))
+        return layout {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Norwegian 4×4")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.headline)
                     .foregroundStyle(Palette.textPrimary)
                 Text(roundText)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(Palette.electricBlue)
                     .tracking(0.5)
             }
-            Spacer()
-            Button(action: onMinimize) {
-                Image(systemName: "chevron.down")
-                    .foregroundStyle(Palette.textSecondary)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Palette.surfaceRaised))
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(action: onMinimize) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Palette.textSecondary)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(Palette.surfaceRaised))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Minimize workout")
+                Button { showEndAlert = true } label: {
+                    Text("END")
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(Palette.danger)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .overlay(Capsule().stroke(Palette.danger.opacity(0.6), lineWidth: 1.5))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            Button { showEndAlert = true } label: {
-                Text("END")
-                    .font(.system(size: 13, weight: .heavy))
-                    .foregroundStyle(Palette.danger)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .overlay(Capsule().stroke(Palette.danger.opacity(0.6), lineWidth: 1.5))
-            }
-            .buttonStyle(.plain)
         }
     }
 
@@ -948,39 +999,11 @@ struct WorkoutScreen: View {
         }
     }
 
-    /// Live coaching cue under the ring: speed up if below the target zone, slow
-    /// down if above, in-zone otherwise. Only while a target applies and HR is
-    /// streaming, and honours the visual-zone-alert setting.
-    @ViewBuilder private var zoneCue: some View {
-        if viewModel.zoneVisualAlertsEnabled, let hr = viewModel.currentHeartRate {
-            let status = viewModel.currentZoneStatus(for: hr)
-            if status != .noTarget {
-                let cue = zoneCueStyle(status)
-                HStack(spacing: 8) {
-                    Image(systemName: cue.icon)
-                        .font(.system(size: 17, weight: .heavy))
-                    Text(cue.text)
-                        .font(.system(size: 22, weight: .heavy))
-                        .tracking(1)
-                }
-                .foregroundStyle(cue.color)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.3), value: status)
-            }
-        }
-    }
-
-    private func zoneCueStyle(_ status: HRZoneStatus) -> (text: String, icon: String, color: Color) {
-        switch status {
-        case .below:    return ("SPEED UP",  "arrow.up.circle.fill",   Palette.amber)
-        case .above:    return ("SLOW DOWN", "arrow.down.circle.fill", Palette.danger)
-        case .inZone:   return ("IN ZONE",   "checkmark.circle.fill",  Palette.recovery)
-        case .noTarget: return ("", "", .clear)
-        }
-    }
-
     private var controls: some View {
-        HStack(spacing: 16) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 16))
+        return layout {
             Button {
                 viewModel.pause()
             } label: {
@@ -1012,14 +1035,15 @@ struct WorkoutScreen: View {
             if !trailingChevrons {
                 Image(systemName: icon).font(.system(size: 15, weight: .bold))
             }
-            Text(text).font(.system(size: 15, weight: .heavy)).tracking(1)
+            Text(text).font(.subheadline.weight(.heavy)).tracking(1)
             if trailingChevrons {
                 Image(systemName: "chevron.right.2").font(.system(size: 13, weight: .bold))
             }
         }
         .foregroundStyle(Palette.textPrimary)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, 14)
+        .frame(minHeight: 48)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.surface))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
@@ -1048,19 +1072,6 @@ struct WorkoutRing: View {
 
     private var phaseColor: Color { intervalColor(viewModel.currentIntervalType) }
 
-    private var targetText: String? {
-        switch viewModel.currentIntervalType {
-        case .highIntensity:
-            let r = viewModel.highIntensityTargetRange
-            return "TARGET \(r.lowerBound)–\(r.upperBound) BPM"
-        case .rest:
-            let r = viewModel.recoveryTargetRange
-            return "TARGET \(r.lowerBound)–\(r.upperBound) BPM"
-        default:
-            return nil
-        }
-    }
-
     var side: CGFloat = 320
 
     var body: some View {
@@ -1077,7 +1088,10 @@ struct WorkoutRing: View {
     private var centerStack: some View {
         VStack(spacing: 3) {
             Text(rdTime(viewModel.timeRemaining))
-                .font(.system(size: side * 0.155, weight: .heavy, design: .rounded))
+                .font(.system(size: side * 0.19, weight: .heavy, design: .rounded))
+                .accessibilityLabel("Time remaining")
+                .accessibilityValue(rdTime(viewModel.timeRemaining))
+                .accessibilityIdentifier("workout-countdown")
                 .foregroundStyle(Palette.textPrimary)
                 .monospacedDigit()
 
@@ -1088,28 +1102,8 @@ struct WorkoutRing: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
-            if let target = targetText {
-                Text(target)
-                    .font(.system(size: side * 0.034, weight: .semibold))
-                    .foregroundStyle(Palette.textTertiary)
-                    .tracking(0.5)
-            }
-
-            if let hr = viewModel.currentHeartRate {
-                HStack(spacing: 6) {
-                    PulsingHeart(bpm: hr, size: side * 0.072)
-                        .id(Int((hr / 4).rounded()))
-                    Text("\(Int(hr))")
-                        .font(.system(size: side * 0.095, weight: .heavy, design: .rounded))
-                        // Zone-coded: orange = too low, red = too high (shared tint).
-                        .foregroundStyle(
-                            viewModel.currentZoneStatus(for: hr).tint ?? Palette.textPrimary)
-                        .monospacedDigit()
-                }
-                .padding(.top, side * 0.02)
-            }
         }
-        .frame(maxWidth: side * 0.58)
+        .frame(maxWidth: side * 0.65)
     }
 }
 
@@ -1120,6 +1114,11 @@ struct WorkoutRing: View {
 /// is streaming it.
 struct HRZoneBar: View {
     @ObservedObject var viewModel: TimerViewModel
+    var landscape = false
+    var compact = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .largeTitle) private var readingSize: CGFloat = 60
+
     /// Invoked when the user taps the missing-heart-rate warning — the
     /// highest-intent moment for the troubleshooting / connect-a-strap flow.
     var onMissingHeartRateTap: (() -> Void)? = nil
@@ -1169,49 +1168,131 @@ struct HRZoneBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text("HEART RATE ZONES")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Palette.textSecondary)
-                    .tracking(0.5)
-                Image(systemName: "info.circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Palette.textTertiary)
-                Spacer()
-                if let hr = viewModel.currentHeartRate {
-                    HStack(spacing: 6) {
-                        PulsingHeart(bpm: hr, size: 15)
+        VStack(alignment: .leading, spacing: 6) {
+            if !compact {
+                HStack(alignment: .firstTextBaseline) {
+                    if let hr = viewModel.currentHeartRate {
+                        PulsingHeart(bpm: hr, size: 12)
                             .id(Int((hr / 4).rounded()))
-                        Text("\(Int(hr))")
-                            .font(.system(size: 22, weight: .heavy, design: .rounded))
-                            // Zone-coded: orange = too low, red = too high (shared tint).
-                            .foregroundStyle(
-                                viewModel.currentZoneStatus(for: hr).tint ?? Palette.textPrimary)
-                            .monospacedDigit()
-                        Text("BPM")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Palette.textSecondary)
-                        if let symbol = viewModel.heartRateSourceSymbol {
-                            Image(systemName: symbol)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Palette.textTertiary)
-                        }
+                    } else {
+                        Image(systemName: "heart")
+                            .accessibilityHidden(true)
                     }
+                    Text("HEART RATE")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.8)
+                    Spacer(minLength: 8)
+                    if let source = viewModel.heartRateSourceLabel, viewModel.currentHeartRate != nil {
+                        Label(source, systemImage: viewModel.heartRateSourceSymbol ?? "heart.fill")
+                            .font(.caption2)
+                            .lineLimit(1)
+                    }
+                }
+                .foregroundStyle(Palette.textSecondary)
+            }
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    heartRateReading
+                    Spacer(minLength: 0)
+                    guidance
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    heartRateReading
+                    guidance
                 }
             }
 
             zoneBar
+                .accessibilityHidden(true)
+            if !compact {
+                zoneLabels
+                    .accessibilityHidden(true)
+            }
 
-            zoneLabels
-
-            connectionStatus
+            if viewModel.currentHeartRate == nil {
+                connectionStatus
+            }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
+        }
+    }
+
+    private var heartRateReading: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(viewModel.currentHeartRate.map { "\(Int($0))" } ?? "—")
+                .font(.system(size: readingSize * (landscape ? 1.2 : 1), weight: .heavy, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(readingColor)
+                .fixedSize()
+            Text("BPM")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Palette.textSecondary)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Live heart rate")
+        .accessibilityValue(viewModel.currentHeartRate.map { "\(Int($0)) beats per minute" } ?? "No reading")
+        .accessibilityIdentifier("live-heart-rate")
+    }
+
+    private var readingColor: Color {
+        guard let hr = viewModel.currentHeartRate else { return Palette.textSecondary }
+        return viewModel.currentZoneStatus(for: hr).tint ?? Palette.textPrimary
+    }
+
+    private var targetRange: ClosedRange<Int>? {
+        switch viewModel.currentIntervalType {
+        case .highIntensity: return viewModel.highIntensityTargetRange
+        case .rest: return viewModel.recoveryTargetRange
+        default: return nil
+        }
+    }
+
+    private var guidance: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if viewModel.zoneVisualAlertsEnabled, let hr = viewModel.currentHeartRate,
+               viewModel.currentZoneStatus(for: hr) != .noTarget {
+                let status = viewModel.currentZoneStatus(for: hr)
+                Label(cueText(status), systemImage: cueSymbol(status))
+                    .font(.subheadline.weight(.heavy))
+                    .foregroundStyle(status.tint ?? Palette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let targetRange {
+                Text("TARGET")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.5)
+                Text("\(targetRange.lowerBound)–\(targetRange.upperBound) BPM")
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .foregroundStyle(Palette.textSecondary)
+    }
+
+    private func cueText(_ status: HRZoneStatus) -> String {
+        switch status {
+        case .below: return "SPEED UP"
+        case .above: return "SLOW DOWN"
+        case .inZone: return "IN ZONE"
+        case .noTarget: return ""
+        }
+    }
+
+    private func cueSymbol(_ status: HRZoneStatus) -> String {
+        switch status {
+        case .below: return "arrow.up.circle.fill"
+        case .above: return "arrow.down.circle.fill"
+        case .inZone: return "checkmark.circle.fill"
+        case .noTarget: return "heart.fill"
         }
     }
 
@@ -1228,7 +1309,7 @@ struct HRZoneBar: View {
                             .opacity(isTarget ? 1 : 0.4)
                             .background {
                                 // Pulsing glow behind the target zone.
-                                if isTarget {
+                                if isTarget && !reduceMotion {
                                     Capsule()
                                         .fill(z.color)
                                         .blur(radius: 10)
@@ -1236,7 +1317,7 @@ struct HRZoneBar: View {
                                         .scaleEffect(pulse ? 1.15 : 0.9)
                                 }
                             }
-                            .scaleEffect(y: isTarget && pulse ? 1.6 : 1.0, anchor: .center)
+                            .scaleEffect(y: isTarget && pulse && !reduceMotion ? 1.6 : 1.0, anchor: .center)
                     }
                 }
 
@@ -1248,13 +1329,13 @@ struct HRZoneBar: View {
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.6), radius: 2)
                         .position(x: min(max(8, x), w - 8), y: -10)
-                        .animation(.easeInOut(duration: 0.5), value: hr)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.5), value: hr)
                 }
             }
             .frame(height: 10)
         }
-        .frame(height: 22)
-        .padding(.top, 12)
+        .frame(height: 12)
+        .padding(.top, 10)
     }
 
     private var zoneLabels: some View {
@@ -1264,9 +1345,6 @@ struct HRZoneBar: View {
                     Text(z.name)
                         .font(.system(size: 12, weight: .heavy))
                         .foregroundStyle(idx == targetIndex ? z.color : Palette.textSecondary)
-                    Text("\(z.lo)-\(z.hi)%")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(Palette.textTertiary)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -1293,6 +1371,7 @@ struct HRZoneBar: View {
                             .foregroundStyle(Palette.amber)
                     }
                 }
+                .frame(minHeight: 44)
                 .buttonStyle(.plain)
             } else {
                 Circle().fill(Palette.textTertiary).frame(width: 7, height: 7)

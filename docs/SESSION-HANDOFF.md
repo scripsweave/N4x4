@@ -1,8 +1,11 @@
 # N4x4 — Session Handoff
 
-> **Current state (5.1, 2026-09-17):** completed workouts
-> now save automatically, with deletion and a full workout list in History.
-> See [`SESSION-HANDOFF-2026-09-17.md`](SESSION-HANDOFF-2026-09-17.md) first.
+> **Current state (5.2, 2026-09-17):** landscape layouts, a larger live
+> heart-rate display, and cleanup of Live Activities / interval notifications
+> when workouts end. See
+> [`SESSION-HANDOFF-2026-09-17-LANDSCAPE.md`](SESSION-HANDOFF-2026-09-17-LANDSCAPE.md)
+> first. The preceding autosave release is documented in
+> [`SESSION-HANDOFF-2026-09-17.md`](SESSION-HANDOFF-2026-09-17.md).
 > The older handoffs below describe earlier releases.
 
 > **Current state (4.13, pushed 2026-07-25 as `25ee1bb`):** the birthday
