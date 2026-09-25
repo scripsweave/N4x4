@@ -33,6 +33,13 @@ on the phone. The 5.2 live-reading enlargement left the target in caption text.
 
 ## Verification
 
+- Final largest-text and no-monitor/completion checks both passed after the
+  source-heading stacking change: `/tmp/N4x4-5.4-accessibility.xcresult`.
+- Xcode Cloud build 40 passed iOS, watchOS and archive actions. Version 5.4
+  (40) was submitted on 2026-09-25 and verified Waiting for Review, with
+  automatic release to all users after approval. Release commit `71a990b`,
+  GitHub release/tag `v5.4`.
+
 - Release 5.4: unsigned generic-iOS Release build passed, including embedded
   Watch and Live Activity. All three built Info.plists report 5.4.
   Build log: `/tmp/N4x4-5.4-release.log`.

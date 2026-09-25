@@ -1,0 +1,5 @@
+# App Store credentials must live outside this repository.
+*.p8
+**/app-store-api-key.json
+.env
+.env.*

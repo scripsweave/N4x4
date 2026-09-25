@@ -2,6 +2,8 @@
 
 Marketing screenshots for the App Store listing.
 
+For releasing an uploaded Xcode Cloud build, see [App Store submissions](SUBMISSIONS.md).
+
 ## `screenshots/` — final, upload-ready
 
 Two sizes are provided; upload the set that matches the App Store Connect slot:

@@ -1,0 +1,89 @@
+require 'spaceship'
+require 'tmpdir'
+require_relative 'release_support'
+
+opt_out_usage
+
+def release_plan(options, submit:)
+  root = File.expand_path('..', __dir__)
+  version, number, notes = N4x4Release.inputs(root, options[:version], options[:build])
+  path = File.expand_path(ENV.fetch('N4X4_ASC_KEY_PATH', '~/.config/n4x4/app-store-api-key.json'))
+  UI.user_error!("Missing API credential at #{path}. See AppStore/SUBMISSIONS.md.") unless File.file?(path)
+  UI.user_error!('API credential must be outside the repository.') if File.realpath(path).start_with?(root + '/')
+  UI.user_error!('API credential must have owner-only permissions (chmod 600).') unless (File.stat(path).mode & 0o077).zero?
+  Spaceship::ConnectAPI.token = Spaceship::ConnectAPI::Token.from_json_file(path)
+  app = Spaceship::ConnectAPI::App.get(app_id: N4x4Release::APP_ID)
+  UI.user_error!('App identifier does not match N4x4.') unless app.bundle_id == N4x4Release::BUNDLE_ID
+
+  deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + (submit ? 1200 : 0)
+  loop do
+    builds = Spaceship::ConnectAPI::Build.all(app_id: app.id, version: version,
+                                            build_number: number, platform: 'IOS')
+    UI.user_error!('More than one matching build returned by Apple.') if builds.length > 1
+    build = builds.first
+    if build && build.processing_state != 'PROCESSING'
+      N4x4Release.validate_build!(build, version, number)
+      versions = app.get_app_store_versions(filter: { platform: 'IOS' })
+      current = versions.find { |v| v.version_string == version }
+      state = current && N4x4Release.state(current)
+      UI.message("N4x4 #{version} (#{number}): build #{build.processing_state}; version #{state || 'not yet created'}")
+      disposition = N4x4Release.disposition(current, build)
+      if disposition == :already_submitted
+        UI.success("Already submitted: #{state}. Release setting: #{current.release_type}. No changes made.")
+        return nil
+      end
+      conflict = versions.find { |v| v.version_string != version && N4x4Release::ACTIVE_STATES.include?(N4x4Release.state(v)) }
+      UI.user_error!("Version #{conflict.version_string} is already active; resolve it in App Store Connect first.") if conflict
+      UI.user_error!('Another review submission is in progress.') if app.get_in_progress_review_submission(platform: 'IOS')
+      draft = app.get_ready_review_submission(platform: 'IOS', includes: 'items')
+      UI.user_error!('A draft review already contains items. Finish that draft in App Store Connect before retrying.') if draft && !draft.items.empty?
+      UI.message("Release notes:\n#{notes}")
+      UI.message('Plan: submit this exact build, retain existing listing/screenshots, release to all users after approval.')
+      return { app: app, version: version, number: number, notes: notes, key_path: path }
+    end
+    UI.user_error!("Build #{version} (#{number}) is not ready. Retry after Xcode Cloud finishes processing.") if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+    UI.message("Waiting for #{version} (#{number}) to finish processing…")
+    sleep(30)
+  end
+end
+
+desc 'Check an exact uploaded N4x4 build without changing App Store Connect'
+lane :app_store_check do |options|
+  release_plan(options, submit: false)
+end
+
+desc 'Submit an exact Xcode Cloud build and release automatically after approval'
+lane :app_store_submit do |options|
+  plan = release_plan(options, submit: true)
+  if plan
+    # Empty metadata directory prevents stale local metadata from changing the listing.
+    Dir.mktmpdir('n4x4-metadata-') do |metadata|
+      deliver(
+        api_key_path: plan[:key_path],
+        app_identifier: N4x4Release::BUNDLE_ID,
+        app_version: plan[:version], build_number: plan[:number], platform: 'ios',
+        metadata_path: metadata,
+        release_notes: { 'en-US' => plan[:notes] },
+        skip_binary_upload: true, skip_screenshots: true,
+        submit_for_review: true, automatic_release: true, phased_release: false,
+        reset_ratings: false, reject_if_possible: false, force: true,
+        precheck_include_in_app_purchases: false,
+        submission_information: { export_compliance_uses_encryption: false }
+      )
+    end
+    # Verify Apple accepted the submission; never equate upload with publication.
+    confirmed = false
+    6.times do
+      current = plan[:app].get_app_store_versions(filter: { platform: 'IOS', versionString: plan[:version] }).first
+      if current && N4x4Release::SUBMITTED_STATES.include?(N4x4Release.state(current)) &&
+         N4x4Release.disposition(current, nil, expected_number: plan[:number]) == :already_submitted
+        UI.user_error!('Submission exists but automatic release is not selected.') unless current.release_type == 'AFTER_APPROVAL'
+        UI.success("Verified #{plan[:version]} (#{plan[:number]}): #{N4x4Release.state(current)}. Automatic release after approval.")
+        confirmed = true
+        break
+      end
+      sleep(10)
+    end
+    UI.user_error!('Apple has not confirmed the submission yet. Run the read-only check before retrying.') unless confirmed
+  end
+end

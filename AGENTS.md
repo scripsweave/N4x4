@@ -427,6 +427,14 @@ To verify:
 
 ## Releasing & versioning (Xcode Cloud)
 
+- **Submission automation:** read [`AppStore/SUBMISSIONS.md`](AppStore/SUBMISSIONS.md).
+  After verifying the Xcode Cloud commit/build, use
+  `AppStore/submit.sh VERSION BUILD --submit` for an authorized release.
+  Without `--submit` it is read-only. Credentials are configured locally,
+  outside the repo; never print or commit them. Submission is on demand,
+  not automatic on every push. Keep tooling-only commits off main until the
+  next version bump, because main pushes still attempt App Store uploads.
+
 - **Xcode Cloud builds and delivers to App Store Connect on every push to the
   branch it watches (`main`)** — configured in App Store Connect, not in the
   repo. Assume every push to `main` attempts an App Store delivery.
