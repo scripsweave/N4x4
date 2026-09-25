@@ -924,11 +924,11 @@ struct WorkoutScreen: View {
 
     private func portraitWorkout(size: CGSize) -> some View {
         let compact = size.height < 650 && !dynamicTypeSize.isAccessibilitySize
+        let ringSide = min(330, max(180, size.height - (compact ? 365 : 390)) * 1.1, size.width - 40)
         return VStack(spacing: compact ? 8 : 12) {
             header
             IntervalTimelineBar(viewModel: viewModel, showProgress: !compact)
-            WorkoutRing(viewModel: viewModel,
-                        side: min(300, max(180, size.height - (compact ? 365 : 390)), size.width - 40))
+            WorkoutRing(viewModel: viewModel, side: ringSide)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             HRZoneBar(viewModel: viewModel, compact: compact,
                       onMissingHeartRateTap: { showWatchHelp = true })
@@ -940,13 +940,13 @@ struct WorkoutScreen: View {
     }
 
     private func landscapeWorkout(size: CGSize) -> some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             VStack(spacing: 8) {
                 WorkoutRing(viewModel: viewModel,
-                            side: min(300, max(200, size.height - 64), size.width * 0.38))
+                            side: min(300, max(200, size.height - 64), size.width * 0.34))
                 IntervalTimelineBar(viewModel: viewModel)
             }
-            .frame(width: min(320, size.width * 0.38))
+            .frame(width: min(320, size.width * 0.34))
             VStack(spacing: 10) {
                 header
                 HRZoneBar(viewModel: viewModel, landscape: true,
@@ -1129,6 +1129,7 @@ struct HRZoneBar: View {
     var landscape = false
     var compact = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .largeTitle) private var readingSize: CGFloat = 60
 
     /// Invoked when the user taps the missing-heart-rate warning — the
@@ -1181,33 +1182,14 @@ struct HRZoneBar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if !compact {
-                HStack(alignment: .firstTextBaseline) {
-                    if let hr = viewModel.currentHeartRate {
-                        PulsingHeart(bpm: hr, size: 12)
-                            .id(Int((hr / 4).rounded()))
-                    } else {
-                        Image(systemName: "heart")
-                            .accessibilityHidden(true)
-                    }
-                    Text("HEART RATE")
-                        .font(.caption2.weight(.bold))
-                        .tracking(0.8)
-                    Spacer(minLength: 8)
-                    if let source = viewModel.heartRateSourceLabel, viewModel.currentHeartRate != nil {
-                        Label(source, systemImage: viewModel.heartRateSourceSymbol ?? "heart.fill")
-                            .font(.caption2)
-                            .lineLimit(1)
-                    }
-                }
-                .foregroundStyle(Palette.textSecondary)
-            }
+            heartRateHeader
 
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 16) {
+                HStack(spacing: 8) {
                     heartRateReading
                     Spacer(minLength: 0)
                     guidance
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     heartRateReading
@@ -1234,6 +1216,34 @@ struct HRZoneBar: View {
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
         }
+    }
+
+    private var heartRateHeader: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+        return layout {
+            HStack(alignment: .firstTextBaseline) {
+                if let hr = viewModel.currentHeartRate {
+                    PulsingHeart(bpm: hr, size: 12)
+                        .id(Int((hr / 4).rounded()))
+                } else {
+                    Image(systemName: "heart")
+                        .accessibilityHidden(true)
+                }
+                Text("CURRENT HEART RATE")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+            if !compact, let source = viewModel.heartRateSourceLabel, viewModel.currentHeartRate != nil {
+                Label(source, systemImage: viewModel.heartRateSourceSymbol ?? "heart.fill")
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+        }
+        .foregroundStyle(Palette.textSecondary)
     }
 
     private var heartRateReading: some View {
@@ -1269,21 +1279,29 @@ struct HRZoneBar: View {
 
     private var guidance: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if let targetRange {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TARGET BPM")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.5)
+                    Text("\(targetRange.lowerBound)–\(targetRange.upperBound)")
+                        .font((landscape ? Font.largeTitle : Font.title).weight(.bold))
+                        .fontDesign(.rounded)
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Target heart rate")
+                .accessibilityValue("\(targetRange.lowerBound) to \(targetRange.upperBound) beats per minute")
+                .accessibilityIdentifier("target-heart-rate")
+            }
             if viewModel.zoneVisualAlertsEnabled, let hr = viewModel.currentHeartRate,
                viewModel.currentZoneStatus(for: hr) != .noTarget {
                 let status = viewModel.currentZoneStatus(for: hr)
                 Label(cueText(status), systemImage: cueSymbol(status))
                     .font(.subheadline.weight(.heavy))
                     .foregroundStyle(status.tint ?? Palette.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let targetRange {
-                Text("TARGET")
-                    .font(.caption2.weight(.bold))
-                    .tracking(0.5)
-                Text("\(targetRange.lowerBound)–\(targetRange.upperBound) BPM")
-                    .font(.caption.weight(.semibold))
-                    .monospacedDigit()
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

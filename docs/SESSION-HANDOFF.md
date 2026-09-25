@@ -1,5 +1,12 @@
 # N4x4 — Session Handoff
 
+> **5.4 release preparation (2026-09-25):** Larger, higher-contrast workout
+> target heart-rate ranges in portrait and landscape, plus an always-visible
+> current-heart-rate heading and heart icon. See
+> [`SESSION-HANDOFF-2026-09-25-TARGET-HR.md`](SESSION-HANDOFF-2026-09-25-TARGET-HR.md).
+> Version is 5.4 in all six shipping configurations; App Store submission is
+> being prepared. The current public release is 5.3 until Apple approves 5.4.
+
 > **Current state (5.3, 2026-09-17):** Finish & Save, interrupted-session
 > recovery, continuous review saving, complete interval timelines and safer
 > Watch commands/imports. Read

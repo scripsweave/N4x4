@@ -1,0 +1,8 @@
+Your workout is easier to read at a glance.
+
+• Larger, brighter target heart-rate numbers in portrait and landscape.
+• A clear Current Heart Rate label and pulsing heart icon, including on smaller iPhones.
+• A larger countdown ring and timer text in portrait.
+• Improved spacing and support for larger text sizes.
+
+Thank you for your feedback—it helps make N4x4 better.
