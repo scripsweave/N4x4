@@ -1,12 +1,13 @@
 # N4x4 — Session Handoff
 
-> **5.5 release preparation (2026-09-27):** More resilient timestamped
-> Watch HR delivery and adaptive workout layouts for compact/larger screens.
+> **5.5 submitted (2026-09-27):** Adaptive Watch layouts and more resilient
+> live HR delivery, with refreshed App Store screenshots. Xcode Cloud build
+> **41** passed all three actions. App Store Connect is **Waiting for Review**
+> with automatic release after approval. Release commit `9b154d4`, tag `v5.5`.
 > Read [`SESSION-HANDOFF-2026-09-27-WATCH-HR.md`](SESSION-HANDOFF-2026-09-27-WATCH-HR.md)
-> first for test evidence and the physical-device check still needed.
-> Version is 5.5 in all six shipping configurations. New phone/Watch App Store
-> captures and release notes are prepared; verify Cloud and submission status
-> before claiming publication.
+> for implementation, validation and the physical-Watch test limitation.
+> Submission used the API automation successfully. Post-submission docs live
+> on `chore/5.5-submission-handoff` to avoid another main-branch Cloud delivery.
 
 > **Submission automation (2026-09-25):** API authentication is configured
 > on this Mac. See [`../AppStore/SUBMISSIONS.md`](../AppStore/SUBMISSIONS.md)

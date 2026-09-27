@@ -79,9 +79,12 @@ Four tests / 18 assertions cover wrong builds, partial version bumps, invalid
 builds, review drafts, and duplicate submission handling. The live read-only
 check verified 5.4 (40), `WAITING_FOR_REVIEW`, `AFTER_APPROVAL`. The repeat
 submission path was also checked against that same build without making
-changes. Creation and submission of a new version will receive its first
-live API verification on the next release; 5.4 was submitted through Safari
-before this automation was added.
+changes. Creation and submission received their first successful live verification
+on 2026-09-27: `AppStore/submit.sh 5.5 41 --submit` attached build 41, supplied
+the release notes and verified WAITING_FOR_REVIEW with AFTER_APPROVAL.
+The new screenshots were uploaded and verified separately before running the
+submission command (the lane deliberately preserves them). Version 5.4 was
+submitted through Safari before this automation was added.
 
 References: [fastlane deliver](https://docs.fastlane.tools/actions/deliver/),
 [API-key authentication](https://docs.fastlane.tools/app-store-connect-api/),

@@ -98,3 +98,28 @@ existing rotation test. Final Watch build passed:
 
 Release build/submission must be checked against the exact release commit and
 Cloud build; do not infer submission from a successful push or screenshot upload.
+
+## Submission verified — 2026-09-27
+
+- Release commit `9b154d46188ba40738a21e5a3517bf644ccfd2ff`, pushed to main;
+  GitHub release/tag: https://github.com/scripsweave/N4x4/releases/tag/v5.5
+- Xcode Cloud build **41**, run `10fd6d25-2d8d-4a8d-986b-445c12870829`,
+  automatically started from that exact commit. iOS build, Watch build and
+  iOS archive all succeeded. App Store build processing is VALID.
+- App Store version `0ce482e2-0e36-4d8e-ab4f-22aebf3261f6`: **WAITING_FOR_REVIEW**,
+  release type **AFTER_APPROVAL**. `AppStore/submit.sh 5.5 41 --submit`
+  completed successfully at 15:58 local time. This is submitted, not yet live.
+- Six phone + four Ultra screenshots verified COMPLETE, with matching source
+  checksums and numeric filename order; release notes verified. Screenshot
+  API upload can return COMPLETE before exposing sourceFileChecksum on the
+  returned object: re-fetch before treating that as a failed integrity check.
+- Final evidence: `/tmp/n4x4-5.5-submit.log`,
+  `/tmp/n4x4-5.5-verified.txt`, `/tmp/n4x4-5.5-cloud-actions.json`.
+- Screenshot review copy: `~/Desktop/N4x4 5.5 App Store Screenshots/index.html`.
+- fastlane precheck reported the existing copyright field lacks a year; it
+  was non-blocking and the review submission succeeded. No copyright metadata
+  was changed in this release.
+
+The documentation-only follow-up is on `chore/5.5-submission-handoff`. Do not
+merge/push it alone to main with 5.5: a main push triggers another delivery.
+Include it with the next version bump.
