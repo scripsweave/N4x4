@@ -239,6 +239,8 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     private var mirrorDismissed = false
     private var tickTimer: Timer?
     private var lastEnginePersist = Date.distantPast
+    /// Root-owned WorkoutManager supplies fresh HR without tying transport to a screen.
+    var onHeartRateRefreshRequested: (() -> Void)?
 
     /// Drives haptic nudges when the wearer drifts out of zone.
     private let zoneEngine = ZoneFeedbackEngine()
@@ -278,6 +280,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         tick()
         requestStateFromPhone()
         flushPendingWorkouts()
+        onHeartRateRefreshRequested?()
     }
 
     // MARK: - Commands (mode-aware)
@@ -645,6 +648,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             // screen (streak, plan) isn't stale from the last app context.
             self?.requestStateFromPhone()
             self?.flushPendingWorkouts()
+            self?.onHeartRateRefreshRequested?()
         }
     }
 
@@ -654,6 +658,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             if session.isReachable {
                 self?.requestStateFromPhone()
                 self?.flushPendingWorkouts()
+                self?.onHeartRateRefreshRequested?()
             }
         }
     }
@@ -676,6 +681,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     private func route(_ p: [String: Any]) {
         switch p[WatchMessageKey.messageType] as? String {
+        case WatchMessageKey.cmdRequestHeartRate: onHeartRateRefreshRequested?()
         case WatchMessageKey.stateSync:  applyStatePayload(p)
         case WatchMessageKey.workoutAck: handleAck(p)
         default: break

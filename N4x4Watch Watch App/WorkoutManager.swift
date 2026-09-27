@@ -15,6 +15,23 @@ final class WorkoutManager: NSObject, ObservableObject {
     private let healthStore = HKHealthStore()
     private var session: HKWorkoutSession?
     private var builder: HKLiveWorkoutBuilder?
+    private var isStopping = false
+
+    private lazy var heartRateDelivery = WatchHeartRateDelivery(
+        activated: { WCSession.isSupported() && WCSession.default.activationState == .activated },
+        reachable: { WCSession.default.isReachable },
+        send: { message, failed in
+            WCSession.default.sendMessage(message, replyHandler: nil) { error in
+                print("[WorkoutManager] HR send failed: \(error.localizedDescription)")
+                DispatchQueue.main.async { failed() }
+            }
+        },
+        saveContext: { message in
+            do { try WCSession.default.updateApplicationContext(message) }
+            catch { print("[WorkoutManager] HR context failed: \(error.localizedDescription)") }
+        },
+        retryLater: { retry in DispatchQueue.main.asyncAfter(deadline: .now() + 2) { retry() } }
+    )
 
     @Published var heartRate: Double = 0
     @Published var isSessionActive: Bool = false
@@ -61,6 +78,8 @@ final class WorkoutManager: NSObject, ObservableObject {
 
         do {
             session = try HKWorkoutSession(healthStore: healthStore, configuration: config)
+            isStopping = false
+            heartRateDelivery.reset()
             builder = session?.associatedWorkoutBuilder()
 
             session?.delegate = self
@@ -85,26 +104,17 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func stopWorkout() {
         guard isSessionActive else { return }
+        isStopping = true
+        heartRateDelivery.reset()
         session?.end()
         // isSessionActive flips to false via the delegate callback.
     }
 
     // MARK: - HR streaming to phone
 
-    private func streamHeartRate(_ bpm: Double) {
-        guard WCSession.isSupported(),
-              WCSession.default.activationState == .activated,
-              WCSession.default.isReachable else { return }
-
-        WCSession.default.sendMessage(
-            [
-                WatchMessageKey.messageType: WatchMessageKey.heartRate,
-                WatchMessageKey.hrBPM:       bpm,
-                WatchMessageKey.hrTimestamp: Date().timeIntervalSince1970,
-            ],
-            replyHandler: nil,
-            errorHandler: nil
-        )
+    func resendLatestHeartRate() {
+        guard isSessionActive, !isStopping else { return }
+        heartRateDelivery.resendLatest()
     }
 }
 
@@ -117,14 +127,16 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                         from fromState: HKWorkoutSessionState,
                         date: Date) {
         DispatchQueue.main.async {
+            // Discard even a superseded session: ignoring its late callback
+            // must not let watchOS save a second workout to Health.
+            if toState == .ended {
+                workoutSession.associatedWorkoutBuilder().discardWorkout()
+            }
+            guard workoutSession === self.session else { return }
             self.isSessionActive = (toState == .running)
             if toState == .ended {
+                self.heartRateDelivery.reset()
                 self.heartRate = 0
-                // Never save from here — merely ending the session is NOT
-                // enough, watchOS finalizes the collected data as a workout,
-                // duplicating the phone's manual HealthKit save (the single
-                // workout record). Discard explicitly, like the phone manager.
-                self.builder?.discardWorkout()
                 self.builder = nil
                 self.session = nil
             }
@@ -135,8 +147,11 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                         didFailWithError error: Error) {
         print("[WorkoutManager] session error: \(error)")
         DispatchQueue.main.async {
+            workoutSession.associatedWorkoutBuilder().discardWorkout()
+            guard workoutSession === self.session else { return }
             self.isSessionActive = false
-            self.builder?.discardWorkout()
+            self.heartRate = 0
+            self.heartRateDelivery.reset()
             self.builder = nil
             self.session = nil
         }
@@ -156,14 +171,16 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
               collectedTypes.contains(hrType) else { return }
 
         let unit = HKUnit.count().unitDivided(by: .minute())
-        guard let bpm = workoutBuilder
-                .statistics(for: hrType)?
-                .mostRecentQuantity()?
-                .doubleValue(for: unit) else { return }
+        guard let statistics = workoutBuilder.statistics(for: hrType),
+              let bpm = statistics.mostRecentQuantity()?.doubleValue(for: unit),
+              let measuredAt = statistics.mostRecentQuantityDateInterval()?.end else { return }
+        let sample = WatchHeartRateSample(bpm: bpm, measuredAt: measuredAt)
 
         DispatchQueue.main.async { [weak self] in
-            self?.heartRate = bpm
-            self?.streamHeartRate(bpm)
+            guard let self, workoutBuilder === self.builder, !self.isStopping,
+                  sample.isFresh(at: Date()) else { return }
+            self.heartRate = bpm
+            self.heartRateDelivery.receive(sample)
         }
     }
 }

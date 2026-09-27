@@ -24,6 +24,19 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             && WCSession.default.isWatchAppInstalled
     }
 
+    /// Recover a fresh reading immediately when the phone returns or reconnects.
+    /// Stored context is latest-only and is validated using the sample's date.
+    func refreshHeartRate() {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        timerViewModel?.ingestWatchHeartRate(WCSession.default.receivedApplicationContext)
+        guard WCSession.default.isReachable else { return }
+        WCSession.default.sendMessage(
+            [WatchMessageKey.messageType: WatchMessageKey.cmdRequestHeartRate],
+            replyHandler: nil,
+            errorHandler: { error in print("[PhoneSessionManager] HR refresh failed: \(error.localizedDescription)") }
+        )
+    }
+
     // MARK: - Send state to Watch
 
     func sendStateUpdate(to vm: TimerViewModel) {
@@ -112,6 +125,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let vm = self?.timerViewModel else { return }
             self?.sendStateUpdate(to: vm)
+            self?.refreshHeartRate()
         }
     }
 
@@ -123,6 +137,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     /// Fired when live reachability changes (Watch app foregrounded/backgrounded).
     func sessionReachabilityDidChange(_ session: WCSession) {
         refreshWatchState()
+        DispatchQueue.main.async { [weak self] in self?.refreshHeartRate() }
     }
 
     /// Read the current WCSession flags and push them to the view model so the UI
@@ -148,6 +163,13 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         DispatchQueue.main.async { [weak self] in self?.handle(message) }
+    }
+
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        // The Watch uses context only for latest HR, never for queued commands.
+        DispatchQueue.main.async { [weak self] in
+            self?.timerViewModel?.ingestWatchHeartRate(applicationContext)
+        }
     }
 
     func session(_ session: WCSession,
@@ -186,9 +208,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
         case WatchMessageKey.cmdRequestState:
             sendStateUpdate(to: vm)
         case WatchMessageKey.heartRate:
-            if let bpm = message[WatchMessageKey.hrBPM] as? Double {
-                vm.ingestHeartRate(bpm, from: .watch)
-            }
+            vm.ingestWatchHeartRate(message)
         case WatchMessageKey.workoutCompleted:
             handleCompletedWatchWorkout(message, vm: vm)
         case WatchMessageKey.workoutDiscard:

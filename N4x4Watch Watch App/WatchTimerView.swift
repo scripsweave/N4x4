@@ -1,7 +1,7 @@
 // WatchTimerView.swift
 // Active-workout UI, mirroring the phone's WorkoutScreen: a "ROUND 2 OF 4"
 // header, the neon countdown ring (time, phase, live zone-coloured HR) with
-// the Speed Up / Slow Down cue beneath, then a second vertical page with the
+// the coaching cue inside (compact) or below (spacious), then a second page with the
 // plan timeline and PAUSE / SKIP / END controls (END and skip-out-of-cooldown
 // confirm, like the phone). Works identically for phone-led and Watch-led
 // workouts; the header badge says which, and controls go quiet when a
@@ -33,11 +33,13 @@ struct WatchTimerView: View {
     private var offline: Bool { sessionManager.isProjectingOffline }
 
     var body: some View {
-        TabView(selection: $page) {
-            ringPage.tag(0)
-            controlsPage.tag(1)
+        GeometryReader { geometry in
+            TabView(selection: $page) {
+                ringPage(size: geometry.size, bottomInset: geometry.safeAreaInsets.bottom).tag(0)
+                controlsPage.tag(1)
+            }
+            .tabViewStyle(.verticalPage)
         }
-        .tabViewStyle(.verticalPage)
         .alert(offline ? "Stop showing this workout?" : "Finish workout?", isPresented: $showEndAlert) {
             Button(offline ? "Stop Showing" : "Finish & Save") { sessionManager.endWorkout(for: finishingWorkoutID) }
             if !offline {
@@ -57,46 +59,47 @@ struct WatchTimerView: View {
 
     // MARK: - Page 1: ring
 
-    private var ringPage: some View {
-        GeometryReader { geo in
-            let side = min(geo.size.width * 0.76, geo.size.height * 0.72)
-            // TimelineView drives a smooth 1 s countdown (a plain
-            // Timer.publish is throttled to ~5 s on watchOS).
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let remaining = state.timeRemaining(asOf: context.date)
-                let progress = state.progressValue(asOf: context.date)
-                VStack(spacing: 0) {
-                    HStack(spacing: 4) {
-                        Text(headerText)
-                            .font(.system(size: 11, weight: .heavy))
-                            .foregroundStyle(WatchPalette.electricBlue)
-                            .tracking(0.8)
-                        modeBadge
-                    }
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-
-                    Spacer(minLength: 2)
-
-                    NeonRing(side: side,
-                             progress: progress,
-                             glow: AnyShapeStyle(phaseColor),
-                             glowColor: phaseColor,
-                             showDot: true,
-                             animates: true,
-                             dimmed: !state.isRunning) {
-                        ringCenter(remaining: remaining, side: side)
-                    }
-
-                    Spacer(minLength: 2)
-
-                    cueRow
-                        .frame(height: 16)
+    private func ringPage(size: CGSize, bottomInset: CGFloat) -> some View {
+        // The passive workout display can use the lower screen area. Keep
+        // controls on their separate page within the normal safe area.
+        let compact = size.width < 184
+        let height = size.height + max(0, bottomInset - 8)
+        let footer: CGFloat = compact ? 0 : 20
+        let side = max(0, min(size.width - 4, height - 16 - footer))
+        return TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    Text(headerText)
+                        .font(.system(size: compact ? 10 : 12, weight: .heavy))
+                        .foregroundStyle(WatchPalette.electricBlue)
+                        .tracking(0.8)
+                    modeBadge
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(height: 16)
+
+                NeonRing(side: side,
+                         progress: state.progressValue(asOf: context.date),
+                         glow: AnyShapeStyle(phaseColor),
+                         glowColor: phaseColor,
+                         showDot: true,
+                         animates: true,
+                         dimmed: !state.isRunning) {
+                    ringCenter(remaining: state.timeRemaining(asOf: context.date),
+                               side: side, compact: compact)
+                }
+                .frame(maxHeight: .infinity)
+
+                if !compact {
+                    cueRow()
+                        .frame(height: footer)
+                }
             }
+            .frame(width: size.width, height: height)
+            // Keep the header in the safe area as the ring grows downwards.
+            .frame(height: size.height, alignment: .top)
         }
-        .padding(.horizontal, 6)
     }
 
     /// Ring centre, same stack as the phone: countdown, phase (or PAUSED),
@@ -104,16 +107,20 @@ struct WatchTimerView: View {
     /// (shared mapping: orange = too low, red = too high, green = in zone).
     /// Before the first reading the slot shows an outline heart and "--" so
     /// the layout doesn't jump when HR arrives, and it's clear HR is expected.
-    private func ringCenter(remaining: TimeInterval, side: CGFloat) -> some View {
+    private func ringCenter(remaining: TimeInterval, side: CGFloat, compact: Bool) -> some View {
         let hr = workoutManager.heartRate
-        return VStack(spacing: side * 0.005) {
+        // Tighten the fonts' line boxes, leaving clear space between the
+        // visible glyphs and the curved inner edge at the top and bottom.
+        return VStack(spacing: -side * 0.035) {
             Text(watchTimeString(remaining))
-                .font(.system(size: side * 0.21, weight: .heavy, design: .rounded))
+                .font(.system(size: side * 0.20, weight: .heavy, design: .rounded))
                 .foregroundStyle(WatchPalette.textPrimary)
                 .monospacedDigit()
+                .accessibilityLabel("Time remaining")
+                .accessibilityValue(watchTimeString(remaining))
 
             Text(state.isRunning ? state.phase.watchLabel : "PAUSED")
-                .font(.system(size: side * 0.085, weight: .heavy))
+                .font(.system(size: side * 0.075, weight: .heavy))
                 .foregroundStyle(state.isRunning ? phaseColor : WatchPalette.amber)
                 .tracking(0.8)
 
@@ -132,11 +139,28 @@ struct WatchTimerView: View {
                         .foregroundStyle(WatchPalette.textTertiary)
                 }
             }
-            .font(.system(size: side * 0.15, weight: .heavy, design: .rounded))
+            .font(.system(size: side * 0.20, weight: .heavy, design: .rounded))
             .monospacedDigit()
             .padding(.top, side * 0.015)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Heart rate")
+            .accessibilityValue(hr > 0 ? "\(Int(hr)) beats per minute" : "Waiting for reading")
+
+            if compact {
+                cueRow(compact: true)
+                    .frame(maxWidth: side * 0.56)
+                    .frame(height: 13)
+                    .padding(.top, 2)
+            } else if hasTarget {
+                Text("TARGET \(state.hrLow)–\(state.hrHigh)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(WatchPalette.textSecondary)
+                    .monospacedDigit()
+                    .frame(maxWidth: side * 0.56)
+                    .padding(.top, 2)
+            }
         }
-        .frame(maxWidth: side * 0.74)
+        .frame(maxWidth: side * 0.70)
         .lineLimit(1)
         .minimumScaleFactor(0.6)
     }
@@ -169,23 +193,23 @@ struct WatchTimerView: View {
 
     /// Live coaching cue (same copy, icons and colours as the phone). Without
     /// a reading the target range takes the slot so it's still visible.
-    @ViewBuilder private var cueRow: some View {
+    @ViewBuilder private func cueRow(compact: Bool = false) -> some View {
         let hr = workoutManager.heartRate
         let status = sessionManager.zoneStatus(bpm: hr)
-        if hr > 0, status != .noTarget {
+        if state.isRunning, hr > 0, status != .noTarget {
             let cue = cueStyle(status)
             HStack(spacing: 4) {
                 Image(systemName: cue.icon)
-                    .font(.system(size: 12, weight: .heavy))
+                    .font(.system(size: compact ? 10 : 12, weight: .heavy))
                 Text(cue.text)
-                    .font(.system(size: 13, weight: .heavy))
-                    .tracking(1)
+                    .font(.system(size: compact ? 10 : 13, weight: .heavy))
+                    .tracking(compact ? 0.5 : 1)
             }
             .foregroundStyle(cue.color)
             .animation(.easeInOut(duration: 0.3), value: status)
         } else if hasTarget {
-            Text("TARGET \(state.hrLow)–\(state.hrHigh) BPM")
-                .font(.system(size: 10, weight: .semibold))
+            Text(compact ? "ZONE \(state.hrLow)–\(state.hrHigh)" : (state.isRunning ? "WAITING FOR HR" : ""))
+                .font(.system(size: compact ? 9 : 10, weight: .semibold))
                 .foregroundStyle(WatchPalette.textTertiary)
                 .tracking(0.5)
                 .monospacedDigit()

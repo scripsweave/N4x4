@@ -5,6 +5,154 @@
 import XCTest
 @testable import N4x4
 
+final class WatchHeartRateStreamTests: XCTestCase {
+    private let t0 = Date(timeIntervalSince1970: 1_000)
+
+    private func sample(_ bpm: Double = 160, seconds: Double = 0) -> WatchHeartRateSample {
+        WatchHeartRateSample(bpm: bpm, measuredAt: t0.addingTimeInterval(seconds))
+    }
+
+    private final class Transport {
+        var now = Date(timeIntervalSince1970: 1_000)
+        var activated = true
+        var reachable = true
+        var sent: [[String: Any]] = []
+        var contexts: [[String: Any]] = []
+        var failures: [() -> Void] = []
+        var retries: [() -> Void] = []
+        lazy var delivery = WatchHeartRateDelivery(
+            now: { [unowned self] in now },
+            activated: { [unowned self] in activated },
+            reachable: { [unowned self] in reachable },
+            send: { [unowned self] message, failed in sent.append(message); failures.append(failed) },
+            saveContext: { [unowned self] in contexts.append($0) },
+            retryLater: { [unowned self] in retries.append($0) }
+        )
+    }
+
+    func testUnavailableLinkKeepsOnlyLatestSampleAndResendsWhenReachable() {
+        let transport = Transport()
+        transport.reachable = false
+        transport.delivery.receive(sample())
+        transport.now = t0.addingTimeInterval(3)
+        transport.delivery.receive(sample(166, seconds: 3))
+        XCTAssertTrue(transport.sent.isEmpty)
+        XCTAssertEqual(WatchHeartRateSample(message: transport.contexts.last!), sample(166, seconds: 3))
+        transport.reachable = true
+        transport.delivery.resendLatest()
+        XCTAssertEqual(transport.sent.count, 1)
+        XCTAssertEqual(WatchHeartRateSample(message: transport.sent[0]), sample(166, seconds: 3))
+    }
+
+    func testSendFailureFallsBackAndRetriesOnceWithOriginalTimestamp() {
+        let transport = Transport()
+        transport.delivery.receive(sample())
+        transport.failures[0]()
+        XCTAssertEqual(transport.contexts.count, 1)
+        XCTAssertEqual(transport.retries.count, 1)
+        transport.now = t0.addingTimeInterval(2)
+        transport.retries[0]()
+        XCTAssertEqual(transport.sent.count, 2)
+        XCTAssertEqual(WatchHeartRateSample(message: transport.sent[1]), sample())
+        transport.failures[1]()
+        XCTAssertEqual(transport.retries.count, 1, "A persistent failure must not spin forever")
+    }
+
+    func testLateFailureAndRetryCannotReplaceANewerSample() {
+        let transport = Transport()
+        transport.delivery.receive(sample())
+        transport.failures[0]()
+        transport.now = t0.addingTimeInterval(3)
+        transport.delivery.receive(sample(166, seconds: 3))
+        transport.retries[0]()
+        transport.failures[0]()
+        XCTAssertEqual(transport.sent.count, 2)
+        XCTAssertEqual(transport.contexts.count, 1)
+        XCTAssertEqual(WatchHeartRateSample(message: transport.sent.last!), sample(166, seconds: 3))
+    }
+
+    func testResetCancelsPendingRetryAndLateFailure() {
+        let transport = Transport()
+        transport.delivery.receive(sample())
+        transport.failures[0]()
+        transport.delivery.reset()
+        transport.retries[0]()
+        transport.failures[0]()
+        transport.delivery.resendLatest()
+        XCTAssertEqual(transport.sent.count, 1)
+        XCTAssertEqual(transport.contexts.count, 1)
+    }
+
+    func testStaleSampleIsNotRetriedOrResentAfterReconnection() {
+        let transport = Transport()
+        transport.delivery.receive(sample())
+        transport.failures[0]()
+        transport.now = t0.addingTimeInterval(10)
+        transport.retries[0]()
+        transport.delivery.resendLatest()
+        transport.failures[0]()
+        XCTAssertEqual(transport.sent.count, 1)
+        XCTAssertEqual(transport.contexts.count, 1)
+    }
+
+    func testActivationAndUnchangedBPMStillDeliverFreshSamples() {
+        let transport = Transport()
+        transport.activated = false
+        transport.delivery.receive(sample())
+        XCTAssertTrue(transport.sent.isEmpty)
+        XCTAssertTrue(transport.contexts.isEmpty)
+        transport.activated = true
+        transport.delivery.resendLatest()
+        transport.now = t0.addingTimeInterval(4)
+        transport.delivery.receive(sample(seconds: 4))
+        XCTAssertEqual(transport.sent.count, 2, "Equal BPM with a new measurement date is a fresh reading")
+    }
+
+    func testInboxRejectsDuplicatesOlderSamplesAndExpiredContext() {
+        var inbox = WatchHeartRateInbox()
+        let now = t0.addingTimeInterval(5)
+        XCTAssertNotNil(inbox.accept(sample(seconds: 3).message, now: now))
+        XCTAssertNil(inbox.accept(sample(seconds: 3).message, now: now))
+        XCTAssertNil(inbox.accept(sample(seconds: 2).message, now: now))
+        XCTAssertNil(inbox.accept(sample(seconds: 4).message, now: t0.addingTimeInterval(20)))
+        XCTAssertNotNil(inbox.accept(sample(seconds: 5).message, now: now))
+    }
+
+    func testInboxRejectsMissingTimestampFutureDateAndInvalidBPM() {
+        var inbox = WatchHeartRateInbox()
+        var missing = sample().message
+        missing.removeValue(forKey: WatchMessageKey.hrTimestamp)
+        XCTAssertNil(inbox.accept(missing, now: t0))
+        XCTAssertNil(inbox.accept(sample(seconds: 60).message, now: t0))
+        for bpm in [Double.nan, Double.infinity, 0, -10, 100_000] {
+            XCTAssertNil(inbox.accept(sample(bpm).message, now: t0))
+        }
+    }
+
+    func testDelayedDeliveryDoesNotExtendExpiryOrOverridePriority() {
+        var inbox = WatchHeartRateInbox()
+        var aggregator = HeartRateAggregator()
+        let now = t0.addingTimeInterval(8)
+        let received = inbox.accept(sample().message, now: now)!
+        XCTAssertEqual(aggregator.ingest(bpm: received.bpm, from: .watch, at: received.measuredAt, now: now), 160)
+        XCTAssertEqual(aggregator.timeUntilNextExpiry(now: now), 2)
+        XCTAssertNil(aggregator.currentValue(now: t0.addingTimeInterval(10)))
+        _ = aggregator.ingest(bpm: 170, from: .bluetooth, at: now)
+        XCTAssertEqual(aggregator.ingest(bpm: 160, from: .watch, at: now), 170)
+    }
+
+    func testDeliveryAndInboxRecoverAfterClockMovesBackwards() {
+        let transport = Transport()
+        var inbox = WatchHeartRateInbox()
+        transport.delivery.receive(sample())
+        XCTAssertNotNil(inbox.accept(transport.sent[0], now: t0))
+        transport.now = t0.addingTimeInterval(-60)
+        transport.delivery.receive(sample(seconds: -60))
+        XCTAssertEqual(transport.sent.count, 2)
+        XCTAssertNotNil(inbox.accept(transport.sent[1], now: transport.now))
+    }
+}
+
 final class HeartRateMeasurementParserTests: XCTestCase {
 
     // MARK: - Value formats

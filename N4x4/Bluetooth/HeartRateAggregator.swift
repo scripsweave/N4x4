@@ -76,9 +76,14 @@ struct HeartRateAggregator {
     // MARK: - Ingestion
 
     /// Record a sample and return the value to display right now.
-    mutating func ingest(bpm: Double, from source: Source, at now: Date) -> Double? {
-        samples[source] = (bpm, now)
-        return currentValue(now: now)
+    mutating func ingest(bpm: Double, from source: Source, at sampledAt: Date, now: Date? = nil) -> Double? {
+        samples[source] = (bpm, sampledAt)
+        return currentValue(now: now ?? sampledAt)
+    }
+
+    /// Schedule expiry from the measurement, not from a delayed delivery.
+    func timeUntilNextExpiry(now: Date) -> TimeInterval? {
+        samples.values.map { max(0, freshnessWindow - max(0, now.timeIntervalSince($0.at))) }.min()
     }
 
     /// The value to display: the highest-priority live source, or nil when all

@@ -983,6 +983,7 @@ class TimerViewModel: ObservableObject {
     /// Arbitrates between sources: Bluetooth wins when live, Watch fills in,
     /// stale sources age out (see HeartRateAggregator for the policy).
     private var heartRateAggregator = HeartRateAggregator()
+    private var watchHeartRateInbox = WatchHeartRateInbox()
 
     // MARK: - Phone workout session (AirPods HR, iOS 26+)
 
@@ -2831,8 +2832,14 @@ class TimerViewModel: ObservableObject {
                                targetLo: d.lo, targetHi: d.hi, at: offset)
     }
 
-    func ingestHeartRate(_ bpm: Double, from source: HeartRateAggregator.Source) {
-        currentHeartRate = heartRateAggregator.ingest(bpm: bpm, from: source, at: Date())
+    func ingestWatchHeartRate(_ message: [String: Any], now: Date = Date()) {
+        guard let sample = watchHeartRateInbox.accept(message, now: now) else { return }
+        ingestHeartRate(sample.bpm, from: .watch, sampledAt: min(sample.measuredAt, now), now: now)
+    }
+
+    func ingestHeartRate(_ bpm: Double, from source: HeartRateAggregator.Source,
+                         sampledAt: Date? = nil, now: Date = Date()) {
+        currentHeartRate = heartRateAggregator.ingest(bpm: bpm, from: source, at: sampledAt ?? now, now: now)
         scheduleHeartRateStalenessSweep()
         if let displayed = currentHeartRate {
             evaluateZoneVoiceFeedback(bpm: displayed)
@@ -2851,6 +2858,7 @@ class TimerViewModel: ObservableObject {
     /// works outside workouts too (when tick() isn't running).
     private func scheduleHeartRateStalenessSweep() {
         heartRateStalenessWork?.cancel()
+        guard let delay = heartRateAggregator.timeUntilNextExpiry(now: Date()) else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.currentHeartRate = self.heartRateAggregator.currentValue(now: Date())
@@ -2860,7 +2868,7 @@ class TimerViewModel: ObservableObject {
         }
         heartRateStalenessWork = work
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + heartRateAggregator.freshnessWindow + 0.5,
+            deadline: .now() + delay + 0.05,
             execute: work
         )
     }
@@ -3553,6 +3561,7 @@ class TimerViewModel: ObservableObject {
         // If a remembered Bluetooth monitor hit its connect-retry cap while we
         // were backgrounded, give it a fresh start.
         bleHeartRateManager.reconnectIfNeeded()
+        phoneSessionManager.refreshHeartRate()
     }
 
     func openAppSettings() {

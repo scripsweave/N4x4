@@ -30,6 +30,9 @@ struct N4x4WatchApp: App {
                         demo.apply(to: sessionManager, workoutManager)
                         return
                     }
+                    sessionManager.onHeartRateRefreshRequested = { [weak workoutManager] in
+                        workoutManager?.resendLatestHeartRate()
+                    }
                     sessionManager.activate()
                     workoutManager.requestAuthorization { _ in }
                     workoutManager.discardAbandonedSession()
@@ -199,7 +202,13 @@ struct WatchDemoState {
             s.hrHigh = 172
             s.intervalEndTime = Date().addingTimeInterval(151)
             s.reportedTimeRemaining = 151
-            workout.heartRate = 148
+            let arguments = ProcessInfo.processInfo.arguments
+            if let index = arguments.firstIndex(of: "-demoHeartRate"), index + 1 < arguments.count,
+               let bpm = Double(arguments[index + 1]), bpm.isFinite, (0...300).contains(bpm) {
+                workout.heartRate = bpm
+            } else {
+                workout.heartRate = 148
+            }
         case .complete:
             s.sessionStarted = true
             s.workoutComplete = true

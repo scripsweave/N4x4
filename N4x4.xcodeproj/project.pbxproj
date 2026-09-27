@@ -29,6 +29,7 @@
 		3DF13A802C94D28B00DD18E7 /* alarm.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 3DF13A7F2C94D28B00DD18E7 /* alarm.mp3 */; };
 		3DFEED000000000000000A01 /* HomeWorkoutRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DFEED000000000000000A02 /* HomeWorkoutRedesign.swift */; };
 		5EA1000000000000000000B1 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F1 /* WatchMessage.swift */; };
+		5EA2000000000000000000B1 /* WatchHeartRateStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA2000000000000000000F1 /* WatchHeartRateStream.swift */; };
 		5EA1000000000000000000B2 /* ZoneFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F2 /* ZoneFeedback.swift */; };
 		5EA1000000000000000000B3 /* ZoneFeedbackStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */; };
 		5EA1000000000000000000B4 /* PhoneSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F4 /* PhoneSessionManager.swift */; };
@@ -38,6 +39,7 @@
 		5EA1000000000000000000C6 /* WatchWorkoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F6 /* WatchWorkoutEngine.swift */; };
 		5EA1000000000000000000D1 /* WatchStandaloneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F8 /* WatchStandaloneTests.swift */; };
 		5EA1000000000000000000C1 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F1 /* WatchMessage.swift */; };
+		5EA2000000000000000000C1 /* WatchHeartRateStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA2000000000000000000F1 /* WatchHeartRateStream.swift */; };
 		5EA1000000000000000000C2 /* ZoneFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F2 /* ZoneFeedback.swift */; };
 		5EA1000000000000000000C3 /* ZoneFeedbackStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */; };
 		5EA1000000000000000000C4 /* Interval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DF13A6E2C938A4F00DD18E7 /* Interval.swift */; };
@@ -147,6 +149,7 @@
 		55D2367A38B64576AC4EEB00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5739937EF07648BE8983755B /* SpeechManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechManager.swift; sourceTree = "<group>"; };
 		5EA1000000000000000000F1 /* WatchMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessage.swift; sourceTree = "<group>"; };
+		5EA2000000000000000000F1 /* WatchHeartRateStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchHeartRateStream.swift; sourceTree = "<group>"; };
 		5EA1000000000000000000F2 /* ZoneFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneFeedback.swift; sourceTree = "<group>"; };
 		5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoneFeedbackStyle.swift; sourceTree = "<group>"; };
 		5EA1000000000000000000F4 /* PhoneSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneSessionManager.swift; sourceTree = "<group>"; };
@@ -311,6 +314,7 @@
 			isa = PBXGroup;
 			children = (
 				5EA1000000000000000000F1 /* WatchMessage.swift */,
+				5EA2000000000000000000F1 /* WatchHeartRateStream.swift */,
 				5EA1000000000000000000F2 /* ZoneFeedback.swift */,
 				5EA1000000000000000000F3 /* ZoneFeedbackStyle.swift */,
 				5EA1000000000000000000F6 /* WatchWorkoutEngine.swift */,
@@ -536,6 +540,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5EA1000000000000000000C1 /* WatchMessage.swift in Sources */,
+				5EA2000000000000000000C1 /* WatchHeartRateStream.swift in Sources */,
 				5EA1000000000000000000C2 /* ZoneFeedback.swift in Sources */,
 				5EA1000000000000000000C3 /* ZoneFeedbackStyle.swift in Sources */,
 				5EA1000000000000000000C4 /* Interval.swift in Sources */,
@@ -569,6 +574,7 @@
 				CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */,
 				F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */,
 				5EA1000000000000000000B1 /* WatchMessage.swift in Sources */,
+				5EA2000000000000000000B1 /* WatchHeartRateStream.swift in Sources */,
 				5EA1000000000000000000B2 /* ZoneFeedback.swift in Sources */,
 				5EA1000000000000000000B3 /* ZoneFeedbackStyle.swift in Sources */,
 				5EA1000000000000000000B4 /* PhoneSessionManager.swift in Sources */,

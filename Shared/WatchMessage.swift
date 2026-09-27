@@ -18,6 +18,8 @@ enum WatchMessageKey {
     static let cmdDiscard           = "cmd_discard"
     static let cmdDeleteCompleted   = "cmd_deleteCompleted"
     static let cmdRequestState      = "request_state"
+    // Phone → Watch: resend the latest still-fresh sensor sample.
+    static let cmdRequestHeartRate  = "request_heart_rate"
 
     // ── State sync payload: Phone → Watch ────────────────────
     static let stateSync            = "state_sync"

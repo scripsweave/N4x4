@@ -288,6 +288,17 @@ To verify:
   tightest screen. Relaunching with no arguments after `local` proves the
   Watch-led workout restores from disk.
 
+- **Live Watch HR uses timestamped, latest-only delivery.**
+  `Shared/WatchHeartRateStream.swift` owns retry/inbox policy; never queue live
+  HR with `transferUserInfo` or replace measurement dates with arrival dates.
+  Reconnect/foreground may resend only fresh samples. Phone messages and
+  application context enter `TimerViewModel.ingestWatchHeartRate`, then the
+  usual source aggregator. Regression tests: `WatchHeartRateStreamTests`.
+- **Workout layout adapts to available width.** Compact screens place the cue
+  inside the ring; wider screens show it below and keep the target visible.
+  Keep controls within their safe area. DEBUG `-demoHeartRate 0` exercises
+  the waiting state alongside `-demoState workout`.
+
 ## Standalone Watch workouts (4.18+)
 
 - **Who leads is decided at START, never mid-workout.** Phone reachable →
