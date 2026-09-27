@@ -130,11 +130,13 @@ struct WatchCompleteView: View {
 
                 Text(isLocal ? (record?.endedEarly == true ? "WORKOUT SAVED" : "WORKOUT COMPLETE")
                      : (sessionManager.timerState.workoutSaved ? "WORKOUT SAVED" : "TIMER FINISHED"))
-                    .font(.system(size: 13, weight: .heavy))
-                    .tracking(1)
+                    .font(.system(size: 12, weight: .heavy))
+                    .tracking(0.5)
                     .foregroundStyle(WatchPalette.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 4)
 
                 if isLocal {
                     localSummary

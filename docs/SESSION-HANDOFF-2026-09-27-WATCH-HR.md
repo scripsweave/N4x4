@@ -1,6 +1,7 @@
 # Watch heart-rate delivery and adaptive workout screen
 
-Branch: `fix/watch-heart-rate-and-layout`. Unreleased; version remains 5.4.
+Release 5.5 prepared on `fix/watch-heart-rate-and-layout`; the user authorized
+screenshots, versioning and App Store submission on 2026-09-27.
 The branch includes the preceding App Store submission automation commit.
 Do not push main without a new version: Xcode Cloud delivers every main push.
 
@@ -73,3 +74,27 @@ radio delivery, background HealthKit callbacks, or the user's iOS 27 setup.
 
 Apple transport reference:
 https://developer.apple.com/documentation/watchconnectivity/wcsession
+
+## 5.5 release preparation
+
+All six shipping configurations are 5.5. Xcode Cloud supplies the build number.
+The completion heading also gained a narrower, centered layout after screenshot
+review found clipping. Phone Home/Workout/History and all Watch states were
+captured from the current app; source images are in AppStore/raw-phone and
+AppStore/raw-watch. Cards 03/06 use the regenerated framed Watch. All 28 upload
+PNGs are RGB. Upload the six 6.7-inch phone cards and four 410×502 Ultra shots,
+ordered by filename, to the existing en-US slots. Release notes:
+AppStore/release-notes-5.5.txt.
+
+Final portrait capture tests passed (including actual 166 BPM accessibility
+value and a clean History without recovery notices):
+/tmp/N4x4-5.5-final-captures.xcresult and
+/tmp/N4x4-5.5-history-captures.xcresult. Temporary capture tests were removed.
+An earlier rotation capture hit the existing simulator accessibility frame
+assertion (reading had a zero-sized frame despite being hittable); the direct
+portrait flow and screenshot inspection passed. No change was made to that
+existing rotation test. Final Watch build passed:
+/tmp/N4x4-5.5-watch-final.log. Release-tool tests: 4 tests, 18 assertions passed.
+
+Release build/submission must be checked against the exact release commit and
+Cloud build; do not infer submission from a successful push or screenshot upload.

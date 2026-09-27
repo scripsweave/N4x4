@@ -1,0 +1,6 @@
+A clearer workout at a glance, on every Apple Watch size.
+
+• Larger countdown and heart-rate displays, with layouts that adapt to your Watch screen.
+• More space between the workout text and ring, plus a visible target range on larger displays.
+• Improved heart-rate reconnection between Apple Watch and iPhone after interruptions or returning to the app.
+• Paused workouts no longer show speed-up or slow-down cues.

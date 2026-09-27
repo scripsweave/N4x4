@@ -1,10 +1,12 @@
 # N4x4 — Session Handoff
 
-> **Watch feedback fixes (2026-09-27, unreleased):** More resilient timestamped
+> **5.5 release preparation (2026-09-27):** More resilient timestamped
 > Watch HR delivery and adaptive workout layouts for compact/larger screens.
 > Read [`SESSION-HANDOFF-2026-09-27-WATCH-HR.md`](SESSION-HANDOFF-2026-09-27-WATCH-HR.md)
 > first for test evidence and the physical-device check still needed.
-> Branch: `fix/watch-heart-rate-and-layout`; version remains 5.4.
+> Version is 5.5 in all six shipping configurations. New phone/Watch App Store
+> captures and release notes are prepared; verify Cloud and submission status
+> before claiming publication.
 
 > **Submission automation (2026-09-25):** API authentication is configured
 > on this Mac. See [`../AppStore/SUBMISSIONS.md`](../AppStore/SUBMISSIONS.md)

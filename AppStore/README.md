@@ -14,11 +14,14 @@ Two sizes are provided; upload the set that matches the App Store Connect slot:
 
 The 6.7" set is a straight resize of the 6.9" set (same composition).
 
-**Alpha-channel caveat:** Apple's spec forbids alpha channels in screenshots,
-and the composed cards `01/02/04` currently carry one (both sizes; the Chrome-
-rendered cards and all watch shots are clean). These renders haven't been
-through an upload yet — if ASC rejects with a transparency error, flatten with
-`magick in.png -alpha off out.png` (or Pillow `convert("RGB")`).
+All upload-ready PNGs are RGB with no alpha channel. Preserve this when
+regenerating them; Apple rejects screenshot transparency.
+
+The 5.5 refresh uses current simulator captures for Home, Workout, History and
+all Watch screens. The framed Watch asset and phone cards 03/06 were regenerated.
+`make-phone-capture.py CARD.png RAW.png` replaces a phone card's screen while
+retaining its existing headline/frame and updating the 6.7-inch copy. Source
+phone captures are kept in `raw-phone/`. Screenshot data is synthetic.
 
 | File | Caption |
 |------|---------|
@@ -70,9 +73,10 @@ no device frame and no caption/marketing text** (that lives on the phone card
 shipped UI, not HTML mockups, so the listing can't drift from the app.
 
 One numbered set per slot; upload the **`ultra-410x502/`** set (per Apple's
-specifications, checked 2026-07-22, 410×502 is the accepted size for Ultra
-1/2/3 — the Ultra 3's physical 422×514 is not an upload size). The other
-folders exist for the optional per-size slots.
+specifications, rechecked 2026-09-27, both 410×502 and 422×514 are accepted).
+We retain 410×502 for the listing's existing `APP_WATCH_ULTRA` slot. The other
+folders are retained as alternate sizes. Apple's reference:
+https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications
 
 | Folder | Size | ASC slot |
 |--------|------|----------|
@@ -85,7 +89,7 @@ folders exist for the optional per-size slots.
 |------|-------|
 | `01-workout.png` | Work interval: countdown ring, in-zone HR, IN ZONE cue (Watch-led) |
 | `02-home.png` | Home: streak, START ring, plan bar, "No iPhone · runs on Watch" |
-| `03-controls.png` | Controls page: timeline, PAUSE / SKIP / END |
+| `03-controls.png` | Controls page: timeline, PAUSE / SKIP / FINISH |
 | `04-complete.png` | Watch-led completion with sync status |
 
 Regenerate: capture each demo state on the Ultra 3, Series 11 46 mm and SE
