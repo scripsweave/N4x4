@@ -7,7 +7,7 @@
 // Mirrors the watch WorkoutManager: on end the builder is explicitly
 // DISCARDED (ending alone is not enough — the system finalizes collected
 // data as a workout), so no workout is saved from here — the app's manual
-// HealthKit save (saveCompletedWorkoutToHealthKit) is the single workout record.
+// HealthKit export queue (retryHealthExports) is the single workout record.
 
 import Foundation
 import HealthKit

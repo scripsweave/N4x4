@@ -66,7 +66,8 @@ extension TimerViewModel {
             ),
             modality: type.trainingModality,
             intervalPerformances: nil,
-            hrSummary: hrSummary, endedEarly: record.endedEarly
+            hrSummary: hrSummary, endedEarly: record.endedEarly,
+            healthExport: newHealthExport(start: record.startedAt, end: record.completedAt)
         )
 
         // The record may arrive after newer phone sessions; keep newest-first.
@@ -80,7 +81,7 @@ extension TimerViewModel {
 
         updateStreakOnWorkoutComplete()
         if entry.countsTowardStreak { cancelMissedWorkoutFollowUpIfCompletedToday() }
-        if !alreadyLogged { saveWorkoutToHealthKit(start: record.startedAt, end: record.completedAt) }
+        retryHealthExports()
         return !alreadyLogged
     }
 

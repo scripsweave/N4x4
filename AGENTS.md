@@ -333,9 +333,10 @@ To verify:
   imports idempotently by record id and remembers discarded ids. Ack only
   after both the log and series are saved, or for already imported/discarded
   ids. Failed writes remain pending on the Watch for retry.
-- **The Watch still never saves to Health.** The phone's
-  `saveWorkoutToHealthKit(start:end:)` writes the imported workout with the
-  Watch's real start/end. Keep the single-saver rule.
+- **The Watch still never saves to Health.** The phone persists the Watch's
+  real start/end in `WorkoutLogEntry.healthExport`; `retryHealthExports()`
+  drains that intent through the injected Health client. Keep the single-saver
+  rule and do not wait for Health success before acking durable local imports.
 
 ## Heart-rate zone feedback
 
@@ -508,8 +509,10 @@ To verify:
 
 ## One workout per session in Apple Health (4.8+)
 
-- `saveCompletedWorkoutToHealthKit()` (phone, in `finishWorkout`) is the ONLY
-  place a workout is saved. Both live `HKWorkoutSession`s (watch
+- `retryHealthExports()` (phone, in `HealthWorkoutExport.swift`) is the ONLY
+  export path. Completion, imports and explicit History recovery persist an
+  optional `WorkoutLogEntry.healthExport` before using it. Both live
+  `HKWorkoutSession`s (watch
   `WorkoutManager`, phone `PhoneWorkoutSessionManager`) exist purely to stream
   heart rate.
 - **Ending a session is NOT enough to prevent a save** — on-device, watchOS
@@ -519,6 +522,22 @@ To verify:
 - The watch also discards crash-abandoned sessions at launch
   (`discardAbandonedSession()` via `recoverActiveWorkoutSession`) so they can't
   resurface as stray workouts. Keep that call in `N4x4WatchApp.onAppear`.
+
+## Health & Devices / durable Health exports (post-5.5)
+
+- Keep feature preferences, known write authorization, observed read data, and
+  confirmed save status separate. HealthKit hides read denial; empty results
+  are never proof of denial or of no existing legacy workout.
+- Never trigger permission prompts or Bluetooth scans merely by opening the
+  consolidated settings screen. Authorization completion is not a grant.
+- Export intent lives in History under the workout's original UUID. Preserve it
+  through review edits, checkpoint recovery and malformed-optional-field repair.
+  Missing metadata on older rows means unknown; never automatically backfill.
+- Keep the Health sync identifier and version stable across retries. A failed
+  acknowledgement remains pending. Local deletion cancels future retries and
+  ignores late callbacks; it does not delete an already-saved Health workout.
+- Detailed behavior and device-check limitations are in
+  `docs/SESSION-HANDOFF-2026-09-29-HEALTH-DEVICES.md`.
 
 ## Editing project.pbxproj by hand
 

@@ -1,5 +1,13 @@
 # N4x4 — Session Handoff
 
+> **5.6 release preparation (2026-09-29):** Consolidated
+> integration settings, persistent Health export retries, and explicit recovery
+> of older History sessions. See
+> [`SESSION-HANDOFF-2026-09-29-HEALTH-DEVICES.md`](SESSION-HANDOFF-2026-09-29-HEALTH-DEVICES.md).
+> Version 5.6 is set in all six shipping configurations. Release and App Store
+> submission are authorized; the handoff will record verified submission status.
+
+
 > **5.5 submitted (2026-09-27):** Adaptive Watch layouts and more resilient
 > live HR delivery, with refreshed App Store screenshots. Xcode Cloud build
 > **41** passed all three actions. App Store Connect is **Waiting for Review**

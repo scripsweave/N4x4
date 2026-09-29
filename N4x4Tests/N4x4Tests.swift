@@ -422,16 +422,6 @@ final class N4x4Tests: XCTestCase {
         XCTAssertFalse(vm.workoutRemindersEnabled)
     }
 
-    func testHealthKitSaveGuardWhenUnauthorized() {
-        let vm = TimerViewModel()
-        vm.healthKitEnabled = true
-        vm.healthAuthorizationGranted = false
-
-        vm.saveCompletedWorkoutToHealthKit()
-
-        XCTAssertFalse(vm.healthAuthorizationGranted)
-    }
-
     func testDeleteWorkoutLogEntryRemovesEntryAndPersists() {
         let vm = TimerViewModel()
         let id = UUID()

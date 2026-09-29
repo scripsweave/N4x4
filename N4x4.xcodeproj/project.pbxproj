@@ -60,6 +60,9 @@
 		CC9B25853F49433F9BC51592 /* SpeechManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5739937EF07648BE8983755B /* SpeechManager.swift */; };
 		CD72E7EF59294BC6B17C3451 /* N4x4LiveActivityBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5219BAF399924A078CD74EEB /* N4x4LiveActivityBundle.swift */; };
 		F39AEAA3606146F790519760 /* N4x4LiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F7B873D24214C5FACE388DD /* N4x4LiveActivityAttributes.swift */; };
+		5EAE0000000000000000B001 /* HealthWorkoutExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EAE0000000000000000F001 /* HealthWorkoutExport.swift */; };
+		5EAE0000000000000000B002 /* HealthDevicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EAE0000000000000000F002 /* HealthDevicesView.swift */; };
+		5EAE0000000000000000B003 /* HealthWorkoutExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EAE0000000000000000F003 /* HealthWorkoutExportTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -169,6 +172,9 @@
 		B1E0000000000000000000F4 /* HeartRateMonitorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateMonitorViews.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateBluetoothTests.swift; sourceTree = "<group>"; };
 		B1E0000000000000000000F6 /* BirthdayEasterEggTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BirthdayEasterEggTests.swift; sourceTree = "<group>"; };
+		5EAE0000000000000000F001 /* HealthWorkoutExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthWorkoutExport.swift; sourceTree = "<group>"; };
+		5EAE0000000000000000F002 /* HealthDevicesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthDevicesView.swift; sourceTree = "<group>"; };
+		5EAE0000000000000000F003 /* HealthWorkoutExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthWorkoutExportTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -254,6 +260,8 @@
 				3DF13A4A2C9389C200DD18E7 /* Preview Content */,
 				3DF13A6E2C938A4F00DD18E7 /* Interval.swift */,
 				3DF13A702C938A6900DD18E7 /* TimerViewModel.swift */,
+				5EAE0000000000000000F002 /* HealthDevicesView.swift */,
+				5EAE0000000000000000F001 /* HealthWorkoutExport.swift */,
 				C4E0000000000000000000F1 /* HeartRateSeries.swift */,
 				C4E0000000000000000000F2 /* SessionDetailViews.swift */,
 				3DF13A722C938A8500DD18E7 /* TimerView.swift */,
@@ -286,6 +294,7 @@
 			isa = PBXGroup;
 			children = (
 				3DF13A552C9389C200DD18E7 /* N4x4Tests.swift */,
+				5EAE0000000000000000F003 /* HealthWorkoutExportTests.swift */,
 				B1E0000000000000000000F5 /* HeartRateBluetoothTests.swift */,
 				B1E0000000000000000000F6 /* BirthdayEasterEggTests.swift */,
 				5EA1000000000000000000F8 /* WatchStandaloneTests.swift */,
@@ -555,6 +564,8 @@
 			files = (
 				3DF13A732C938A8500DD18E7 /* TimerView.swift in Sources */,
 				3DF13A712C938A6900DD18E7 /* TimerViewModel.swift in Sources */,
+				5EAE0000000000000000B002 /* HealthDevicesView.swift in Sources */,
+				5EAE0000000000000000B001 /* HealthWorkoutExport.swift in Sources */,
 				C4E0000000000000000000B1 /* HeartRateSeries.swift in Sources */,
 				C4E0000000000000000000B2 /* SessionDetailViews.swift in Sources */,
 				3DF13A472C9389C100DD18E7 /* ContentView.swift in Sources */,
@@ -593,6 +604,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3DF13A562C9389C200DD18E7 /* N4x4Tests.swift in Sources */,
+				5EAE0000000000000000B003 /* HealthWorkoutExportTests.swift in Sources */,
 				B1E0000000000000000000C1 /* HeartRateBluetoothTests.swift in Sources */,
 				B1E0000000000000000000C2 /* BirthdayEasterEggTests.swift in Sources */,
 				5EA1000000000000000000D1 /* WatchStandaloneTests.swift in Sources */,
@@ -665,7 +677,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.5;
+				MARKETING_VERSION = 5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -703,7 +715,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.5;
+				MARKETING_VERSION = 5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.watchkitapp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -868,7 +880,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.5;
+				MARKETING_VERSION = 5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -910,7 +922,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.5;
+				MARKETING_VERSION = 5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1009,7 +1021,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.5;
+				MARKETING_VERSION = 5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1035,7 +1047,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.5;
+				MARKETING_VERSION = 5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = "Jan-van-Rensburg.N4x4.LiveActivity";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

@@ -110,7 +110,7 @@ struct HeartRateAggregator {
 
     // MARK: - Internals
 
-    private func isLive(_ source: Source, now: Date) -> Bool {
+    func isLive(_ source: Source, now: Date) -> Bool {
         guard let sample = samples[source] else { return false }
         // A timestamp in the future means the wall clock was adjusted
         // backwards mid-session; such a sample would otherwise stay "fresh"

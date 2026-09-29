@@ -646,6 +646,9 @@ struct PostWorkoutSummaryRedesignView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     hero
+                    if let id = viewModel.completedWorkoutEntryID {
+                        WorkoutHealthSaveView(viewModel: viewModel, id: id)
+                    }
 
                     workoutTypeSection
 
@@ -857,6 +860,8 @@ struct SessionDetailSheet: View {
                         max: entry.hrSummary?.maxBPM,
                         inZonePct: entry.hrSummary?.workInZonePct
                     )
+
+                    WorkoutHealthSaveView(viewModel: viewModel, id: entry.id)
 
                     if let series {
                         sectionTitle("SESSION")

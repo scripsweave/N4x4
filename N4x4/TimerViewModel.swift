@@ -193,6 +193,7 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     let hrSummary: HRSessionSummary?
     /// Missing on older records, which retain their original streak eligibility.
     let endedEarly: Bool?
+    var healthExport: HealthWorkoutExport?
     var countsTowardStreak: Bool { endedEarly != true }
 
     init(
@@ -204,7 +205,8 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         modality: TrainingModality? = nil,
         intervalPerformances: [IntervalPerformance]? = nil,
         hrSummary: HRSessionSummary? = nil,
-        endedEarly: Bool? = nil
+        endedEarly: Bool? = nil,
+        healthExport: HealthWorkoutExport? = nil
     ) {
         self.id = id
         self.completedAt = completedAt
@@ -215,6 +217,7 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         self.intervalPerformances = intervalPerformances
         self.hrSummary = hrSummary
         self.endedEarly = endedEarly
+        self.healthExport = healthExport
     }
 
     /// Average of the logged primary values for this entry, ignoring blanks.
@@ -1102,6 +1105,8 @@ class TimerViewModel: ObservableObject {
             && workoutElapsedSeconds > 15
     }
 
+    var hasFreshWatchHeartRate: Bool { heartRateAggregator.isLive(.watch, now: Date()) }
+
     /// SF Symbol for the small badge next to the BPM readout indicating where
     /// the number comes from. nil when no source is live.
     var heartRateSourceSymbol: String? {
@@ -1422,6 +1427,10 @@ class TimerViewModel: ObservableObject {
     }
 
     let healthStore = HKHealthStore()
+    let healthExportClient: any HealthWorkoutExportClient
+    var healthExportTask: Task<Void, Never>?
+    var restoredHealthExport: HealthWorkoutExport?
+    @Published var birthdayReadingAvailable = false
     private var isSchedulingWorkoutReminder = false
     private var isResolvingNotificationPermission = false
     private var isRequestingNotificationAuthorization = false
@@ -1568,7 +1577,9 @@ class TimerViewModel: ObservableObject {
     init(intervalNotificationCenter: any IntervalNotificationCenter = UNUserNotificationCenter.current(),
          liveActivityProvider: any WorkoutLiveActivityProvider = SystemWorkoutLiveActivityProvider(),
          checkpointURL: URL = TimerViewModel.defaultCheckpointURL,
+         healthExportClient: any HealthWorkoutExportClient = SystemHealthWorkoutExportClient(),
          seriesSaver: @escaping (HeartRateSeries, UUID) -> Bool = { HeartRateSeriesStore.save($0, for: $1) }) {
+        self.healthExportClient = healthExportClient
         self.checkpointURL = checkpointURL
         self.seriesSaver = seriesSaver
         self.intervalNotificationCenter = intervalNotificationCenter
@@ -1713,13 +1724,8 @@ class TimerViewModel: ObservableObject {
 
         refreshHealthKitAuthorizationState()
 
-        if healthKitEnabled {
-            if healthKitPermissionState == .granted {
-                fetchVO2MaxSamples()
-            } else {
-                requestHealthKitAuthorizationIfNeeded()
-            }
-        }
+        if healthKitEnabled { fetchVO2MaxSamples() }
+        retryHealthExports()
     }
 
     var sessionIntervalCount: Int { intervals.filter { $0.type == .highIntensity }.count }
@@ -1995,7 +2001,6 @@ class TimerViewModel: ObservableObject {
             scheduleWorkoutReminder()
         }
         if healthKitEnabled {
-            saveCompletedWorkoutToHealthKit()
             fetchVO2MaxSamples()
         }
     }
@@ -2093,6 +2098,7 @@ class TimerViewModel: ObservableObject {
         hrRecorder = nil
         completedSeries = nil
         completedWorkoutEntryID = nil
+        restoredHealthExport = nil
         workoutNotesDraft = ""
         performanceDraft = []
         performanceNotesDraft = []
@@ -2292,7 +2298,10 @@ class TimerViewModel: ObservableObject {
             sessionBreakdown: currentSessionBreakdown, modality: modality,
             intervalPerformances: builtPerformances(for: modality),
             hrSummary: completedSeries.flatMap { HeartRateSeriesAnalytics.summary(for: $0) },
-            endedEarly: sessionEndedEarly
+            endedEarly: sessionEndedEarly,
+            healthExport: workoutLogEntries.first(where: { $0.id == entryID })?.healthExport
+                ?? restoredHealthExport
+                ?? newHealthExport(start: workoutStartDate ?? completionDate, end: completionDate)
         )
         if let index = workoutLogEntries.firstIndex(where: { $0.id == entryID }) {
             workoutLogEntries[index] = entry
@@ -2323,6 +2332,7 @@ class TimerViewModel: ObservableObject {
                 scheduleRecoveryNudge(afterCount: workoutLogEntries.filter(\.countsTowardStreak).count)
             }
         }
+        if !hasPendingWorkoutSave { retryHealthExports() }
         return !hasPendingWorkoutSave
     }
 
@@ -2518,7 +2528,8 @@ class TimerViewModel: ObservableObject {
                 modality: field("modality", as: TrainingModality.self),
                 intervalPerformances: field("intervalPerformances", as: [IntervalPerformance].self),
                 hrSummary: field("hrSummary", as: HRSessionSummary.self),
-                endedEarly: field("endedEarly", as: Bool.self)
+                endedEarly: field("endedEarly", as: Bool.self),
+                healthExport: field("healthExport", as: HealthWorkoutExport.self)
             )
         }.filter { !isDiscardedPhoneWorkout($0.id) }.sorted { $0.completedAt > $1.completedAt }
         // Never replace unreadable storage until its original bytes are safe.
@@ -3383,14 +3394,12 @@ class TimerViewModel: ObservableObject {
             }
 
             DispatchQueue.main.async {
-                self.healthAuthorizationGranted = success
                 self.refreshHealthKitAuthorizationState()
-                self.healthKitEnabled = success
-                if success { self.healthKitUserOptedOut = false }
-                if success {
+                if success && self.healthKitEnabled {
                     self.fetchVO2MaxSamples()
                     self.refreshCachedUserBirthday()
                 }
+                self.retryHealthExports()
                 completion?()
             }
         }
@@ -3401,9 +3410,11 @@ class TimerViewModel: ObservableObject {
     /// and returns components with no month/day if the user never entered one —
     /// both are silent no-ops, leaving the egg on its 2 August schedule.
     func refreshCachedUserBirthday() {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
+        birthdayReadingAvailable = false
+        guard healthKitEnabled, HKHealthStore.isHealthDataAvailable() else { return }
         guard let components = try? healthStore.dateOfBirthComponents(),
               let month = components.month, let day = components.day else { return }
+        birthdayReadingAvailable = true
         let hadBirthday = BirthdayEasterEgg.cachedUserBirthday() != nil
         BirthdayEasterEgg.cacheUserBirthday(month: month, day: day)
         // First grant of the day-of-birth read lands after refreshOnForeground's
@@ -3415,27 +3426,19 @@ class TimerViewModel: ObservableObject {
     }
 
     func refreshHealthKitAuthorizationState() {
-        guard HKHealthStore.isHealthDataAvailable() else {
+        guard healthExportClient.isAvailable else {
             healthKitPermissionState = .unavailable
             healthAuthorizationGranted = false
             return
         }
-
-        let workoutStatus = healthStore.authorizationStatus(for: HKObjectType.workoutType())
-        switch workoutStatus {
+        switch healthExportClient.authorization {
         case .sharingAuthorized:
             healthKitPermissionState = .granted
             healthAuthorizationGranted = true
-            // Re-arm after an iOS-side revoke. `healthKitEnabled` is persisted and
-            // the .sharingDenied branch below clears it, so a user who hits "Turn
-            // Off All" in Settings > Privacy > Health and then re-grants every
-            // toggle would otherwise stay disconnected forever: fetchVO2MaxSamples()
-            // is guarded on this flag, so the VO2 card would never come back.
             if !healthKitUserOptedOut { healthKitEnabled = true }
         case .sharingDenied:
             healthKitPermissionState = .denied
             healthAuthorizationGranted = false
-            healthKitEnabled = false
         case .notDetermined:
             healthKitPermissionState = .notDetermined
             healthAuthorizationGranted = false
@@ -3475,46 +3478,6 @@ class TimerViewModel: ObservableObject {
         healthStore.execute(query)
     }
 
-    func saveCompletedWorkoutToHealthKit() {
-        let endDate = workoutCompletionDate ?? Date()
-        let startDate = workoutStartDate ?? endDate.addingTimeInterval(-totalWorkoutDuration())
-        saveWorkoutToHealthKit(start: startDate, end: endDate)
-    }
-
-    /// Writes one HIIT workout record to Health for the given span. Used for
-    /// the just-finished phone session and for workouts imported from a
-    /// standalone Watch run (the Watch never saves — see AGENTS.md).
-    func saveWorkoutToHealthKit(start startDate: Date, end endDate: Date) {
-        guard healthKitEnabled, healthAuthorizationGranted, logWorkoutsToHealthKit else { return }
-        guard endDate > startDate else { return }
-
-        let config = HKWorkoutConfiguration()
-        config.activityType = .highIntensityIntervalTraining
-        config.locationType = .indoor
-
-        let builder = HKWorkoutBuilder(healthStore: healthStore, configuration: config, device: .local())
-
-        builder.beginCollection(withStart: startDate) { _, beginError in
-            if let beginError = beginError {
-                print("Workout beginCollection error: \(beginError.localizedDescription)")
-                return
-            }
-
-            builder.endCollection(withEnd: endDate) { _, endError in
-                if let endError = endError {
-                    print("Workout endCollection error: \(endError.localizedDescription)")
-                    return
-                }
-
-                builder.finishWorkout { _, finishError in
-                    if let finishError = finishError {
-                        print("Workout finish error: \(finishError.localizedDescription)")
-                    }
-                }
-            }
-        }
-    }
-
     /// Called when the app returns to the foreground. Refreshes streaks, permissions,
     /// and reschedules one-shot daily follow-up notifications.
     func refreshOnForeground() {
@@ -3548,14 +3511,11 @@ class TimerViewModel: ObservableObject {
         }
 
         refreshHealthKitAuthorizationState()
+        retryHealthExports()
 
         if healthKitEnabled {
-            if healthKitPermissionState == .granted {
-                fetchVO2MaxSamples()
-                refreshCachedUserBirthday()
-            } else {
-                requestHealthKitAuthorizationIfNeeded()
-            }
+            fetchVO2MaxSamples()
+            refreshCachedUserBirthday()
         }
 
         // If a remembered Bluetooth monitor hit its connect-retry cap while we
@@ -3607,12 +3567,16 @@ class TimerViewModel: ObservableObject {
         lines.append("N4x4 \(version) (\(build)) · iOS \(UIDevice.current.systemVersion)")
         lines.append("Health data available: \(HKHealthStore.isHealthDataAvailable() ? "yes" : "no")")
         lines.append("Apple Health enabled in N4x4: \(healthKitEnabled ? "yes" : "no")")
+        lines.append("Save workouts enabled: \(logWorkoutsToHealthKit ? "yes" : "no")")
+        lines.append("Pending Health saves: \(pendingHealthExports)")
+        lines.append("Latest confirmed Health save: \(latestHealthSave.map { formatter.string(from: $0) } ?? "none recorded")")
+        lines.append("Health save error: \(latestHealthExportError ?? "none")")
+        lines.append("Watch: \(watchConnectionStatus)")
+        lines.append("Bluetooth: \(bleHeartRateManager.diagnosticStatus)")
+        lines.append("AirPods heart rate enabled: \(appleSensorHREnabled ? "yes" : "no")")
         lines.append("User opted out in-app: \(healthKitUserOptedOut ? "yes" : "no")")
         lines.append("Workout permission: \(healthKitPermissionState.diagnosticLabel)")
         lines.append("VO₂ max readings found: \(vo2DataPoints.count)")
-        if let latest = vo2DataPoints.max(by: { $0.date < $1.date }) {
-            lines.append("Latest reading: \(String(format: "%.1f", latest.value)) mL/kg·min on \(formatter.string(from: latest.date))")
-        }
         if let fetched = lastVO2FetchDate {
             lines.append("Last checked: \(formatter.string(from: fetched))")
         } else {
@@ -3864,6 +3828,8 @@ extension TimerViewModel {
                     entry.intervalPerformances?.first { $0.intervalNumber == number }?.note ?? ""
                 }
                 preparedPerformanceType = selectedWorkoutType
+                restoredHealthExport = entry.healthExport ?? HealthWorkoutExport(
+                    start: snapshot.startedAt, end: entry.completedAt, requested: false)
                 // Upsert under the original ID, including when a previous log
                 // write succeeded but its series write failed.
                 completedWorkoutEntryID = nil

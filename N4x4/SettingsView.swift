@@ -108,10 +108,7 @@ struct SettingsView: View {
 
     private var devicesSection: some View {
         Section(header: Text("Devices & Health")) {
-            watchRow
-            monitorRow
-            hrSourcesRow
-            healthRow
+            healthDevicesRow
         }
     }
 
@@ -198,6 +195,13 @@ struct SettingsView: View {
         SettingsRow(icon: "heart.fill", tint: .pink, title: "Heart-Rate Zones & Alerts",
                     value: "Max \(viewModel.maximumHeartRate)") {
             ZoneSettingsView(viewModel: viewModel)
+        }
+    }
+
+    private var healthDevicesRow: some View {
+        SettingsRow(icon: "heart.text.square.fill", tint: .red, title: "Health & Devices",
+                    value: viewModel.pendingHealthExports > 0 ? "\(viewModel.pendingHealthExports) pending" : "") {
+            HealthDevicesView(viewModel: viewModel)
         }
     }
 
@@ -322,6 +326,8 @@ struct SettingsView: View {
              AnyView(hapticsRow)),
             ("Heart-Rate Zones & Alerts", "heart rate zones alerts max age custom bpm target haptic voice visual tanaka",
              AnyView(zonesRow)),
+            ("Health & Devices", "health devices connections permissions diagnostics",
+             AnyView(healthDevicesRow)),
             ("Apple Watch", "apple watch wrist pairing troubleshooting",
              AnyView(watchRow)),
             ("Heart Rate Monitor", "heart rate monitor bluetooth chest strap armband garmin polar whoop pairing",

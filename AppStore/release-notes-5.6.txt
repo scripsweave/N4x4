@@ -1,0 +1,5 @@
+Health & Devices, all in one place
+• See your Apple Health settings, workout permissions, Apple Watch, and heart-rate connections on one screen.
+• Check whether a workout has saved to Apple Health, with automatic retries for pending saves.
+• Recover older workouts from History with a check for existing Health records before saving.
+• Clearer connection information and improved troubleshooting diagnostics.

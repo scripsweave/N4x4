@@ -356,3 +356,107 @@ extension N4x4UITests {
         XCTAssertFalse(app.alerts["Workout recovered"].exists)
     }
 }
+
+extension N4x4UITests {
+    func testHealthDevicesShowsSwitchesAndConnectionsWithoutPrompting() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-AppleInterfaceStyle", "Light"]
+        app.launch()
+        app.tabBars.buttons["Settings"].tap()
+        let link = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Health & Devices")).firstMatch
+        reveal(link, in: app)
+        link.tap()
+        let master = app.switches["healthEnabled"]
+        XCTAssertTrue(master.waitForExistence(timeout: 5))
+        XCTAssertEqual(master.value as? String, "0")
+        XCTAssertFalse(app.switches["healthWorkoutLogging"].isEnabled)
+        XCTAssertEqual(app.alerts.count, 0)
+        keepScreenshot("Health and Devices - Health saving", app: app)
+        let watch = app.buttons.containing(.staticText, identifier: "Apple Watch").firstMatch
+        reveal(watch, in: app)
+        keepScreenshot("Health and Devices - Connections", app: app)
+        let diagnostics = app.buttons["Copy Diagnostics"]
+        reveal(diagnostics, in: app)
+        XCTAssertTrue(app.staticTexts["Health Readings"].exists)
+        keepScreenshot("Health and Devices - Readings and diagnostics", app: app)
+        diagnostics.tap()
+        XCTAssertTrue(app.buttons["Diagnostics Copied"].exists)
+        XCTAssertEqual(app.alerts.count, 0)
+    }
+
+    func testHealthDevicesSupportsLargestTextAndSearch() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-AppleInterfaceStyle", "Dark"]
+        app.launch()
+        app.tabBars.buttons["Settings"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("airpods")
+        let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Heart Rate Sources")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        result.tap()
+        XCTAssertTrue(app.navigationBars["Health & Devices"].waitForExistence(timeout: 5))
+        keepScreenshot("Health and Devices - Largest text source priority", app: app)
+        let diagnostics = app.buttons["Copy Diagnostics"]
+        reveal(diagnostics, in: app)
+        assertVisible(diagnostics, in: app)
+        keepScreenshot("Health and Devices - Largest text help", app: app)
+    }
+
+    func testLegacyHealthRecoveryExplainsUncertaintyBeforeSaving() throws {
+        let app = XCUIApplication()
+        let id = "33333333-3333-3333-3333-333333333333"
+        let row: [String: Any] = ["id": id, "completedAt": ISO8601DateFormatter().string(from: Date()),
+            "workoutType": "Run", "notes": "Legacy session", "sessionBreakdown": ["totalDuration": 600]]
+        let json = String(decoding: try JSONSerialization.data(withJSONObject: [row]), as: UTF8.self)
+        let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
+        app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument]
+        app.launch()
+        app.tabBars.buttons["History"].tap()
+        let workout = app.buttons["workout-\(id)"]
+        reveal(workout, in: app)
+        workout.tap()
+        let save = app.buttons["Save to Apple Health"]
+        reveal(save, in: app)
+        save.tap()
+        XCTAssertTrue(app.navigationBars["Save to Apple Health"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Estimated start"].exists)
+        let confirm = app.buttons["Confirm & Save New Workout"]
+        reveal(confirm, in: app)
+        XCTAssertFalse(confirm.isEnabled, "Saving is disabled until both preferences and workout permission allow it")
+        keepScreenshot("Health recovery - Confirm before exporting", app: app)
+        app.navigationBars.buttons["Cancel"].tap()
+        XCTAssertTrue(app.staticTexts["Health save status unknown"].exists)
+    }
+}
+
+extension N4x4UITests {
+    func testHealthDevicesSeparatesPendingSavesFromConfirmedSaves() throws {
+        let app = XCUIApplication()
+        let now = Date()
+        let timestamp = now.timeIntervalSince1970
+        let date = ISO8601DateFormatter().string(from: now)
+        let rows: [[String: Any]] = [
+            ["id": UUID().uuidString, "completedAt": date, "workoutType": "Run", "notes": "",
+             "healthExport": ["startTimestamp": timestamp - 600, "endTimestamp": timestamp,
+                              "state": "pending", "attempts": 1, "lastError": "The save will retry when enabled."]],
+            ["id": UUID().uuidString, "completedAt": date, "workoutType": "Run", "notes": "",
+             "healthExport": ["startTimestamp": timestamp - 1800, "endTimestamp": timestamp - 1200,
+                              "state": "saved", "attempts": 1, "savedAt": date, "healthID": UUID().uuidString]]
+        ]
+        let json = String(decoding: try JSONSerialization.data(withJSONObject: rows), as: UTF8.self)
+        let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
+        app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument, "-AppleInterfaceStyle", "Dark"]
+        app.launch()
+        app.tabBars.buttons["Settings"].tap()
+        let link = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Health & Devices")).firstMatch
+        reveal(link, in: app)
+        link.tap()
+        XCTAssertTrue(app.staticTexts["Last confirmed save"].waitForExistence(timeout: 5))
+        let retry = app.buttons["Retry Pending Saves"]
+        reveal(retry, in: app)
+        XCTAssertFalse(retry.isEnabled)
+        keepScreenshot("Health and Devices - Pending and confirmed saves", app: app)
+    }
+}

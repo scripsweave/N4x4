@@ -81,6 +81,20 @@ final class BluetoothHeartRateManager: NSObject, ObservableObject {
         UserDefaults.standard.string(forKey: Self.nameDefaultsKey)
     }
 
+    /// No peripheral names or identifiers in support diagnostics.
+    var diagnosticStatus: String {
+        switch state {
+        case .idle: return "No monitor selected"
+        case .unavailable(.denied): return "Bluetooth permission denied"
+        case .unavailable(.poweredOff): return "Bluetooth off"
+        case .unavailable(.unsupported): return "Bluetooth unavailable"
+        case .scanning: return "Scanning"
+        case .connecting: return "Connecting"
+        case .searching: return "Waiting for monitor"
+        case .connected: return notifySubscribeFailed ? "Connected; heart rate unavailable" : "Connected"
+        }
+    }
+
     // MARK: - Private state
 
     private static let idDefaultsKey = "bleMonitorPeripheralID"
