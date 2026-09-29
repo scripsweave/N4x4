@@ -86,6 +86,13 @@ The new screenshots were uploaded and verified separately before running the
 submission command (the lane deliberately preserves them). Version 5.4 was
 submitted through Safari before this automation was added.
 
+Latest live submission: 2026-09-29, `AppStore/submit.sh 5.6 42 --submit`.
+All three Xcode Cloud actions passed for release commit `0e0e60d`. The lane
+verified build 42 was VALID, uploaded the release notes, and confirmed
+**WAITING_FOR_REVIEW** with **AFTER_APPROVAL** at 13:11 CEST. Existing
+screenshots were retained. Precheck's existing missing copyright-year warning
+was non-blocking; submission completed successfully.
+
 References: [fastlane deliver](https://docs.fastlane.tools/actions/deliver/),
 [API-key authentication](https://docs.fastlane.tools/app-store-connect-api/),
 [Apple's API access guide](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/).

@@ -1,9 +1,21 @@
 # Health & Devices and recoverable Health exports
 
-Release **5.6** authorized on 2026-09-29. All six shipping configurations
-are bumped to 5.6. Implementation was prepared on
-`feature/health-devices-reliable-saves`; release delivery uses main and Xcode
-Cloud. Submission status will be recorded after Apple's API confirms it.
+Release **5.6 (42)** submitted on 2026-09-29. Apple's API confirmed
+**WAITING_FOR_REVIEW**, automatic release **AFTER_APPROVAL**, at 13:11 CEST.
+Version 5.5 is currently live. All six shipping configurations are set to 5.6.
+Implementation was prepared on `feature/health-devices-reliable-saves` and
+released from main at `0e0e60dbbfb608fbfe1dff985fadc1c14a1c0478`, tag `v5.6`.
+
+Xcode Cloud build 42 passed Build - iOS, Build - watchOS, and Archive - iOS
+for that exact commit. `AppStore/submit.sh 5.6 42 --submit` uploaded release
+notes, attached build 42, submitted it, and verified the review/release states.
+Existing listing and screenshots were preserved. Fastlane precheck reported
+a non-blocking missing copyright-year warning in existing listing metadata.
+Release tooling tests passed (4 tests, 18 assertions).
+
+GitHub release: https://github.com/scripsweave/N4x4/releases/tag/v5.6
+Post-submission documentation is committed on `chore/5.6-submission-handoff`;
+do not push another main commit with the already-delivered version 5.6.
 
 ## User-facing behavior
 
