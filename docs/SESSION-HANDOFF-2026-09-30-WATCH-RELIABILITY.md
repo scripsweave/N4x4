@@ -112,3 +112,22 @@ known): use a paired Series 11 and iPhone on OS 27:
 No physical devices were connected (`devicectl list devices`: none). Gowen's
 precise cause is unconfirmed; these are code-supported fixes, not an on-device
 reproduction or certification of OS 27 behaviour.
+
+## Release — 30 September 2026
+
+User authorized version bump, commit and App Store release after the investigation.
+Version **5.7** is set in all six shipping configurations, alongside the Health HR
+export feature. Release commit `d1acb0aac39560420173b7a5a59f8ac3a6554a2b`, tag
+`v5.7`; [GitHub release](https://github.com/scripsweave/N4x4/releases/tag/v5.7).
+
+Xcode Cloud **43** (`7ca24172-33cd-4552-b5a1-f96b1ac8a6d3`) passed Build iOS,
+Build watchOS and Archive iOS for that exact commit. App Store Connect processed
+43 as VALID. `AppStore/submit.sh 5.7 43 --submit` supplied release notes, retained
+screenshots, attached the exact build and verified **WAITING_FOR_REVIEW** with
+**AFTER_APPROVAL** at **12:04 CEST**. Apple approval is still pending; 5.6 is live.
+Release tooling tests passed (4 tests, 18 assertions). The existing missing
+copyright-year precheck warning was non-blocking. The physical-device limitations
+above remain; Cloud success does not validate live Watch radio/HealthKit behavior.
+
+Post-submission docs are committed on `chore/5.7-submission-handoff`, not pushed to
+main, which would trigger another App Store delivery on the same version train.

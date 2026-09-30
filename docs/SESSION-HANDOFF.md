@@ -1,9 +1,13 @@
 # N4x4 — Session Handoff
 
-> **5.7 release prepared (2026-09-30):** Both changes below are included.
-> Version 5.7 is set in all six shipping configurations. User authorized commit,
-> push and App Store release. Cloud build and review submission are pending.
-> Version 5.6 is now live (verified through App Store Connect).
+> **5.7 submitted (2026-09-30):** Heart-rate samples in Apple Health exports
+> and Watch startup, delivery/recovery and stale-display fixes. Release commit
+> `d1acb0a`, tag `v5.7`. Xcode Cloud build **43** passed all three actions for
+> that exact commit. API automation verified **WAITING_FOR_REVIEW** with
+> **AFTER_APPROVAL** at 12:04 CEST; the update releases automatically after
+> approval. Existing screenshots were retained. Version 5.6 is currently live.
+> Post-submission docs are on `chore/5.7-submission-handoff` to avoid another
+> main-branch Cloud delivery. Physical Series 11/OS 27 validation remains open.
 
 > **Watch reliability investigation (2026-09-30):**
 > `fix/watch-session-reliability` preserves the pending Health HR export work
