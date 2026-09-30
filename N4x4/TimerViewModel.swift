@@ -987,6 +987,12 @@ class TimerViewModel: ObservableObject {
     /// stale sources age out (see HeartRateAggregator for the policy).
     private var heartRateAggregator = HeartRateAggregator()
     private var watchHeartRateInbox = WatchHeartRateInbox()
+    private var watchHeartRateRefreshPolicy = WatchHeartRateRefreshPolicy()
+    @Published private(set) var lastWatchHeartRateReceivedAt: Date?
+    @Published private(set) var lastWatchHeartRateMeasuredAt: Date?
+    private(set) var watchHeartRateAcceptedCount = 0
+    private(set) var watchHeartRateRejectedCount = 0
+    private(set) var lastWatchHeartRateRejection: String?
 
     // MARK: - Phone workout session (AirPods HR, iOS 26+)
 
@@ -1216,6 +1222,7 @@ class TimerViewModel: ObservableObject {
 
     @Published var notificationPermissionState: PermissionState = .unknown
     @Published var healthKitPermissionState: PermissionState = .unknown
+    @Published var heartRateWritePermissionState: PermissionState = .unknown
 
     var workoutReminderMode: WorkoutReminderMode {
         get { WorkoutReminderMode(rawValue: workoutReminderModeRaw) ?? .weeklyWeekday }
@@ -1789,6 +1796,7 @@ class TimerViewModel: ObservableObject {
         cancelRecoveryNudge()
         showWorkoutRecovery = false
         isRunning = true
+        heartRateRecordingResumedAt = now
         // Keep the audio session (and the app) alive while the phone is
         // locked so voice prompts fire on time. Idempotent across resumes.
         SpeechManager.shared.beginWorkoutAudio()
@@ -1837,6 +1845,11 @@ class TimerViewModel: ObservableObject {
     }
 
     func reconcileTimerState(now: Date = Date(), playAlarm: Bool) {
+        if watchHeartRateRefreshPolicy.shouldRequest(now: now, workoutActive: isRunning,
+                                                     watchInstalled: watchAppInstalled,
+                                                     hasFreshReading: heartRateAggregator.isLive(.watch, now: now)) {
+            phoneSessionManager.refreshHeartRate()
+        }
         guard isRunning else { return }
         lastProgressDate = now
         defer { if workoutCompletionDate == nil { saveSessionCheckpoint(now: now) } }
@@ -2803,13 +2816,9 @@ class TimerViewModel: ObservableObject {
 
     /// Records the live HR stream + interval timeline for the running workout.
     private var hrRecorder: HeartRateSeriesRecorder?
+    private var heartRateRecordingResumedAt: Date?
     /// Saved at completion and retained in memory while the summary is open.
     @Published var completedSeries: HeartRateSeries?
-
-    /// Seconds since the workout started, nil when no workout is in progress.
-    private var recorderOffset: Double? {
-        workoutStartDate.map { Date().timeIntervalSince($0) }
-    }
 
     private func recorderSpanDescriptor(for index: Int)
         -> (kind: String, work: Int, lo: Int, hi: Int)? {
@@ -2843,9 +2852,38 @@ class TimerViewModel: ObservableObject {
                                targetLo: d.lo, targetHi: d.hi, at: offset)
     }
 
-    func ingestWatchHeartRate(_ message: [String: Any], now: Date = Date()) {
-        guard let sample = watchHeartRateInbox.accept(message, now: now) else { return }
+    @discardableResult
+    func ingestWatchHeartRate(_ message: [String: Any], now: Date = Date(), isCachedContext: Bool = false) -> Bool {
+        guard message[WatchMessageKey.messageType] as? String == WatchMessageKey.heartRate else { return false }
+        if !isCachedContext { lastWatchHeartRateReceivedAt = now }
+        guard let sample = WatchHeartRateSample(message: message), sample.isFresh(at: now) else {
+            if !isCachedContext {
+                watchHeartRateRejectedCount += 1
+                lastWatchHeartRateRejection = "Invalid or expired reading"
+            }
+            return false
+        }
+        if let rawID = sample.workoutID, let id = UUID(uuidString: rawID),
+           let activeWorkoutID, workoutCompletionDate == nil, id != activeWorkoutID {
+            if !isCachedContext {
+                watchHeartRateRejectedCount += 1
+                lastWatchHeartRateRejection = "Reading belongs to another workout"
+            }
+            return false
+        }
+        if watchHeartRateInbox.hasAccepted(sample) { return true }
+        guard watchHeartRateInbox.accept(message, now: now) != nil else {
+            if !isCachedContext {
+                watchHeartRateRejectedCount += 1
+                lastWatchHeartRateRejection = "Out-of-order reading"
+            }
+            return false
+        }
+        watchHeartRateAcceptedCount += 1
+        lastWatchHeartRateMeasuredAt = sample.measuredAt
+        lastWatchHeartRateRejection = nil
         ingestHeartRate(sample.bpm, from: .watch, sampledAt: min(sample.measuredAt, now), now: now)
+        return true
     }
 
     func ingestHeartRate(_ bpm: Double, from source: HeartRateAggregator.Source,
@@ -2857,8 +2895,10 @@ class TimerViewModel: ObservableObject {
             // Record the aggregator's accepted value (not the raw reading) so
             // the saved series matches what the user saw. Paused time records
             // nothing — charts show the gap.
-            if isRunning, let offset = recorderOffset {
-                hrRecorder?.record(bpm: displayed, at: offset)
+            if isRunning, let start = workoutStartDate,
+               let sample = heartRateAggregator.currentSample(now: now),
+               sample.at >= (heartRateRecordingResumedAt ?? start) {
+                hrRecorder?.record(bpm: sample.bpm, at: sample.at.timeIntervalSince(start))
             }
         }
     }
@@ -2891,6 +2931,7 @@ class TimerViewModel: ObservableObject {
         heartRateStalenessWork?.cancel()
         heartRateStalenessWork = nil
         heartRateAggregator.reset()
+        watchHeartRateInbox = WatchHeartRateInbox()
         currentHeartRate = nil
         zoneVoiceEngine.reset()
     }
@@ -3368,6 +3409,7 @@ class TimerViewModel: ObservableObject {
             healthKitEnabled = false
             healthAuthorizationGranted = false
             healthKitPermissionState = .unavailable
+            heartRateWritePermissionState = .unavailable
             completion?()
             return
         }
@@ -3386,7 +3428,7 @@ class TimerViewModel: ObservableObject {
         if let dobType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
             readTypes.insert(dobType)
         }
-        let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType()]
+        let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate)]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
             if let error = error {
@@ -3428,8 +3470,15 @@ class TimerViewModel: ObservableObject {
     func refreshHealthKitAuthorizationState() {
         guard healthExportClient.isAvailable else {
             healthKitPermissionState = .unavailable
+            heartRateWritePermissionState = .unavailable
             healthAuthorizationGranted = false
             return
+        }
+        switch healthExportClient.heartRateAuthorization {
+        case .sharingAuthorized: heartRateWritePermissionState = .granted
+        case .sharingDenied: heartRateWritePermissionState = .denied
+        case .notDetermined: heartRateWritePermissionState = .notDetermined
+        @unknown default: heartRateWritePermissionState = .unknown
         }
         switch healthExportClient.authorization {
         case .sharingAuthorized:
@@ -3572,10 +3621,20 @@ class TimerViewModel: ObservableObject {
         lines.append("Latest confirmed Health save: \(latestHealthSave.map { formatter.string(from: $0) } ?? "none recorded")")
         lines.append("Health save error: \(latestHealthExportError ?? "none")")
         lines.append("Watch: \(watchConnectionStatus)")
+        lines.append("Watch HR received this launch: \(watchHeartRateAcceptedCount)")
+        lines.append("Watch HR rejected this launch: \(watchHeartRateRejectedCount)")
+        lines.append("Watch HR last rejection: \(lastWatchHeartRateRejection ?? "none")")
+        if let date = lastWatchHeartRateReceivedAt {
+            lines.append("Last Watch HR packet: \(max(0, Int(Date().timeIntervalSince(date)))) seconds ago")
+        }
+        if let date = lastWatchHeartRateMeasuredAt {
+            lines.append("Last accepted Watch HR measurement: \(max(0, Int(Date().timeIntervalSince(date)))) seconds ago")
+        }
         lines.append("Bluetooth: \(bleHeartRateManager.diagnosticStatus)")
         lines.append("AirPods heart rate enabled: \(appleSensorHREnabled ? "yes" : "no")")
         lines.append("User opted out in-app: \(healthKitUserOptedOut ? "yes" : "no")")
         lines.append("Workout permission: \(healthKitPermissionState.diagnosticLabel)")
+        lines.append("Heart Rate write permission: \(heartRateWritePermissionState.diagnosticLabel)")
         lines.append("VO₂ max readings found: \(vo2DataPoints.count)")
         if let fetched = lastVO2FetchDate {
             lines.append("Last checked: \(formatter.string(from: fetched))")

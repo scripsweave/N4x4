@@ -85,34 +85,38 @@ struct WatchTroubleshootingView: View {
     // MARK: Adaptive content
 
     private var statusIcon: String {
+        if viewModel.hasFreshWatchHeartRate { return "applewatch.radiowaves.left.and.right" }
         switch viewModel.watchConnectionStatus {
         case .noWatchPaired, .appNotInstalled: return "applewatch.slash"
         case .notReachable:                    return "applewatch"
         case .connected:
-            return viewModel.currentHeartRate == nil ? "heart.slash" : "applewatch.radiowaves.left.and.right"
+            return "heart.slash"
         }
     }
 
     private var statusTint: Color {
+        if viewModel.hasFreshWatchHeartRate { return .green }
         switch viewModel.watchConnectionStatus {
         case .noWatchPaired:   return .secondary
         case .appNotInstalled: return .orange
         case .notReachable:    return .orange
-        case .connected:       return viewModel.currentHeartRate == nil ? .orange : .green
+        case .connected:       return .orange
         }
     }
 
     private var statusTitle: String {
+        if viewModel.hasFreshWatchHeartRate { return "Watch heart rate received" }
         switch viewModel.watchConnectionStatus {
         case .noWatchPaired:   return "No Apple Watch paired"
         case .appNotInstalled: return "Watch app not installed"
         case .notReachable:    return "Watch app not reachable"
         case .connected:
-            return viewModel.currentHeartRate == nil ? "No heart rate yet" : "Connected"
+            return viewModel.lastWatchHeartRateMeasuredAt == nil ? "Waiting for Watch heart rate" : "Watch heart rate interrupted"
         }
     }
 
     private var statusDetail: String {
+        if viewModel.hasFreshWatchHeartRate { return "Fresh readings are reaching this iPhone from your Watch." }
         switch viewModel.watchConnectionStatus {
         case .noWatchPaired:
             return "Pair an Apple Watch with this iPhone to stream heart rate."
@@ -121,9 +125,7 @@ struct WatchTroubleshootingView: View {
         case .notReachable:
             return "Open N4x4 on your wrist to connect."
         case .connected:
-            return viewModel.currentHeartRate == nil
-                ? "Connected, but no heart rate is arriving — usually a Health permission."
-                : "\(Int(viewModel.currentHeartRate ?? 0)) BPM streaming."
+            return "The Watch app is reachable, but fresh heart-rate readings aren’t arriving. Reachability alone doesn’t confirm the heart-rate connection."
         }
     }
 
@@ -149,13 +151,19 @@ struct WatchTroubleshootingView: View {
                 "Start the workout from either device.",
             ]
         case .connected:
-            // Connected but likely a Health-permission problem.
+            if viewModel.lastWatchHeartRateMeasuredAt != nil {
+                return [
+                    "Keep both devices nearby and open N4x4 on your Watch. The phone automatically requests fresh readings during the workout.",
+                    "Check whether the heart-rate number on your Watch is still updating or has changed to a dash.",
+                    "For support, open Settings → Health & Devices → Copy Diagnostics on this iPhone while the problem is happening.",
+                ]
+            }
             return [
                 "On your Watch, open N4x4 and allow Health access if prompted.",
                 "On the Watch: Settings → Privacy & Security → Health → N4x4, and turn on Heart Rate.",
                 "On this iPhone: open the Watch app → Privacy → confirm Health access for N4x4.",
                 "Keep the Watch snug on your wrist — a loose band blocks the optical sensor.",
-                "Stop and restart the workout so the Watch begins a fresh heart-rate session.",
+                "If the Watch reports a heart-rate error, reopen N4x4 on the Watch to retry without discarding your workout.",
             ]
         }
     }

@@ -104,6 +104,13 @@ struct HeartRateAggregator {
         priority.first { isLive($0, now: now) }
     }
 
+    /// Preserve the selected sensor's measurement time when recording. A
+    /// lower-priority packet must not re-record an older preferred reading.
+    func currentSample(now: Date) -> (bpm: Double, at: Date)? {
+        guard let source = liveSource(now: now) else { return nil }
+        return samples[source]
+    }
+
     mutating func reset() {
         samples.removeAll()
     }

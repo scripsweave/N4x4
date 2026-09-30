@@ -18,81 +18,101 @@ final class WatchHeartRateStreamTests: XCTestCase {
         var reachable = true
         var sent: [[String: Any]] = []
         var contexts: [[String: Any]] = []
-        var failures: [() -> Void] = []
-        var retries: [() -> Void] = []
+        var completions: [(Bool) -> Void] = []
+        var scheduled: [(Date, () -> Void)] = []
+        var acknowledgements: [WatchHeartRateSample] = []
         lazy var delivery = WatchHeartRateDelivery(
             now: { [unowned self] in now },
             activated: { [unowned self] in activated },
             reachable: { [unowned self] in reachable },
-            send: { [unowned self] message, failed in sent.append(message); failures.append(failed) },
+            send: { [unowned self] message, completed in sent.append(message); completions.append(completed) },
             saveContext: { [unowned self] in contexts.append($0) },
-            retryLater: { [unowned self] in retries.append($0) }
+            retryLater: { [unowned self] in scheduled.append((now + 2, $0)) },
+            acknowledged: { [unowned self] in acknowledgements.append($0) }
         )
+        func advance(_ seconds: Double) {
+            let end = now + seconds
+            while let first = scheduled.firstIndex(where: { $0.0 <= end }) {
+                let task = scheduled.remove(at: first)
+                now = task.0
+                task.1()
+            }
+            now = end
+        }
     }
 
-    func testUnavailableLinkKeepsOnlyLatestSampleAndResendsWhenReachable() {
+    func testUnavailableLinkKeepsLatestAndRecoversWithoutReachabilityCallback() {
         let transport = Transport()
         transport.reachable = false
         transport.delivery.receive(sample())
-        transport.now = t0.addingTimeInterval(3)
-        transport.delivery.receive(sample(166, seconds: 3))
-        XCTAssertTrue(transport.sent.isEmpty)
-        XCTAssertEqual(WatchHeartRateSample(message: transport.contexts.last!), sample(166, seconds: 3))
+        XCTAssertEqual(transport.contexts.count, 1)
         transport.reachable = true
-        transport.delivery.resendLatest()
+        transport.advance(2)
         XCTAssertEqual(transport.sent.count, 1)
-        XCTAssertEqual(WatchHeartRateSample(message: transport.sent[0]), sample(166, seconds: 3))
+        transport.completions[0](true)
+        XCTAssertEqual(transport.acknowledgements, [sample()])
     }
 
-    func testSendFailureFallsBackAndRetriesOnceWithOriginalTimestamp() {
+    func testMissingReplyTimesOutAndRetriesOnceWithOriginalTimestamp() {
         let transport = Transport()
         transport.delivery.receive(sample())
-        transport.failures[0]()
-        XCTAssertEqual(transport.contexts.count, 1)
-        XCTAssertEqual(transport.retries.count, 1)
-        transport.now = t0.addingTimeInterval(2)
-        transport.retries[0]()
+        transport.advance(4)
         XCTAssertEqual(transport.sent.count, 2)
         XCTAssertEqual(WatchHeartRateSample(message: transport.sent[1]), sample())
-        transport.failures[1]()
-        XCTAssertEqual(transport.retries.count, 1, "A persistent failure must not spin forever")
+        transport.advance(20)
+        XCTAssertEqual(transport.sent.count, 2, "A silent transport must not spin forever")
+        XCTAssertTrue(transport.acknowledgements.isEmpty)
     }
 
-    func testLateFailureAndRetryCannotReplaceANewerSample() {
+    func testSuccessfulAcknowledgementCancelsTimeoutFallback() {
         let transport = Transport()
         transport.delivery.receive(sample())
-        transport.failures[0]()
-        transport.now = t0.addingTimeInterval(3)
-        transport.delivery.receive(sample(166, seconds: 3))
-        transport.retries[0]()
-        transport.failures[0]()
+        transport.completions[0](true)
+        transport.advance(10)
+        XCTAssertEqual(transport.sent.count, 1)
+        XCTAssertTrue(transport.contexts.isEmpty)
+        XCTAssertEqual(transport.acknowledgements, [sample()])
+    }
+
+    func testSlowSendCoalescesNewSamplesAndFailureFallsBackToNewest() {
+        let transport = Transport()
+        transport.delivery.receive(sample())
+        transport.now = t0 + 1
+        transport.delivery.receive(sample(162, seconds: 1))
+        transport.now = t0 + 1.5
+        transport.delivery.receive(sample(166, seconds: 1.5))
+        XCTAssertEqual(transport.sent.count, 1)
+        transport.completions[0](false)
         XCTAssertEqual(transport.sent.count, 2)
-        XCTAssertEqual(transport.contexts.count, 1)
-        XCTAssertEqual(WatchHeartRateSample(message: transport.sent.last!), sample(166, seconds: 3))
+        XCTAssertEqual(WatchHeartRateSample(message: transport.sent[1]), sample(166, seconds: 1.5))
+        XCTAssertEqual(WatchHeartRateSample(message: transport.contexts[0]), sample(166, seconds: 1.5))
+        transport.completions[0](true) // Late callback must not acknowledge the old attempt.
+        XCTAssertTrue(transport.acknowledgements.isEmpty)
+        transport.completions[1](true)
+        XCTAssertEqual(transport.acknowledgements, [sample(166, seconds: 1.5)])
     }
 
-    func testResetCancelsPendingRetryAndLateFailure() {
+    func testResetCancelsPendingRetryTimeoutAndLateReply() {
         let transport = Transport()
         transport.delivery.receive(sample())
-        transport.failures[0]()
+        transport.completions[0](false)
         transport.delivery.reset()
-        transport.retries[0]()
-        transport.failures[0]()
+        transport.completions[0](true)
+        transport.advance(5)
         transport.delivery.resendLatest()
         XCTAssertEqual(transport.sent.count, 1)
         XCTAssertEqual(transport.contexts.count, 1)
+        XCTAssertTrue(transport.acknowledgements.isEmpty)
     }
 
-    func testStaleSampleIsNotRetriedOrResentAfterReconnection() {
+    func testStaleSampleIsNotResentAfterReconnection() {
         let transport = Transport()
+        transport.reachable = false
         transport.delivery.receive(sample())
-        transport.failures[0]()
-        transport.now = t0.addingTimeInterval(10)
-        transport.retries[0]()
+        transport.advance(10)
+        transport.reachable = true
         transport.delivery.resendLatest()
-        transport.failures[0]()
-        XCTAssertEqual(transport.sent.count, 1)
-        XCTAssertEqual(transport.contexts.count, 1)
+        XCTAssertTrue(transport.sent.isEmpty)
     }
 
     func testActivationAndUnchangedBPMStillDeliverFreshSamples() {
@@ -103,9 +123,23 @@ final class WatchHeartRateStreamTests: XCTestCase {
         XCTAssertTrue(transport.contexts.isEmpty)
         transport.activated = true
         transport.delivery.resendLatest()
-        transport.now = t0.addingTimeInterval(4)
+        transport.completions[0](true)
+        transport.advance(4)
         transport.delivery.receive(sample(seconds: 4))
-        XCTAssertEqual(transport.sent.count, 2, "Equal BPM with a new measurement date is a fresh reading")
+        XCTAssertEqual(transport.sent.count, 2)
+    }
+
+    func testDelayedErrorCannotOverrideNewerContextOrAttempt() {
+        let transport = Transport()
+        transport.delivery.receive(sample())
+        transport.advance(2) // timeout
+        transport.now = t0 + 3
+        transport.reachable = false
+        transport.delivery.receive(sample(170, seconds: 3))
+        let count = transport.contexts.count
+        transport.completions[0](false)
+        XCTAssertEqual(transport.contexts.count, count)
+        XCTAssertEqual(WatchHeartRateSample(message: transport.contexts.last!), sample(170, seconds: 3))
     }
 
     func testInboxRejectsDuplicatesOlderSamplesAndExpiredContext() {
@@ -150,6 +184,108 @@ final class WatchHeartRateStreamTests: XCTestCase {
         transport.delivery.receive(sample(seconds: -60))
         XCTAssertEqual(transport.sent.count, 2)
         XCTAssertNotNil(inbox.accept(transport.sent[1], now: transport.now))
+    }
+}
+
+final class WatchSessionReliabilityTests: XCTestCase {
+    func testIdleAndAlreadyCompletedWorkoutsNeverStartASensorSession() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        XCTAssertNil(lifecycle.preparationFinished())
+        XCTAssertNil(lifecycle.desire(sessionStarted: false, complete: false, workoutID: nil))
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: true, workoutID: "A"))
+    }
+
+    func testStartupWaitsForRecoveryAndAuthorizationAndUsesLatestIntent() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A"))
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "B"))
+        XCTAssertEqual(lifecycle.preparationFinished(), .start(workoutID: "B", token: 1))
+        XCTAssertNil(lifecycle.preparationFinished())
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "B"))
+    }
+
+    func testCompletionDuringStartupCleanupCancelsPendingStart() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        _ = lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A")
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: true, workoutID: "A"))
+        XCTAssertNil(lifecycle.preparationFinished())
+    }
+
+    func testRapidRestartWaitsForEndAndIgnoresOldCallbacks() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        _ = lifecycle.preparationFinished()
+        XCTAssertEqual(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A"), .start(workoutID: "A", token: 1))
+        XCTAssertEqual(lifecycle.desire(sessionStarted: false, complete: false, workoutID: nil), .stop(token: 1))
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "B"))
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "C"))
+        XCTAssertEqual(lifecycle.ended(token: 1), .start(workoutID: "C", token: 2))
+        XCTAssertNil(lifecycle.ended(token: 1, failed: true))
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "C"))
+    }
+
+    func testFailureDoesNotRestartEveryTimerTickButForegroundCanRetry() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        _ = lifecycle.preparationFinished()
+        _ = lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A")
+        XCTAssertNil(lifecycle.ended(token: 1, failed: true))
+        for _ in 0..<60 {
+            XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A"))
+        }
+        XCTAssertEqual(lifecycle.retry(), .start(workoutID: "A", token: 2))
+    }
+
+    func testUnexpectedEndDoesNotFightAnotherWorkoutApp() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        _ = lifecycle.preparationFinished()
+        _ = lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A")
+        XCTAssertNil(lifecycle.ended(token: 1))
+        XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A"))
+    }
+
+    func testLateStateContextCannotReopenFinishedWorkout() {
+        var inbox = WatchStateInbox()
+        XCTAssertTrue(inbox.accept([WatchMessageKey.stateRevision: 10]))
+        XCTAssertTrue(inbox.accept([WatchMessageKey.stateRevision: 12, WatchMessageKey.workoutComplete: true]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.stateRevision: 11, WatchMessageKey.isRunning: true]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.stateRevision: 12]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.isRunning: true]))
+        XCTAssertTrue(inbox.accept([WatchMessageKey.stateRevision: 13]))
+    }
+
+    func testLegacyStateWorksUntilVersionedStateArrives() {
+        var inbox = WatchStateInbox()
+        XCTAssertTrue(inbox.accept([:]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.stateRevision: "invalid"]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.stateRevision: -1]))
+        XCTAssertTrue(inbox.accept([WatchMessageKey.stateRevision: 1]))
+        XCTAssertFalse(inbox.accept([:]))
+    }
+
+    func testStateRevisionsIncreaseAcrossRelaunchClockCorrectionAndReinstall() {
+        let first = WatchStateInbox.nextRevision(after: 0, now: Date(timeIntervalSince1970: 1000))
+        let second = WatchStateInbox.nextRevision(after: first, now: Date(timeIntervalSince1970: 900))
+        let reinstalled = WatchStateInbox.nextRevision(after: 0, now: Date(timeIntervalSince1970: 1100))
+        XCTAssertGreaterThan(second, first)
+        XCTAssertGreaterThan(reinstalled, second)
+        var inbox = WatchStateInbox()
+        let modernRevision: Int64 = 1_790_000_000_000
+        XCTAssertTrue(inbox.accept([WatchMessageKey.stateRevision: modernRevision]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.stateRevision: modernRevision - 1]))
+        XCTAssertFalse(inbox.accept([WatchMessageKey.stateRevision: 1.5]))
+    }
+
+    func testMissingHeartRateRequestsAreBoundedAndStopAfterRecovery() {
+        var policy = WatchHeartRateRefreshPolicy()
+        let start = Date(timeIntervalSince1970: 1000)
+        XCTAssertFalse(policy.shouldRequest(now: start, workoutActive: false, watchInstalled: true, hasFreshReading: false))
+        XCTAssertFalse(policy.shouldRequest(now: start, workoutActive: true, watchInstalled: false, hasFreshReading: false))
+        XCTAssertTrue(policy.shouldRequest(now: start, workoutActive: true, watchInstalled: true, hasFreshReading: false))
+        for i in 1..<5 {
+            XCTAssertFalse(policy.shouldRequest(now: start + Double(i), workoutActive: true, watchInstalled: true, hasFreshReading: false))
+        }
+        XCTAssertTrue(policy.shouldRequest(now: start + 5, workoutActive: true, watchInstalled: true, hasFreshReading: false))
+        XCTAssertFalse(policy.shouldRequest(now: start + 6, workoutActive: true, watchInstalled: true, hasFreshReading: true))
+        XCTAssertTrue(policy.shouldRequest(now: start + 20, workoutActive: true, watchInstalled: true, hasFreshReading: false))
     }
 }
 

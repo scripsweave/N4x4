@@ -4,16 +4,20 @@ import HealthKit
 
 private final class FakeHealthExportClient: HealthWorkoutExportClient {
     var authorization: HKAuthorizationStatus = .sharingAuthorized
+    var heartRateAuthorization: HKAuthorizationStatus = .sharingAuthorized
     var isAvailable = true
     var failSave = false
     var failQuery = false
     var calls: [UUID] = []
     var objects: [UUID: UUID] = [:]
+    var heartRates: [UUID: [HealthWorkoutHeartRateSample]] = [:]
+    var contents: [UUID: HealthWorkoutExport.HeartRateContent] = [:]
     var candidates: [HealthWorkoutMatch] = []
     var onSave: (() -> Void)?
     var hold = false
     var continuation: CheckedContinuation<Void, Never>?
-    func save(_ export: HealthWorkoutExport, id: UUID) async throws -> UUID {
+    func save(_ export: HealthWorkoutExport, id: UUID,
+              heartRateSamples: [HealthWorkoutHeartRateSample] = []) async throws -> HealthWorkoutSaveResult {
         calls.append(id)
         if hold {
             await withCheckedContinuation { continuation in
@@ -22,9 +26,15 @@ private final class FakeHealthExportClient: HealthWorkoutExportClient {
             }
         }
         if failSave { throw HealthExportError.unconfirmed }
-        let result = objects[id] ?? UUID()
+        if let result = objects[id] { return HealthWorkoutSaveResult(id: result, heartRateContent: contents[id]) }
+        if export.heartRateContent == .included && heartRateAuthorization != .sharingAuthorized {
+            throw HealthExportError.heartRatePermission
+        }
+        let result = UUID()
         objects[id] = result
-        return result
+        heartRates[id] = heartRateSamples
+        contents[id] = export.heartRateContent
+        return HealthWorkoutSaveResult(id: result, heartRateContent: export.heartRateContent)
     }
     func matches(_ export: HealthWorkoutExport, id: UUID) async throws -> [HealthWorkoutMatch] {
         if failQuery { throw HealthExportError.unavailable }
@@ -98,7 +108,7 @@ final class HealthWorkoutExportTests: XCTestCase {
         restored.retryHealthExports()
         await restored.healthExportTask?.value
         XCTAssertEqual(client.objects.count, 1)
-        XCTAssertEqual(restored.workoutLogEntries.first?.healthExport?.healthID, remoteID)
+        XCTAssertEqual(restored.workoutLogEntries.first?.healthExport?.healthID, remoteID.id)
     }
 
     @MainActor
@@ -277,6 +287,170 @@ final class HealthWorkoutExportTests: XCTestCase {
 }
 
 extension HealthWorkoutExportTests {
+    func testHeartRateExportPreservesTimingGapsAndFiltersInvalidSamples() throws {
+        let start = Date(timeIntervalSince1970: 1_790_000_000.25)
+        let export = HealthWorkoutExport(start: start, end: start + 120, requested: true)
+        let id = UUID()
+        let series = HeartRateSeries(samples: [
+            .init(t: 0, bpm: 110), .init(t: 2, bpm: 120),
+            .init(t: 90, bpm: 150), .init(t: 120, bpm: 145),
+            .init(t: 90, bpm: 151), .init(t: 122, bpm: 140),
+            .init(t: -1, bpm: 100), .init(t: .nan, bpm: 120),
+            .init(t: 5, bpm: .infinity), .init(t: 6, bpm: 0)
+        ], spans: [], startedAt: Date(timeIntervalSince1970: 1_790_000_000))
+        let result = HealthWorkoutHeartRateSample.samples(from: series, export: export, id: id)
+        XCTAssertEqual(result.map(\.bpm), [110, 120, 150, 145])
+        XCTAssertEqual(result.map { $0.date.timeIntervalSince(start) }, [0, 2, 90, 120])
+        XCTAssertEqual(result, HealthWorkoutHeartRateSample.samples(from: series, export: export, id: id))
+        XCTAssertEqual(Set(result.map(\.syncIdentifier)).count, 4)
+        let sample = try XCTUnwrap(result.first).quantitySample
+        XCTAssertEqual(sample.quantityType, HKQuantityType(.heartRate))
+        XCTAssertEqual(sample.quantity.doubleValue(for: .count().unitDivided(by: .minute())), 110)
+        XCTAssertEqual(sample.startDate, start)
+        XCTAssertEqual(sample.endDate, start, "No invented readings across pauses or signal gaps")
+        XCTAssertEqual(sample.metadata?[HKMetadataKeySyncIdentifier] as? String, result.first?.syncIdentifier)
+        XCTAssertEqual(sample.metadata?[HKMetadataKeySyncVersion] as? Int, 1)
+    }
+
+    @MainActor
+    func testBluetoothCompletionExportsItsPersistedHeartRateSeries() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        vm.warmupDuration = 0
+        vm.startTimer()
+        vm.ingestHeartRate(153, from: .bluetooth)
+        vm.finishAndSaveWorkout(now: Date().addingTimeInterval(10))
+        await vm.healthExportTask?.value
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        defer { HeartRateSeriesStore.delete(for: id) }
+        XCTAssertEqual(client.heartRates[id]?.map(\.bpm), [153])
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.heartRateContent, .included)
+        XCTAssertEqual(vm.healthHeartRateStatus(for: id), "Recorded heart rate included.")
+    }
+
+    @MainActor
+    func testHeartRatePermissionIsSeparateAndDoesNotBlockWorkoutSave() async throws {
+        for permission in [HKAuthorizationStatus.sharingDenied, .notDetermined] {
+            let client = FakeHealthExportClient()
+            client.heartRateAuthorization = permission
+            let vm = model(client)
+            let row = entry()
+            defer { HeartRateSeriesStore.delete(for: row.id) }
+            XCTAssertTrue(HeartRateSeriesStore.save(HeartRateSeries(
+                samples: [.init(t: 5, bpm: 145)], spans: [], startedAt: row.healthExport!.start), for: row.id))
+            vm.workoutLogEntries = [row]
+            vm.refreshHealthKitAuthorizationState()
+            XCTAssertTrue(vm.healthAuthorizationGranted)
+            XCTAssertEqual(vm.heartRateWritePermissionState, permission == .sharingDenied ? .denied : .notDetermined)
+            vm.retryHealthExports()
+            await vm.healthExportTask?.value
+            XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.state, .saved)
+            XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.heartRateContent, .permissionNotGranted)
+            XCTAssertEqual(client.heartRates[row.id], [])
+            client.heartRateAuthorization = .sharingAuthorized
+            vm.retryHealthExports()
+            await vm.healthExportTask?.value
+            XCTAssertEqual(client.calls, [row.id], "Already saved workouts are never rewritten")
+        }
+    }
+
+    @MainActor
+    func testInterruptedHeartRateSaveRetriesIdenticalSamplesAfterRelaunch() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        var row = entry()
+        row.healthExport?.heartRateContent = .included
+        let export = try XCTUnwrap(row.healthExport)
+        let series = HeartRateSeries(samples: [.init(t: 1, bpm: 120), .init(t: 50, bpm: 155)],
+                                     spans: [], startedAt: export.start)
+        defer { HeartRateSeriesStore.delete(for: row.id) }
+        XCTAssertTrue(HeartRateSeriesStore.save(series, for: row.id))
+        vm.workoutLogEntries = [row]
+        XCTAssertTrue(vm.persistWorkoutLogEntries())
+        let samples = HealthWorkoutHeartRateSample.samples(from: series, export: export, id: row.id)
+        let remote = try await client.save(export, id: row.id, heartRateSamples: samples)
+        // Crash before the local acknowledgement; permission also changes.
+        client.heartRateAuthorization = .sharingDenied
+        let restored = model(client)
+        restored.retryHealthExports()
+        await restored.healthExportTask?.value
+        XCTAssertEqual(client.objects.count, 1)
+        XCTAssertEqual(client.heartRates[row.id], samples)
+        XCTAssertEqual(restored.workoutLogEntries.first?.healthExport?.healthID, remote.id)
+        XCTAssertEqual(restored.workoutLogEntries.first?.healthExport?.heartRateContent, .included)
+    }
+
+    @MainActor
+    func testPreparedHeartRateExportNeverSilentlyDowngradesOnRetry() async throws {
+        let client = FakeHealthExportClient()
+        client.failSave = true
+        let vm = model(client)
+        let row = entry()
+        defer { HeartRateSeriesStore.delete(for: row.id) }
+        XCTAssertTrue(HeartRateSeriesStore.save(HeartRateSeries(
+            samples: [.init(t: 5, bpm: 145)], spans: [], startedAt: row.healthExport!.start), for: row.id))
+        vm.workoutLogEntries = [row]
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.heartRateContent, .included)
+        client.failSave = false
+        client.heartRateAuthorization = .sharingDenied
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(vm.pendingHealthExports, 1)
+        XCTAssertTrue(client.objects.isEmpty)
+        client.heartRateAuthorization = .sharingAuthorized
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(client.heartRates[row.id]?.map(\.bpm), [145])
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.state, .saved)
+    }
+
+    @MainActor
+    func testMissingPreparedSeriesKeepsExportPending() async {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        var row = entry()
+        row.healthExport?.heartRateContent = .included
+        vm.workoutLogEntries = [row]
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertTrue(client.calls.isEmpty)
+        XCTAssertEqual(vm.pendingHealthExports, 1)
+        XCTAssertEqual(vm.latestHealthExportError, HealthExportError.missingHeartRate.errorDescription)
+    }
+
+    @MainActor
+    func testWatchImportExportsHeartRateFromOriginalWatchTimeline() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        var engine = WatchWorkoutEngine.start(plan: .fallback, now: start)!
+        engine.record(bpm: 122, now: start + 5)
+        engine.record(bpm: 148, now: start + 15)
+        engine.reconcile(now: start + 10_000)
+        let record = try XCTUnwrap(engine.completedRecord())
+        defer { HeartRateSeriesStore.delete(for: record.id) }
+        XCTAssertTrue(vm.importWatchWorkout(record))
+        XCTAssertTrue(vm.canAcknowledgeWatchWorkout(record.id))
+        await vm.healthExportTask?.value
+        XCTAssertEqual(client.heartRates[record.id]?.map(\.bpm), [122, 148])
+        XCTAssertEqual(client.heartRates[record.id]?.map(\.date), [start + 5, start + 15])
+    }
+
+    @MainActor
+    func testLegacyExportsDecodeWithoutClaimingHeartRateWasIncluded() throws {
+        let row = entry()
+        let data = try JSONEncoder().encode(row.healthExport)
+        let decoded = try JSONDecoder().decode(HealthWorkoutExport.self, from: data)
+        XCTAssertNil(decoded.heartRateContent)
+        let vm = model(FakeHealthExportClient())
+        var saved = row
+        saved.healthExport?.state = .saved
+        vm.workoutLogEntries = [saved]
+        XCTAssertNil(vm.healthHeartRateStatus(for: row.id))
+    }
+
     @MainActor
     func testFailedSeriesSaveRetainsExportInCheckpointUntilRecovery() async throws {
         let client = FakeHealthExportClient()
@@ -349,6 +523,70 @@ extension HealthWorkoutExportTests {
         vm.ingestHeartRate(145, from: .watch)
         XCTAssertTrue(vm.hasFreshWatchHeartRate)
         XCTAssertEqual(vm.heartRateSourceLabel, vm.bleHeartRateManager.rememberedName ?? "Heart Rate Monitor")
+    }
+
+    @MainActor
+    func testWatchReceiptAcknowledgesDuplicatesWithoutRecordingThemTwice() {
+        let vm = model(FakeHealthExportClient())
+        // Whole seconds make the exact ten-second expiry boundary independent
+        // of sub-microsecond rounding in the WCSession timestamp conversion.
+        let now = Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
+        let message = WatchHeartRateSample(bpm: 145, measuredAt: now).message
+        XCTAssertTrue(vm.ingestWatchHeartRate(message, now: now))
+        XCTAssertTrue(vm.ingestWatchHeartRate(message, now: now + 1))
+        XCTAssertEqual(vm.watchHeartRateAcceptedCount, 1)
+        XCTAssertEqual(vm.watchHeartRateRejectedCount, 0)
+        XCTAssertEqual(vm.lastWatchHeartRateMeasuredAt?.timeIntervalSince1970 ?? 0,
+                       now.timeIntervalSince1970, accuracy: 0.000001)
+        XCTAssertFalse(vm.ingestWatchHeartRate(message, now: now + 10))
+        XCTAssertEqual(vm.watchHeartRateRejectedCount, 1)
+        XCTAssertEqual(vm.lastWatchHeartRateRejection, "Invalid or expired reading")
+        XCTAssertFalse(vm.ingestWatchHeartRate(message, now: now + 20, isCachedContext: true))
+        XCTAssertEqual(vm.lastWatchHeartRateReceivedAt, now + 10, "Rereading local context is not a new packet")
+        XCTAssertEqual(vm.watchHeartRateRejectedCount, 1)
+    }
+
+    @MainActor
+    func testLateHeartRateFromPreviousWorkoutCannotEnterANewWorkout() throws {
+        let vm = model(FakeHealthExportClient())
+        vm.startTimer()
+        defer { vm.reset() }
+        let id = try XCTUnwrap(vm.activeWorkoutID)
+        let now = Date()
+        let old = WatchHeartRateSample(bpm: 145, measuredAt: now, workoutID: UUID().uuidString)
+        XCTAssertFalse(vm.ingestWatchHeartRate(old.message, now: now))
+        XCTAssertNil(vm.currentHeartRate)
+        XCTAssertEqual(vm.lastWatchHeartRateRejection, "Reading belongs to another workout")
+        let current = WatchHeartRateSample(bpm: 145, measuredAt: now, workoutID: id.uuidString)
+        XCTAssertTrue(vm.ingestWatchHeartRate(current.message, now: now))
+        XCTAssertEqual(vm.currentHeartRate, 145)
+    }
+
+    @MainActor
+    func testEmptyContextIsNotReportedAsAHeartRatePacketAndDiagnosticsExcludeBPM() {
+        let vm = model(FakeHealthExportClient())
+        XCTAssertFalse(vm.ingestWatchHeartRate([:]))
+        XCTAssertNil(vm.lastWatchHeartRateReceivedAt)
+        XCTAssertEqual(vm.watchHeartRateRejectedCount, 0)
+        let now = Date()
+        XCTAssertTrue(vm.ingestWatchHeartRate(WatchHeartRateSample(bpm: 153, measuredAt: now).message, now: now))
+        let diagnostics = vm.healthDiagnosticsSummary()
+        XCTAssertTrue(diagnostics.contains("Watch HR received this launch: 1"))
+        XCTAssertFalse(diagnostics.contains("153"))
+        XCTAssertFalse(diagnostics.contains("BPM"))
+    }
+
+    @MainActor
+    func testDelayedWatchReadingRecordsMeasurementTimeInsteadOfArrivalTime() throws {
+        let vm = model(FakeHealthExportClient())
+        let start = Date().addingTimeInterval(-10)
+        vm.startTimer(now: start)
+        let id = try XCTUnwrap(vm.activeWorkoutID)
+        defer { HeartRateSeriesStore.delete(for: id) }
+        let sample = WatchHeartRateSample(bpm: 145, measuredAt: start + 2, workoutID: id.uuidString)
+        XCTAssertTrue(vm.ingestWatchHeartRate(sample.message, now: start + 9))
+        vm.finishAndSaveWorkout(now: start + 11)
+        XCTAssertEqual(vm.completedSeries?.samples.first?.t ?? -1, 2, accuracy: 0.000001)
     }
 }
 

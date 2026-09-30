@@ -23,6 +23,8 @@ enum WatchMessageKey {
 
     // ── State sync payload: Phone → Watch ────────────────────
     static let stateSync            = "state_sync"
+    static let stateRevision        = "stateRevision"
+    static let hrAcknowledgement    = "hrAcknowledgement"
     static let isRunning            = "isRunning"             // Bool
     static let currentIntervalIndex = "currentIntervalIndex" // Int
     static let intervalEndTime      = "intervalEndTime"      // Double (timeIntervalSince1970)

@@ -29,6 +29,7 @@ final class PhoneWorkoutSessionManager: NSObject {
 
     /// Heart-rate read is what the live builder needs; workout share is
     /// required to create a session at all (nothing is ever saved from here).
+    /// Heart-rate share is used later by the phone's completed-workout export.
     func requestAuthorization(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable(),
               let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
@@ -36,7 +37,7 @@ final class PhoneWorkoutSessionManager: NSObject {
             return
         }
         healthStore.requestAuthorization(
-            toShare: [HKObjectType.workoutType()],
+            toShare: [HKObjectType.workoutType(), hrType],
             read:    [hrType]
         ) { success, _ in
             DispatchQueue.main.async { completion(success) }

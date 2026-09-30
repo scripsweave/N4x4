@@ -1,0 +1,7 @@
+Recorded heart rate in Apple Health
+Your recorded heart-rate readings now accompany newly exported workouts, including readings from Polar and other Bluetooth monitors. Allow N4x4 to write Heart Rate in Settings > Health & Devices > Review Health Access.
+
+Improved Apple Watch reliability
+More reliable workout startup, heart-rate delivery and recovery after interruptions, with clearer connection status and a retry option on the Watch. Stale readings now clear from the display.
+
+Thank you for your feedback and support!

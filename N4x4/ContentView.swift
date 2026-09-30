@@ -1005,7 +1005,9 @@ private struct OnboardingView: View {
     }
 
     private func requestHealth() {
-        if timerViewModel.healthKitPermissionState == .granted {
+        if timerViewModel.healthKitPermissionState == .granted,
+           timerViewModel.heartRateWritePermissionState != .notDetermined,
+           timerViewModel.heartRateWritePermissionState != .unknown {
             timerViewModel.healthKitEnabled = true
             timerViewModel.healthKitUserOptedOut = false
             timerViewModel.fetchVO2MaxSamples()

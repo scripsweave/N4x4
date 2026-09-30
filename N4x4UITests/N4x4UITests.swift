@@ -371,6 +371,11 @@ extension N4x4UITests {
         XCTAssertEqual(master.value as? String, "0")
         XCTAssertFalse(app.switches["healthWorkoutLogging"].isEnabled)
         XCTAssertEqual(app.alerts.count, 0)
+        let heartRatePermission = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Heart Rate write permission")).firstMatch
+        reveal(heartRatePermission, in: app)
+        XCTAssertTrue(heartRatePermission.exists)
+        XCTAssertEqual(app.alerts.count, 0, "Viewing the new write-permission status must not prompt")
         keepScreenshot("Health and Devices - Health saving", app: app)
         let watch = app.buttons.containing(.staticText, identifier: "Apple Watch").firstMatch
         reveal(watch, in: app)

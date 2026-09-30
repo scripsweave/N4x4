@@ -199,6 +199,7 @@ extension WatchWorkoutEngine {
         s.hrHigh = targetRange.high
         s.workoutComplete = isComplete
         s.sessionStarted = true
+        s.workoutID = id.uuidString
         s.currentIntervalIndex = currentIndex
         return s
     }
@@ -232,6 +233,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     private(set) var engine: WatchWorkoutEngine?
     /// Last state the phone sent (mirror mode seed).
     private var lastPhoneState: WatchTimerState = .idle
+    private var stateInbox = WatchStateInbox()
     /// Plan from the last sync — what a standalone run uses.
     private(set) var cachedPlan: WatchWorkoutPlan?
     /// Set when the user ends a mirrored workout while the phone is
@@ -444,6 +446,16 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     /// aren't invalidated every second (the countdown itself is derived by
     /// the views from the absolute end time).
     func tick(now: Date = Date()) {
+        if WCSession.isSupported(), WCSession.default.activationState == .activated {
+            let reachable = WCSession.default.isReachable
+            if reachable != isReachable {
+                isReachable = reachable
+                if reachable {
+                    requestStateFromPhone()
+                    onHeartRateRefreshRequested?()
+                }
+            }
+        }
         let next: WatchTimerState
         switch mode {
         case .local:
@@ -691,6 +703,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     // MARK: - State parsing
 
     private func applyStatePayload(_ p: [String: Any]) {
+        guard stateInbox.accept(p) else { return }
         let state = WatchTimerState(
             isRunning:            p[WatchMessageKey.isRunning]            as? Bool   ?? false,
             intervalEndTime:      Date(timeIntervalSince1970:

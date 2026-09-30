@@ -27,8 +27,9 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     /// Recover a fresh reading immediately when the phone returns or reconnects.
     /// Stored context is latest-only and is validated using the sample's date.
     func refreshHeartRate() {
+        refreshWatchState()
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
-        timerViewModel?.ingestWatchHeartRate(WCSession.default.receivedApplicationContext)
+        timerViewModel?.ingestWatchHeartRate(WCSession.default.receivedApplicationContext, isCachedContext: true)
         guard WCSession.default.isReachable else { return }
         WCSession.default.sendMessage(
             [WatchMessageKey.messageType: WatchMessageKey.cmdRequestHeartRate],
@@ -59,7 +60,10 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
         let hrLow = range?.lowerBound ?? 0
         let hrHigh = range?.upperBound ?? 0
 
+        let revision = WatchStateInbox.nextRevision(after: Int64(UserDefaults.standard.integer(forKey: "watchStateRevision")), now: Date())
+        UserDefaults.standard.set(revision, forKey: "watchStateRevision")
         let payload: [String: Any] = [
+            WatchMessageKey.stateRevision:          revision,
             WatchMessageKey.messageType:            WatchMessageKey.stateSync,
             WatchMessageKey.isRunning:              vm.isRunning,
             WatchMessageKey.currentIntervalIndex:   vm.currentIntervalIndex,
@@ -93,14 +97,14 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.workoutTypeRaw:         vm.resolvedDefaultWorkoutType.rawValue,
         ]
 
+        // Publish the newest context now. An old send's error callback must
+        // never replace a more recent pause/end/reset with its stale payload.
+        do { try WCSession.default.updateApplicationContext(payload) }
+        catch { print("[PhoneSessionManager] State context failed: \(error.localizedDescription)") }
         if WCSession.default.isReachable {
-            WCSession.default.sendMessage(payload, replyHandler: nil) { _ in
-                // Fallback: stash in applicationContext so the Watch gets the
-                // latest state on its next connection.
-                try? WCSession.default.updateApplicationContext(payload)
+            WCSession.default.sendMessage(payload, replyHandler: nil) { error in
+                print("[PhoneSessionManager] State send failed: \(error.localizedDescription)")
             }
-        } else {
-            try? WCSession.default.updateApplicationContext(payload)
         }
     }
 
@@ -137,7 +141,11 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     /// Fired when live reachability changes (Watch app foregrounded/backgrounded).
     func sessionReachabilityDidChange(_ session: WCSession) {
         refreshWatchState()
-        DispatchQueue.main.async { [weak self] in self?.refreshHeartRate() }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if session.isReachable, let vm = self.timerViewModel { self.sendStateUpdate(to: vm) }
+            self.refreshHeartRate()
+        }
     }
 
     /// Read the current WCSession flags and push them to the view model so the UI
@@ -156,7 +164,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     }
 
     // Required on iOS so the session survives the user switching Watches.
-    func sessionDidBecomeInactive(_ session: WCSession) {}
+    func sessionDidBecomeInactive(_ session: WCSession) { refreshWatchState() }
     func sessionDidDeactivate(_ session: WCSession) {
         WCSession.default.activate()
     }
@@ -175,8 +183,17 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     func session(_ session: WCSession,
                  didReceiveMessage message: [String: Any],
                  replyHandler: @escaping ([String: Any]) -> Void) {
-        DispatchQueue.main.async { [weak self] in self?.handle(message) }
-        replyHandler([:])
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { replyHandler([:]); return }
+            if message[WatchMessageKey.messageType] as? String == WatchMessageKey.heartRate {
+                let accepted = self.timerViewModel?.ingestWatchHeartRate(message) ?? false
+                let timestamp = message[WatchMessageKey.hrTimestamp] as? Double
+                replyHandler(accepted && timestamp != nil ? [WatchMessageKey.hrAcknowledgement: timestamp!] : [:])
+            } else {
+                self.handle(message)
+                replyHandler([:])
+            }
+        }
     }
 
     /// Queued delivery (transferUserInfo) — how the Watch hands over workouts

@@ -33,8 +33,11 @@ struct N4x4WatchApp: App {
                     sessionManager.onHeartRateRefreshRequested = { [weak workoutManager] in
                         workoutManager?.resendLatestHeartRate()
                     }
+                    workoutManager.onReading = { [weak sessionManager] sample in
+                        sessionManager?.evaluateZoneHaptic(bpm: sample.bpm)
+                        sessionManager?.recordHeartRate(sample.bpm, now: sample.measuredAt)
+                    }
                     sessionManager.activate()
-                    workoutManager.requestAuthorization { _ in }
                     workoutManager.discardAbandonedSession()
                 }
         }
@@ -70,13 +73,6 @@ private struct WatchRootView: View {
         }
         .onAppear { syncWorkoutSession(for: state) }
 
-        // Drive the zone-feedback engine off each fresh HR reading, and keep
-        // the Watch-led series (local mode records; mirror mode ignores).
-        .onChange(of: workoutManager.heartRate) { _, bpm in
-            sessionManager.evaluateZoneHaptic(bpm: bpm)
-            sessionManager.recordHeartRate(bpm)
-        }
-
         .onChange(of: sessionManager.timerState) { _, s in
             syncWorkoutSession(for: s)
             scheduleCountdownTaps(for: s)
@@ -104,7 +100,10 @@ private struct WatchRootView: View {
 
         // Foreground return: catch the engine up, re-sync, retry pending uploads.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, !demoMode { sessionManager.appDidBecomeActive() }
+            if phase == .active, !demoMode {
+                workoutManager.refreshOnForeground()
+                sessionManager.appDidBecomeActive()
+            }
         }
     }
 
@@ -117,12 +116,8 @@ private struct WatchRootView: View {
     /// starts HR streaming.
     private func syncWorkoutSession(for s: WatchTimerState) {
         guard !demoMode else { return }
-        let shouldRun = s.isRunning || (!s.workoutComplete && s.intervalDuration > 0)
-        if shouldRun, !workoutManager.isSessionActive {
-            workoutManager.startWorkout()
-        } else if !shouldRun, workoutManager.isSessionActive {
-            workoutManager.stopWorkout()
-        }
+        workoutManager.updateWorkout(sessionStarted: s.sessionStarted,
+                                     complete: s.workoutComplete, workoutID: s.workoutID)
     }
 
     // MARK: Countdown haptics

@@ -294,6 +294,26 @@ To verify:
   Reconnect/foreground may resend only fresh samples. Phone messages and
   application context enter `TimerViewModel.ingestWatchHeartRate`, then the
   usual source aggregator. Regression tests: `WatchHeartRateStreamTests`.
+- **Watch sensor startup is serialized.** `WatchWorkoutSessionLifecycle`
+  gates startup on authorization and abandoned-session cleanup finishing,
+  requires `sessionStarted && !workoutComplete`, and waits for an old session's
+  `.ended` before starting a new workout ID. Never use intervalDuration as an
+  activity flag: idle phone state includes the next interval's duration.
+- **Delivery is acknowledged and bounded.** Only the newest pending HR sample
+  is retained, with two-second acknowledgement timeout and one retry per sample.
+  Late callbacks cannot affect a new attempt. The phone acknowledges fresh
+  accepted/duplicate samples after processing. Cached context reads aren't new
+  packet arrivals in diagnostics. Preserve the measurement timestamp in the
+  recorder; don't record the same preferred reading again on another source's
+  callback. Watch samples expire just like phone samples.
+- **Timer messages are ordered.** Publish the latest application context at
+  send time, never from a delayed error callback. `stateRevision` is monotonic
+  across sends/relaunches; the Watch rejects older/duplicate state. Keep the
+  legacy-state fallback until a versioned payload arrives.
+- **Watch readings drive recording directly.** The root installs
+  `WorkoutManager.onReading`; don't record/haptic from SwiftUI `onChange` of
+  the BPM number. Equal BPM with a new measurement date is a new reading, and
+  background recording must not depend on view rendering.
 - **Workout layout adapts to available width.** Compact screens place the cue
   inside the ring; wider screens show it below and keep the target visible.
   Keep controls within their safe area. DEBUG `-demoHeartRate 0` exercises
@@ -508,6 +528,13 @@ To verify:
   standard Bluetooth HR (Powerbeats Pro 2 do).
 
 ## One workout per session in Apple Health (4.8+)
+
+- Completed Health exports also attach the persisted heart-rate series (next
+  release after 5.6). Heart Rate write permission is separate from Workouts.
+  Freeze `HealthWorkoutExport.heartRateContent` before the first remote write;
+  don't silently downgrade a prepared HR export on a retry. Preserve the sample
+  sync identifiers and the original wall-clock timeline, including gaps.
+  Existing saved workouts must not be automatically replaced/backfilled.
 
 - `retryHealthExports()` (phone, in `HealthWorkoutExport.swift`) is the ONLY
   export path. Completion, imports and explicit History recovery persist an

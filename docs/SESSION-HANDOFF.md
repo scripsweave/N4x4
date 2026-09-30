@@ -1,5 +1,24 @@
 # N4x4 — Session Handoff
 
+> **5.7 release prepared (2026-09-30):** Both changes below are included.
+> Version 5.7 is set in all six shipping configurations. User authorized commit,
+> push and App Store release. Cloud build and review submission are pending.
+> Version 5.6 is now live (verified through App Store Connect).
+
+> **Watch reliability investigation (2026-09-30):**
+> `fix/watch-session-reliability` preserves the pending Health HR export work
+> below and fixes confirmed Watch startup, message-ordering, delivery recovery,
+> and stale-display defects. Read
+> [`SESSION-HANDOFF-2026-09-30-WATCH-RELIABILITY.md`](SESSION-HANDOFF-2026-09-30-WATCH-RELIABILITY.md).
+> Gowen's exact Series 11/watchOS 27
+> radio behaviour still needs physical-device validation.
+
+> **Heart rate in Health exports (2026-09-29):** On
+> `feature/health-workout-heart-rate`, completed exports now attach recorded HR
+> samples and expose separate Heart Rate write permission. See
+> [`SESSION-HANDOFF-2026-09-29-HEALTH-HR.md`](SESSION-HANDOFF-2026-09-29-HEALTH-HR.md).
+> Included in 5.7; 5.6 does not include this change.
+
 > **5.6 submitted (2026-09-29):** Consolidated
 > integration settings, persistent Health export retries, and explicit recovery
 > of older History sessions. See

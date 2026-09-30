@@ -272,6 +272,23 @@ struct WatchTimerView: View {
                     .minimumScaleFactor(0.8)
                 }
 
+                if let error = workoutManager.lastSessionError {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(WatchPalette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Retry Heart Rate") { workoutManager.refreshOnForeground() }
+                        .buttonStyle(WatchControlButtonStyle())
+                } else if sessionManager.mode == .mirror, workoutManager.heartRate > 0 {
+                    let recentlyConfirmed = workoutManager.lastPhoneAcknowledgement.map {
+                        Date().timeIntervalSince($0) < WatchHeartRateSample.maximumAge
+                    } ?? false
+                    Text(recentlyConfirmed ? "Heart rate received by iPhone" : "Waiting for iPhone to receive heart rate")
+                        .font(.footnote)
+                        .foregroundStyle(recentlyConfirmed ? WatchPalette.textSecondary : WatchPalette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Button { sessionManager.togglePause() } label: {
                     HStack(spacing: 6) {
                         Image(systemName: state.isRunning ? "pause.fill" : "play.fill")

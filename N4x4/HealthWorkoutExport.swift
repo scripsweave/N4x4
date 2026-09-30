@@ -5,6 +5,7 @@ import UIKit
 /// Persisted with History so a crash cannot lose the intent to export a workout.
 struct HealthWorkoutExport: Codable, Equatable {
     enum State: String, Codable { case pending, saved, notRequested }
+    enum HeartRateContent: String, Codable { case included, noSamples, permissionNotGranted }
     // Numeric timestamps retain precision with the History encoder's ISO date strategy.
     let startTimestamp: Double
     let endTimestamp: Double
@@ -14,6 +15,9 @@ struct HealthWorkoutExport: Codable, Equatable {
     var lastError: String?
     var healthID: UUID?
     var savedAt: Date?
+    // Frozen before the first Health write. Retries must not change the payload
+    // when permissions change. Nil on older exports means inclusion is unknown.
+    var heartRateContent: HeartRateContent?
     var start: Date { Date(timeIntervalSince1970: startTimestamp) }
     var end: Date { Date(timeIntervalSince1970: endTimestamp) }
     var isValid: Bool { startTimestamp.isFinite && endTimestamp.isFinite && endTimestamp > startTimestamp }
@@ -26,11 +30,50 @@ struct HealthWorkoutExport: Codable, Equatable {
     static func syncIdentifier(_ id: UUID) -> String { "N4x4.workout.\(id.uuidString)" }
 }
 
+/// The recorded wall-clock timeline, not an average stretched across the session.
+/// Stable sample identities also prevent duplicate readings after an interrupted save.
+struct HealthWorkoutHeartRateSample: Equatable {
+    let date: Date
+    let bpm: Double
+    let syncIdentifier: String
+
+    static func samples(from series: HeartRateSeries?, export: HealthWorkoutExport,
+                        id: UUID) -> [Self] {
+        guard let series, export.isValid, series.startedAt.timeIntervalSince1970.isFinite else { return [] }
+        // Older series files round startedAt to whole seconds; the export keeps
+        // the original precision. Restore that anchor without shifting legacy
+        // sessions whose start was only estimated from their duration.
+        let start = abs(series.startedAt.timeIntervalSince(export.start)) < 1 ? export.start : series.startedAt
+        var seen: Set<Double> = []
+        return series.samples.enumerated().compactMap { index, sample in
+            guard sample.t.isFinite, sample.t >= 0, sample.bpm.isFinite, sample.bpm > 0 else { return nil }
+            let date = start.addingTimeInterval(sample.t)
+            guard date >= export.start, date <= export.end, seen.insert(sample.t).inserted else { return nil }
+            return Self(date: date, bpm: sample.bpm,
+                        syncIdentifier: "\(HealthWorkoutExport.syncIdentifier(id)).heartRate.\(index)")
+        }.sorted { $0.date < $1.date }
+    }
+
+    var quantitySample: HKQuantitySample {
+        HKQuantitySample(type: HKQuantityType(.heartRate),
+                         quantity: HKQuantity(unit: .count().unitDivided(by: .minute()), doubleValue: bpm),
+                         start: date, end: date,
+                         metadata: [HKMetadataKeySyncIdentifier: syncIdentifier,
+                                    HKMetadataKeySyncVersion: NSNumber(value: 1)])
+    }
+}
+
+struct HealthWorkoutSaveResult {
+    let id: UUID
+    let heartRateContent: HealthWorkoutExport.HeartRateContent?
+}
+
 struct HealthWorkoutMatch: Identifiable, Equatable {
     let id: UUID
     let start: Date
     let end: Date
     let syncIdentifier: String?
+    var heartRateContent: HealthWorkoutExport.HeartRateContent? = nil
 
     func exactlyMatches(_ export: HealthWorkoutExport) -> Bool {
         abs(start.timeIntervalSince(export.start)) <= 1 && abs(end.timeIntervalSince(export.end)) <= 1
@@ -39,27 +82,33 @@ struct HealthWorkoutMatch: Identifiable, Equatable {
 
 protocol HealthWorkoutExportClient {
     var authorization: HKAuthorizationStatus { get }
+    var heartRateAuthorization: HKAuthorizationStatus { get }
     var isAvailable: Bool { get }
-    func save(_ export: HealthWorkoutExport, id: UUID) async throws -> UUID
+    func save(_ export: HealthWorkoutExport, id: UUID,
+              heartRateSamples: [HealthWorkoutHeartRateSample]) async throws -> HealthWorkoutSaveResult
     func matches(_ export: HealthWorkoutExport, id: UUID) async throws -> [HealthWorkoutMatch]
 }
 
 enum HealthExportError: LocalizedError {
-    case unavailable, permission, unconfirmed, invalidTiming
+    case unavailable, permission, unconfirmed, invalidTiming, heartRatePermission, missingHeartRate
     var errorDescription: String? {
         switch self {
         case .unavailable: return "Apple Health is unavailable on this device."
         case .permission: return "Allow N4x4 to write workouts in Apple Health, then retry."
         case .unconfirmed: return "Apple Health did not confirm the save. It will be retried."
         case .invalidTiming: return "This session does not have usable workout timing."
+        case .heartRatePermission: return "Allow N4x4 to write Heart Rate in Apple Health, then retry this save."
+        case .missingHeartRate: return "The recorded heart-rate data could not be loaded. This workout will retry saving later."
         }
     }
 }
 
 final class SystemHealthWorkoutExportClient: HealthWorkoutExportClient {
+    private static let heartRateContentKey = "N4x4.heartRateContent"
     private let store = HKHealthStore()
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
     var authorization: HKAuthorizationStatus { store.authorizationStatus(for: .workoutType()) }
+    var heartRateAuthorization: HKAuthorizationStatus { store.authorizationStatus(for: HKQuantityType(.heartRate)) }
 
     func matches(_ export: HealthWorkoutExport, id: UUID) async throws -> [HealthWorkoutMatch] {
         guard isAvailable, let bundleID = Bundle.main.bundleIdentifier else { throw HealthExportError.unavailable }
@@ -82,45 +131,64 @@ final class SystemHealthWorkoutExportClient: HealthWorkoutExportClient {
                     sourceIDs.contains($0.sourceRevision.source.bundleIdentifier)
                 }.map {
                     HealthWorkoutMatch(id: $0.uuid, start: $0.startDate, end: $0.endDate,
-                                       syncIdentifier: $0.metadata?[HKMetadataKeySyncIdentifier] as? String)
+                                       syncIdentifier: $0.metadata?[HKMetadataKeySyncIdentifier] as? String,
+                                       heartRateContent: ($0.metadata?[Self.heartRateContentKey] as? String)
+                                        .flatMap(HealthWorkoutExport.HeartRateContent.init(rawValue:)))
                 })
             }
             store.execute(query)
         }
     }
 
-    func save(_ export: HealthWorkoutExport, id: UUID) async throws -> UUID {
+    func save(_ export: HealthWorkoutExport, id: UUID,
+              heartRateSamples: [HealthWorkoutHeartRateSample]) async throws -> HealthWorkoutSaveResult {
         guard isAvailable else { throw HealthExportError.unavailable }
         guard authorization == .sharingAuthorized else { throw HealthExportError.permission }
         guard export.isValid else { throw HealthExportError.invalidTiming }
+        // A previous attempt can have succeeded before the local acknowledgement.
+        // A missing read result is not proof of absence; sync IDs remain the guard.
+        if let existing = try? await existingResult(export, id: id) { return existing }
+        if export.heartRateContent == .included {
+            guard heartRateAuthorization == .sharingAuthorized else { throw HealthExportError.heartRatePermission }
+            guard !heartRateSamples.isEmpty else { throw HealthExportError.missingHeartRate }
+        }
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .highIntensityIntervalTraining
         configuration.locationType = .indoor
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: .local())
         do {
-            try await builder.addMetadata([
+            var metadata: [String: Any] = [
                 HKMetadataKeySyncIdentifier: HealthWorkoutExport.syncIdentifier(id),
                 HKMetadataKeySyncVersion: NSNumber(value: 1)
-            ])
+            ]
+            if let content = export.heartRateContent { metadata[Self.heartRateContentKey] = content.rawValue }
+            try await builder.addMetadata(metadata)
             try await builder.beginCollection(at: export.start)
+            if export.heartRateContent == .included {
+                try await builder.addSamples(heartRateSamples.map(\.quantitySample))
+            }
             try await builder.endCollection(at: export.end)
-            if let workout = try await builder.finishWorkout() { return workout.uuid }
+            if let workout = try await builder.finishWorkout() {
+                return HealthWorkoutSaveResult(id: workout.uuid, heartRateContent: export.heartRateContent)
+            }
             // A repeated sync identifier/version can be ignored by HealthKit.
             // Only acknowledge a nil result if the original object can be found.
-            if let existing = try await matches(export, id: id).first(where: {
-                $0.syncIdentifier == HealthWorkoutExport.syncIdentifier(id)
-            }) { return existing.id }
+            if let existing = try await existingResult(export, id: id) { return existing }
             throw HealthExportError.unconfirmed
         } catch {
             builder.discardWorkout()
             // Some HealthKit versions report a duplicate sync version as an error.
             // A readable original is also a confirmed success; otherwise retain pending.
-            if let records = try? await matches(export, id: id),
-               let existing = records.first(where: { $0.syncIdentifier == HealthWorkoutExport.syncIdentifier(id) }) {
-                return existing.id
-            }
+            if let existing = try? await existingResult(export, id: id) { return existing }
             throw error
         }
+    }
+
+    private func existingResult(_ export: HealthWorkoutExport, id: UUID) async throws -> HealthWorkoutSaveResult? {
+        guard let match = try await matches(export, id: id).first(where: {
+            $0.syncIdentifier == HealthWorkoutExport.syncIdentifier(id)
+        }) else { return nil }
+        return HealthWorkoutSaveResult(id: match.id, heartRateContent: match.heartRateContent)
     }
 }
 
@@ -133,6 +201,16 @@ struct HealthRecoveryReview: Identifiable {
 }
 
 extension TimerViewModel {
+    func healthHeartRateStatus(for id: UUID) -> String? {
+        guard let export = workoutLogEntries.first(where: { $0.id == id })?.healthExport,
+              export.state == .saved else { return nil }
+        switch export.heartRateContent {
+        case .included: return "Recorded heart rate included."
+        case .noSamples: return "No recorded heart-rate samples were available to include."
+        case .permissionNotGranted: return "Heart rate wasn’t included. Allow Heart Rate write access in Health & Devices for future workouts."
+        case nil: return nil
+        }
+    }
     var pendingHealthExports: Int { workoutLogEntries.filter { $0.healthExport?.state == .pending }.count }
     var latestHealthSave: Date? {
         workoutLogEntries.compactMap(\.healthExport).filter { $0.state == .saved }.compactMap(\.savedAt).max()
@@ -198,6 +276,16 @@ extension TimerViewModel {
                 do {
                     guard self.healthExportClient.isAvailable else { throw HealthExportError.unavailable }
                     guard self.healthExportClient.authorization == .sharingAuthorized else { throw HealthExportError.permission }
+                    let samples = HealthWorkoutHeartRateSample.samples(
+                        from: HeartRateSeriesStore.load(for: entry.id), export: export, id: entry.id)
+                    if export.heartRateContent == nil {
+                        export.heartRateContent = samples.isEmpty ? .noSamples
+                            : (self.healthExportClient.heartRateAuthorization == .sharingAuthorized
+                               ? .included : .permissionNotGranted)
+                        guard self.updateHealthExport(export, for: entry.id) else { break }
+                    }
+                    // Never silently downgrade a previously prepared export on retry.
+                    if export.heartRateContent == .included && samples.isEmpty { throw HealthExportError.missingHeartRate }
                     // A bounded UIKit background task gives a just-completed session
                     // time to save after workout audio stops. Expiration never loses intent.
                     var backgroundID = UIBackgroundTaskIdentifier.invalid
@@ -210,7 +298,10 @@ extension TimerViewModel {
                     defer {
                         if backgroundID != .invalid { UIApplication.shared.endBackgroundTask(backgroundID) }
                     }
-                    export.healthID = try await self.healthExportClient.save(export, id: entry.id)
+                    let result = try await self.healthExportClient.save(
+                        export, id: entry.id, heartRateSamples: export.heartRateContent == .included ? samples : [])
+                    export.healthID = result.id
+                    export.heartRateContent = result.heartRateContent
                     export.state = .saved
                     export.savedAt = Date()
                 } catch {
@@ -262,6 +353,7 @@ extension TimerViewModel {
             var export = candidate.export
             export.state = .saved
             export.healthID = match.id
+            export.heartRateContent = match.heartRateContent
             export.savedAt = Date()
             export.lastError = nil
             if updateHealthExport(export, for: id) { return nil }
@@ -279,6 +371,7 @@ extension TimerViewModel {
             guard review.matches.contains(existing) else { return }
             export.state = .saved
             export.healthID = existing.id
+            export.heartRateContent = existing.heartRateContent
             export.savedAt = Date()
         } else {
             guard healthSavingEnabled, healthExportClient.authorization == .sharingAuthorized else { return }

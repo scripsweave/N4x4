@@ -54,7 +54,10 @@ struct HealthDevicesView: View {
                 Text("Enable Apple Health above to save workouts. Your workout-saving preference is kept.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            statusRow("Workout write permission", value: permissionText)
+            statusRow("Workout write permission", value: permissionText(viewModel.healthKitPermissionState))
+            statusRow("Heart Rate write permission", value: permissionText(viewModel.heartRateWritePermissionState))
+            Text("Allow Heart Rate write access to include recorded readings with new workouts in Apple Health and Fitness. Workouts can still save without it.")
+                .font(.footnote).foregroundStyle(.secondary)
             if let saved = viewModel.latestHealthSave {
                 statusRow("Last confirmed save", value: saved.formatted(date: .abbreviated, time: .shortened))
             } else {
@@ -73,7 +76,7 @@ struct HealthDevicesView: View {
                     .disabled(!viewModel.healthSavingEnabled || !viewModel.healthAuthorizationGranted)
             }
             Button("Review Health Access") { viewModel.requestHealthKitAuthorizationIfNeeded() }
-            Text("To change an existing permission, open Settings → Privacy & Security → Health → N4x4. Allow Workouts under write access. Read permissions are separate.")
+            Text("To change an existing permission, open Settings → Privacy & Security → Health → N4x4. Allow Workouts and Heart Rate under write access. Read permissions are separate.")
                 .font(.footnote).foregroundStyle(.secondary)
         } header: {
             Label("Apple Health", systemImage: "heart.text.square")
@@ -160,8 +163,8 @@ struct HealthDevicesView: View {
         } header: { Text("Help & Diagnostics") }
     }
 
-    private var permissionText: String {
-        switch viewModel.healthKitPermissionState {
+    private func permissionText(_ state: PermissionState) -> String {
+        switch state {
         case .granted: return "Allowed"
         case .denied: return "Not allowed"
         case .notDetermined: return "Not requested"
@@ -171,11 +174,12 @@ struct HealthDevicesView: View {
     }
 
     private var watchStatus: String {
+        if viewModel.hasFreshWatchHeartRate { return "Heart rate received from Watch" }
         switch viewModel.watchConnectionStatus {
         case .noWatchPaired: return "No Watch paired"
         case .appNotInstalled: return "N4x4 is not installed on your Watch"
         case .notReachable: return "App installed · not currently reachable"
-        case .connected: return viewModel.hasFreshWatchHeartRate ? "Connected · heart rate streaming" : "Connected · no live Watch reading"
+        case .connected: return "Watch app reachable · waiting for heart rate"
         }
     }
 
@@ -219,6 +223,12 @@ struct WorkoutHealthSaveView: View {
             Label("Apple Health", systemImage: "heart.text.square")
                 .font(.headline)
             Text(viewModel.healthExportStatus(for: id)).font(.subheadline)
+            if let heartRateStatus = viewModel.healthHeartRateStatus(for: id) {
+                Text(heartRateStatus).font(.footnote).foregroundStyle(.secondary)
+                if viewModel.workoutLogEntries.first(where: { $0.id == id })?.healthExport?.heartRateContent == .permissionNotGranted {
+                    NavigationLink("Review Health & Devices") { HealthDevicesView(viewModel: viewModel) }
+                }
+            }
             if let error = viewModel.workoutLogEntries.first(where: { $0.id == id })?.healthExport?.lastError {
                 Text(error).font(.footnote).foregroundStyle(.secondary)
             }
