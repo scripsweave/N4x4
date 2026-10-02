@@ -1468,6 +1468,7 @@ class TimerViewModel: ObservableObject {
     private var hapticEngine: CHHapticEngine?
     var intervalEndTime: Date?
     var workoutStartDate: Date?
+    var activityTiming: WorkoutActivityTiming?
     var workoutCompletionDate: Date?
     @Published var cooldownCompletionNotice: Bool = false
     private var skippedCooldownThisSession: Bool = false
@@ -1790,6 +1791,7 @@ class TimerViewModel: ObservableObject {
         guard workoutCompletionDate == nil, !intervals.isEmpty,
               intervals.indices.contains(currentIntervalIndex) else { return }
 
+        let wasRunning = isRunning
         timer?.cancel()
         timer = nil
 
@@ -1802,12 +1804,18 @@ class TimerViewModel: ObservableObject {
         SpeechManager.shared.beginWorkoutAudio()
         if workoutStartDate == nil {
             workoutStartDate = now
+            activityTiming = WorkoutActivityTiming(startedAt: now)
             activeWorkoutID = UUID()
             sessionWorkoutType = resolvedDefaultWorkoutType
             // Fresh workout: start the fine-grained HR recording.
             hrRecorder = HeartRateSeriesRecorder(startedAt: now)
             completedSeries = nil
             recorderBeginCurrentInterval(at: now)
+        }
+        if !wasRunning {
+            activityTiming?.resume(at: now)
+            // Every entry point, including Watch Start, resumes the frozen countdown.
+            intervalEndTime = now.addingTimeInterval(timeRemaining)
         }
         // Also restart streaming after restoring a paused session on relaunch.
         startPhoneWorkoutSessionIfNeeded()
@@ -1960,6 +1968,7 @@ class TimerViewModel: ObservableObject {
         // Timer reconciliation and Watch commands can both reach completion.
         // Save the workout (and Apple Health record) only once per session.
         guard workoutCompletionDate == nil else { return }
+        activityTiming?.finish(at: completionTime)
         triggerCompletionHaptic()
         stopTimer()
         endLiveActivity()
@@ -1968,6 +1977,7 @@ class TimerViewModel: ObservableObject {
         // summary charts render from completedSeries.
         if let recorder = hrRecorder, let start = workoutStartDate {
             completedSeries = recorder.finish(at: max(0, completionTime.timeIntervalSince(start)))
+            completedSeries?.activityTiming = activityTiming
         }
         completedSeriesNeedsSave = completedSeries != nil
         hrRecorder = nil
@@ -2052,6 +2062,7 @@ class TimerViewModel: ObservableObject {
 
             SpeechManager.shared.stopSpeaking()
             timeRemaining = max(0, intervalEndTime?.timeIntervalSince(now) ?? timeRemaining)
+            activityTiming?.pause(at: now)
             stopTimer()
             SpeechManager.shared.endWorkoutAudio()
             updateLiveActivity(isRunning: false)
@@ -2126,6 +2137,7 @@ class TimerViewModel: ObservableObject {
         showPostWorkoutSummary = false
         intervalEndTime = nil
         workoutStartDate = nil
+        activityTiming = nil
         workoutCompletionDate = nil
         cooldownCompletionNotice = false
         skippedCooldownThisSession = false
@@ -2314,7 +2326,8 @@ class TimerViewModel: ObservableObject {
             endedEarly: sessionEndedEarly,
             healthExport: workoutLogEntries.first(where: { $0.id == entryID })?.healthExport
                 ?? restoredHealthExport
-                ?? newHealthExport(start: workoutStartDate ?? completionDate, end: completionDate)
+                ?? newHealthExport(start: workoutStartDate ?? completionDate, end: completionDate,
+                                   timing: activityTiming, activeDuration: currentSessionBreakdown.totalDuration)
         )
         if let index = workoutLogEntries.firstIndex(where: { $0.id == entryID }) {
             workoutLogEntries[index] = entry
@@ -3728,6 +3741,7 @@ private struct PhoneWorkoutCheckpoint: Codable {
     let recorder: HeartRateSeriesRecorder?
     let completedSeries: HeartRateSeries?
     let completedEntry: WorkoutLogEntry?
+    var activityTiming: WorkoutActivityTiming? = nil
 }
 
 extension TimerViewModel {
@@ -3795,7 +3809,8 @@ extension TimerViewModel {
             currentIndex: currentIntervalIndex, remaining: timeRemaining,
             breakdown: currentSessionBreakdown, workoutType: sessionWorkoutType ?? selectedWorkoutType,
             recorder: hrRecorder, completedSeries: completedSeries,
-            completedEntry: completedWorkoutEntryID.flatMap { id in workoutLogEntries.first { $0.id == id } }
+            completedEntry: completedWorkoutEntryID.flatMap { id in workoutLogEntries.first { $0.id == id } },
+            activityTiming: activityTiming?.checkpoint(at: lastProgressDate ?? start)
         )
         do {
             if let unreadableCheckpointData {
@@ -3854,6 +3869,14 @@ extension TimerViewModel {
             isRestoringOrResetting = true
             activeWorkoutID = snapshot.id
             workoutStartDate = snapshot.startedAt
+            activityTiming = snapshot.activityTiming
+            // Older checkpoints have no pause timeline. A fully accounted-for
+            // continuous stretch is recoverable; unexplained gaps stay unknown.
+            if activityTiming == nil, snapshot.completedEntry == nil,
+               abs(snapshot.progressAt.timeIntervalSince(snapshot.startedAt) - snapshot.breakdown.totalDuration) < 0.001 {
+                activityTiming = WorkoutActivityTiming(startedAt: snapshot.startedAt)
+                activityTiming?.pause(at: snapshot.progressAt)
+            }
             sessionWorkoutType = snapshot.workoutType
             selectedWorkoutType = snapshot.workoutType
             intervals = snapshot.intervals

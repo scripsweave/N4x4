@@ -108,6 +108,71 @@ extension WorkoutPhase {
     }
 }
 
+// MARK: - Active exercise timeline (phone and Watch)
+
+/// Numeric wall-clock timestamps survive both devices' ISO-date persistence.
+/// Only measured running stretches count as exercise; pauses remain real gaps.
+struct WorkoutActivityTiming: Codable, Equatable {
+    struct Segment: Codable, Equatable {
+        let start: Double
+        var end: Double
+    }
+    let start: Double
+    private(set) var end: Double?
+    private(set) var segments: [Segment] = []
+    private var runningSince: Double?
+
+    init(startedAt: Date) {
+        start = startedAt.timeIntervalSince1970
+        runningSince = start
+    }
+
+    mutating func resume(at date: Date) {
+        guard runningSince == nil, end == nil else { return }
+        runningSince = date.timeIntervalSince1970
+    }
+
+    mutating func pause(at date: Date) {
+        guard let since = runningSince else { return }
+        let until = date.timeIntervalSince1970
+        if until > since {
+            if let last = segments.last, last.end == since {
+                segments[segments.count - 1].end = until
+            } else {
+                segments.append(.init(start: since, end: until))
+            }
+        }
+        runningSince = nil
+    }
+
+    mutating func finish(at date: Date) {
+        pause(at: date)
+        end = date.timeIntervalSince1970
+    }
+
+    /// A recovered phone never counts time after its last saved progress.
+    func checkpoint(at date: Date) -> Self {
+        var copy = self
+        copy.pause(at: date)
+        return copy
+    }
+
+    var activeDuration: Double { segments.reduce(0) { $0 + ($1.end - $1.start) } }
+
+    var isValid: Bool {
+        guard start.isFinite, let end, end.isFinite, end > start,
+              runningSince == nil, !segments.isEmpty else { return false }
+        var cursor = start
+        for segment in segments {
+            guard segment.start.isFinite, segment.end.isFinite,
+                  segment.start >= cursor, segment.end > segment.start,
+                  segment.end <= end else { return false }
+            cursor = segment.end
+        }
+        return true
+    }
+}
+
 // MARK: - Completed record (wire format Watch → Phone)
 
 struct CompletedWatchWorkout: Codable, Equatable, Identifiable {
@@ -136,6 +201,7 @@ struct CompletedWatchWorkout: Codable, Equatable, Identifiable {
     let samples: [Sample]
     let spans: [Span]
     var endedEarly: Bool? = nil
+    var activityTiming: WorkoutActivityTiming? = nil
 
     var totalSeconds: TimeInterval {
         warmupSeconds + highIntensitySeconds + recoverySeconds + cooldownSeconds
@@ -183,6 +249,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
     private(set) var spans: [CompletedWatchWorkout.Span]
     private var openSpanStart: TimeInterval
     private(set) var endedEarly: Bool? = nil
+    private(set) var activityTiming: WorkoutActivityTiming? = nil
 
     /// Kept sample cadence, matching the phone's recorder (one per 2 s).
     static let sampleBucketSeconds: Double = 2
@@ -196,7 +263,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
             pausedRemaining: first.duration,
             isComplete: false, completionDate: nil, cooldownSkipped: false,
             segmentStart: now, elapsedByPhase: [:], samples: [], spans: [],
-            openSpanStart: 0
+            openSpanStart: 0, activityTiming: WorkoutActivityTiming(startedAt: now)
         )
     }
 
@@ -247,6 +314,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         guard !isRunning, !isComplete else { return }
         intervalEndTime = now.addingTimeInterval(pausedRemaining)
         segmentStart = now
+        activityTiming?.resume(at: now)
         isRunning = true
     }
 
@@ -270,6 +338,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         guard !isComplete else { return }
         closeSegment(at: now)
         closeSpan(at: now)
+        activityTiming?.finish(at: now)
         cooldownSkipped = elapsed(for: .cooldown) < plan.steps.filter { $0.phase == .cooldown }.reduce(0) { $0 + $1.duration }
         endedEarly = elapsed(for: .highIntensity) + 0.01 < plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
         isRunning = false
@@ -299,7 +368,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
             recoverySeconds: elapsed(for: .rest),
             cooldownSeconds: elapsed(for: .cooldown),
             cooldownSkipped: cooldownSkipped,
-            samples: samples, spans: spans, endedEarly: endedEarly
+            samples: samples, spans: spans, endedEarly: endedEarly, activityTiming: activityTiming
         )
     }
 
@@ -310,6 +379,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         closeSpan(at: time)
         let next = currentIndex + 1
         guard next < plan.steps.count else {
+            activityTiming?.finish(at: time)
             endedEarly = elapsed(for: .highIntensity) + 0.01 < plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
             isRunning = false
             isComplete = true
@@ -321,6 +391,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         if isRunning {
             intervalEndTime = time.addingTimeInterval(plan.steps[next].duration)
             segmentStart = time
+            activityTiming?.resume(at: time)
         } else {
             pausedRemaining = plan.steps[next].duration
         }
@@ -329,6 +400,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
 
     private mutating func closeSegment(at time: Date) {
         guard let start = segmentStart else { return }
+        activityTiming?.pause(at: time)
         elapsedByPhase[phase.rawValue, default: 0] += max(0, time.timeIntervalSince(start))
         segmentStart = nil
     }

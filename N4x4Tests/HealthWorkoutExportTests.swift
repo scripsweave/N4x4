@@ -12,6 +12,7 @@ private final class FakeHealthExportClient: HealthWorkoutExportClient {
     var objects: [UUID: UUID] = [:]
     var heartRates: [UUID: [HealthWorkoutHeartRateSample]] = [:]
     var contents: [UUID: HealthWorkoutExport.HeartRateContent] = [:]
+    var exports: [HealthWorkoutExport] = []
     var candidates: [HealthWorkoutMatch] = []
     var onSave: (() -> Void)?
     var hold = false
@@ -19,6 +20,7 @@ private final class FakeHealthExportClient: HealthWorkoutExportClient {
     func save(_ export: HealthWorkoutExport, id: UUID,
               heartRateSamples: [HealthWorkoutHeartRateSample] = []) async throws -> HealthWorkoutSaveResult {
         calls.append(id)
+        exports.append(export)
         if hold {
             await withCheckedContinuation { continuation in
                 self.continuation = continuation
@@ -603,5 +605,280 @@ extension HealthWorkoutExportTests {
         vm.setHealthWorkoutLogging(true)
         await vm.healthExportTask?.value
         XCTAssertTrue(client.calls.isEmpty)
+    }
+}
+
+// MARK: - Active workout time and recovery (Louise's multi-day export regression)
+extension HealthWorkoutExportTests {
+    @MainActor
+    private func timingModel(_ client: FakeHealthExportClient, checkpoint: URL? = nil) -> TimerViewModel {
+        let vm = model(client, checkpoint: checkpoint)
+        vm.warmupDuration = 0
+        vm.numberOfIntervals = 1
+        vm.highIntensityDuration = 600
+        vm.cooldownEnabled = false
+        return vm
+    }
+
+    private func assertHealthDuration(_ export: HealthWorkoutExport, equals seconds: Double,
+                                      file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertTrue(export.isValid, file: file, line: line)
+        // Uses HealthKit's own event-based duration calculation, without writing to Health.
+        let workout = HKWorkout(activityType: .highIntensityIntervalTraining,
+                                start: export.start, end: export.end,
+                                workoutEvents: export.workoutEvents, totalEnergyBurned: nil,
+                                totalDistance: nil, metadata: nil)
+        XCTAssertEqual(workout.duration, seconds, accuracy: 0.001, file: file, line: line)
+    }
+
+    @MainActor
+    func testRecoveredTwoDaySessionExportsOnlyActiveExercise() async throws {
+        let client = FakeHealthExportClient()
+        let checkpoint = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json")
+        let vm = timingModel(client, checkpoint: checkpoint)
+        let start = Date(timeIntervalSince1970: 1_790_780_000.25)
+        let end = start + 172_305.85
+        vm.startTimer(now: start)
+        vm.reconcileTimerState(now: start + 10, playAlarm: false)
+        vm.timer?.cancel()
+        let restored = model(client, checkpoint: checkpoint)
+        XCTAssertTrue(restored.showWorkoutRecovery)
+        restored.startTimer(now: end - 590)
+        restored.reconcileTimerState(now: end, playAlarm: false)
+        await restored.healthExportTask?.value
+        let row = try XCTUnwrap(restored.workoutLogEntries.first)
+        let export = try XCTUnwrap(client.exports.last)
+        XCTAssertEqual(row.sessionBreakdown?.totalDuration ?? 0, 600, accuracy: 0.001)
+        XCTAssertEqual(export.end.timeIntervalSince(export.start), 172_305.85, accuracy: 0.001)
+        assertHealthDuration(export, equals: 600)
+        XCTAssertEqual(export.workoutEvents.map(\.type), [.pause, .resume])
+        XCTAssertEqual(HeartRateSeriesStore.load(for: row.id)?.activityTiming, export.activityTiming)
+        restored.reset()
+    }
+
+    @MainActor
+    func testWatchResumeEntryPointKeepsCountdownFrozenAndExcludesPause() async throws {
+        let client = FakeHealthExportClient()
+        let vm = timingModel(client)
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.pause(now: start + 10)
+        vm.startTimer(now: start + 3_610) // Same entry point as the Watch command.
+        XCTAssertTrue(vm.isRunning)
+        XCTAssertNil(vm.workoutCompletionDate)
+        XCTAssertEqual(vm.timeRemaining, 590, accuracy: 0.001)
+        vm.reconcileTimerState(now: start + 4_200, playAlarm: false)
+        await vm.healthExportTask?.value
+        assertHealthDuration(try XCTUnwrap(client.exports.last), equals: 600)
+        vm.reset()
+    }
+
+    @MainActor
+    func testRepeatedRecoveryAndPhoneResumeKeepEveryGap() async throws {
+        let client = FakeHealthExportClient()
+        let checkpoint = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json")
+        let start = Date()
+        let vm = timingModel(client, checkpoint: checkpoint)
+        vm.startTimer(now: start)
+        vm.pause(now: start + 10)
+        vm.pause(now: start + 100)
+        vm.reconcileTimerState(now: start + 120, playAlarm: false)
+        vm.timer?.cancel()
+        let restored = model(client, checkpoint: checkpoint)
+        restored.startTimer(now: start + 1_000)
+        restored.pause(now: start + 1_030)
+        let again = model(client, checkpoint: checkpoint)
+        again.startTimer(now: start + 10_000)
+        again.finishAndSaveWorkout(now: start + 10_040)
+        await again.healthExportTask?.value
+        let export = try XCTUnwrap(client.exports.last)
+        assertHealthDuration(export, equals: 100)
+        XCTAssertEqual(export.workoutEvents.map(\.type), [.pause, .resume, .pause, .resume, .pause, .resume])
+        again.reset()
+    }
+
+    @MainActor
+    func testFinishWhilePausedAndFreshWorkoutDoNotCountTimeAway() async throws {
+        let client = FakeHealthExportClient()
+        let vm = timingModel(client)
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.pause(now: start + 10)
+        vm.finishAndSaveWorkout(now: start + 172_800)
+        await vm.healthExportTask?.value
+        assertHealthDuration(try XCTUnwrap(client.exports.last), equals: 10)
+        vm.reset()
+        vm.startTimer(now: start + 172_800)
+        vm.reconcileTimerState(now: start + 173_400, playAlarm: false)
+        await vm.healthExportTask?.value
+        let export = try XCTUnwrap(client.exports.last)
+        XCTAssertEqual(export.start.timeIntervalSince(start + 172_800), 0, accuracy: 0.001)
+        assertHealthDuration(export, equals: 600)
+        XCTAssertTrue(export.workoutEvents.isEmpty)
+        vm.reset()
+    }
+
+    @MainActor
+    func testOldPendingInflatedExportIsHeldWithoutChangingPayload() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        let row = WorkoutLogEntry(workoutType: .treadmill, notes: "",
+            sessionBreakdown: .init(totalDuration: 10, warmupDuration: 0, highIntensityDuration: 10,
+                                   recoveryDuration: 0, cooldownDuration: 0, cooldownSkipped: true),
+            healthExport: entry().healthExport)
+        let original = try XCTUnwrap(row.healthExport)
+        vm.workoutLogEntries = [row]
+        XCTAssertTrue(vm.persistWorkoutLogEntries())
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertTrue(client.calls.isEmpty)
+        let pending = try XCTUnwrap(vm.workoutLogEntries.first?.healthExport)
+        XCTAssertEqual(pending.state, .pending)
+        XCTAssertNotNil(pending.lastError)
+        XCTAssertEqual(pending.startTimestamp, original.startTimestamp)
+        XCTAssertEqual(pending.endTimestamp, original.endTimestamp)
+    }
+
+    @MainActor
+    func testLegacyCheckpointGapIsNotGuessedOnUpgrade() async throws {
+        let client = FakeHealthExportClient()
+        let checkpoint = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json")
+        let vm = timingModel(client, checkpoint: checkpoint)
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.pause(now: start + 10)
+        vm.startTimer(now: start + 100)
+        vm.pause(now: start + 110)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: checkpoint)) as? [String: Any])
+        json.removeValue(forKey: "activityTiming")
+        try JSONSerialization.data(withJSONObject: json).write(to: checkpoint)
+        let restored = model(client, checkpoint: checkpoint)
+        restored.startTimer(now: start + 172_800)
+        restored.finishAndSaveWorkout(now: start + 172_810)
+        await restored.healthExportTask?.value
+        XCTAssertEqual(restored.workoutLogEntries.first?.sessionBreakdown?.totalDuration ?? 0, 30, accuracy: 0.001)
+        XCTAssertTrue(client.calls.isEmpty)
+        XCTAssertNotNil(restored.latestHealthExportError)
+        restored.reset()
+    }
+
+    @MainActor
+    func testContinuousLegacyCheckpointCanRecoverWithoutInventingExercise() async throws {
+        let client = FakeHealthExportClient()
+        let checkpoint = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json")
+        let vm = timingModel(client, checkpoint: checkpoint)
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.pause(now: start + 10)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: checkpoint)) as? [String: Any])
+        json.removeValue(forKey: "activityTiming")
+        try JSONSerialization.data(withJSONObject: json).write(to: checkpoint)
+        let restored = model(client, checkpoint: checkpoint)
+        restored.startTimer(now: start + 172_800)
+        restored.finishAndSaveWorkout(now: start + 172_810)
+        await restored.healthExportTask?.value
+        assertHealthDuration(try XCTUnwrap(client.exports.last), equals: 20)
+        restored.reset()
+    }
+
+    @MainActor
+    func testPausedExportRetryRetainsEventsAndHeartRateDates() async throws {
+        let client = FakeHealthExportClient()
+        client.failSave = true
+        let vm = timingModel(client)
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.ingestHeartRate(150, from: .bluetooth, sampledAt: start + 5, now: start + 5)
+        vm.pause(now: start + 10)
+        vm.startTimer(now: start + 100)
+        vm.ingestHeartRate(155, from: .bluetooth, sampledAt: start + 105, now: start + 105)
+        vm.finishAndSaveWorkout(now: start + 110)
+        await vm.healthExportTask?.value
+        let first = try XCTUnwrap(client.exports.last)
+        vm.reset()
+        client.failSave = false
+        let restored = model(client)
+        restored.retryHealthExports()
+        await restored.healthExportTask?.value
+        let retried = try XCTUnwrap(client.exports.last)
+        XCTAssertEqual(first.activityTiming, retried.activityTiming)
+        XCTAssertEqual(first.startTimestamp, retried.startTimestamp)
+        XCTAssertEqual(first.endTimestamp, retried.endTimestamp)
+        assertHealthDuration(retried, equals: 20)
+        let id = try XCTUnwrap(client.calls.last)
+        let dates = try XCTUnwrap(client.heartRates[id]).map { $0.date.timeIntervalSince(start) }
+        XCTAssertEqual(dates.count, 2)
+        XCTAssertEqual(dates[0], 5, accuracy: 0.001)
+        XCTAssertEqual(dates[1], 105, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testStandaloneWatchPauseSurvivesEncodingAndImportsExactTiming() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        let start = Date(timeIntervalSince1970: 1_790_780_000.75)
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: .fallback, now: start))
+        engine.pause(now: start + 10.25)
+        engine = try JSONDecoder().decode(WatchWorkoutEngine.self, from: JSONEncoder().encode(engine))
+        engine.resume(now: start + 172_800.5)
+        engine.finish(now: start + 172_820.75)
+        let record = try XCTUnwrap(engine.completedRecord())
+        let wire = try XCTUnwrap(CompletedWatchWorkout.decode(XCTUnwrap(record.encoded())))
+        XCTAssertTrue(vm.importWatchWorkout(wire))
+        await vm.healthExportTask?.value
+        let export = try XCTUnwrap(client.exports.last)
+        XCTAssertEqual(export.start.timeIntervalSince(start), 0, accuracy: 0.001)
+        XCTAssertEqual(export.end.timeIntervalSince(start), 172_820.75, accuracy: 0.001)
+        assertHealthDuration(export, equals: 30.5)
+        XCTAssertTrue(vm.canAcknowledgeWatchWorkout(record.id))
+    }
+
+    @MainActor
+    func testStandaloneWatchFinishWhilePausedExcludesTrailingGap() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        let start = Date()
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: .fallback, now: start))
+        engine.pause(now: start + 10)
+        engine.finish(now: start + 172_800)
+        let record = try XCTUnwrap(engine.completedRecord())
+        XCTAssertTrue(vm.importWatchWorkout(record))
+        await vm.healthExportTask?.value
+        let export = try XCTUnwrap(client.exports.last)
+        assertHealthDuration(export, equals: 10)
+        XCTAssertEqual(export.workoutEvents.map(\.type), [.pause])
+    }
+
+    @MainActor
+    func testLegacyWatchGapStillImportsButDoesNotExportInflatedDuration() async throws {
+        let client = FakeHealthExportClient()
+        let vm = model(client)
+        let start = Date()
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: .fallback, now: start))
+        engine.pause(now: start + 10)
+        engine.resume(now: start + 172_800)
+        engine.finish(now: start + 172_810)
+        var record = try XCTUnwrap(engine.completedRecord())
+        record.activityTiming = nil
+        XCTAssertTrue(vm.importWatchWorkout(record))
+        await vm.healthExportTask?.value
+        XCTAssertTrue(client.calls.isEmpty)
+        XCTAssertNotNil(vm.latestHealthExportError)
+        XCTAssertTrue(vm.canAcknowledgeWatchWorkout(record.id))
+    }
+
+    func testTimingValidationRejectsOverlapAndDisagreement() throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var timing = WorkoutActivityTiming(startedAt: start)
+        timing.pause(at: start + 10)
+        timing.resume(at: start + 5) // Backward wall-clock adjustment creates overlap.
+        timing.finish(at: start + 20)
+        XCTAssertFalse(timing.isValid)
+        XCTAssertFalse(HealthWorkoutExport(start: start, end: start + 20, requested: true,
+                                          timing: timing, activeDuration: 25).isValid)
+        var valid = WorkoutActivityTiming(startedAt: start)
+        valid.finish(at: start + 20)
+        XCTAssertFalse(HealthWorkoutExport(start: start, end: start + 20, requested: true,
+                                          timing: valid, activeDuration: 10).isValid)
     }
 }

@@ -1,5 +1,17 @@
 # N4x4 — Session Handoff
 
+> **5.9 timing fix (2026-10-02):** Health exports now exclude pauses and
+> interrupted-session recovery gaps. Watch resume rebuilds the paused interval
+> deadline. See
+> [`SESSION-HANDOFF-2026-10-02-WORKOUT-TIMING.md`](SESSION-HANDOFF-2026-10-02-WORKOUT-TIMING.md).
+> Validation: **243 unit tests + 5 UI tests passed**;
+> `/tmp/N4x4-5.9-final-tests.xcresult`. Unsigned generic-device Release build
+> passed for phone, Watch and Live Activity, all reporting 5.9. Release tooling
+> checks passed (4 tests / 18 assertions). No physical devices were connected.
+> Release submission is authorized; signed Cloud verification and App Store
+> submission are the next steps. Version 5.8 is still waiting for review and
+> will be superseded by 5.9 after its build passes.
+
 > **5.8 submitted (2026-10-02):** Quieter Watch connection recovery with a
 > 30-second warning grace period and bounded synchronization retries. Release
 > commit `5452a98813ab42bef2c9bd7c85d68775bc0eb2e8`, tag `v5.8`;

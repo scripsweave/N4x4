@@ -42,7 +42,8 @@ extension TimerViewModel {
                 .init(kind: $0.kind, workNumber: $0.workNumber, start: $0.start, end: $0.end,
                       targetLo: $0.targetLo, targetHi: $0.targetHi)
             },
-            startedAt: record.startedAt
+            startedAt: record.activityTiming.map { Date(timeIntervalSince1970: $0.start) } ?? record.startedAt,
+            activityTiming: record.activityTiming
         )
         pendingWatchImports[record.id] = record
         guard seriesSaver(series, record.id) else {
@@ -67,7 +68,8 @@ extension TimerViewModel {
             modality: type.trainingModality,
             intervalPerformances: nil,
             hrSummary: hrSummary, endedEarly: record.endedEarly,
-            healthExport: newHealthExport(start: record.startedAt, end: record.completedAt)
+            healthExport: newHealthExport(start: record.startedAt, end: record.completedAt,
+                                         timing: record.activityTiming, activeDuration: record.totalSeconds)
         )
 
         // The record may arrive after newer phone sessions; keep newest-first.

@@ -18,14 +18,55 @@ struct HealthWorkoutExport: Codable, Equatable {
     // Frozen before the first Health write. Retries must not change the payload
     // when permissions change. Nil on older exports means inclusion is unknown.
     var heartRateContent: HeartRateContent?
+    // Immutable alongside start/end so retries cannot change a remote workout.
+    var activityTiming: WorkoutActivityTiming? = nil
+    var expectedActiveDuration: Double? = nil
     var start: Date { Date(timeIntervalSince1970: startTimestamp) }
     var end: Date { Date(timeIntervalSince1970: endTimestamp) }
-    var isValid: Bool { startTimestamp.isFinite && endTimestamp.isFinite && endTimestamp > startTimestamp }
+    var activeDuration: Double { activityTiming?.activeDuration ?? endTimestamp - startTimestamp }
+    var isValid: Bool {
+        guard startTimestamp.isFinite, endTimestamp.isFinite, endTimestamp > startTimestamp else { return false }
+        if let timing = activityTiming {
+            guard timing.isValid, timing.start == startTimestamp, timing.end == endTimestamp else { return false }
+        }
+        if let expected = expectedActiveDuration {
+            guard expected.isFinite, expected > 0, abs(activeDuration - expected) < 1 else { return false }
+        }
+        return true
+    }
 
-    init(start: Date, end: Date, requested: Bool) {
-        startTimestamp = start.timeIntervalSince1970
-        endTimestamp = end.timeIntervalSince1970
+    /// Also checks old pending exports against History, without rewriting their identity/payload.
+    func matchesActiveDuration(_ recorded: Double?) -> Bool {
+        guard isValid else { return false }
+        guard let recorded else { return true }
+        return recorded.isFinite && recorded > 0 && abs(activeDuration - recorded) < 1
+    }
+
+    var workoutEvents: [HKWorkoutEvent] {
+        guard let timing = activityTiming, isValid else { return [] }
+        var events: [HKWorkoutEvent] = []
+        var cursor = startTimestamp
+        func event(_ type: HKWorkoutEventType, at timestamp: Double) -> HKWorkoutEvent {
+            HKWorkoutEvent(type: type, dateInterval: DateInterval(start: Date(timeIntervalSince1970: timestamp), duration: 0), metadata: nil)
+        }
+        for segment in timing.segments {
+            if segment.start > cursor {
+                events.append(event(.pause, at: cursor))
+                events.append(event(.resume, at: segment.start))
+            }
+            cursor = segment.end
+        }
+        if cursor < endTimestamp { events.append(event(.pause, at: cursor)) }
+        return events
+    }
+
+    init(start: Date, end: Date, requested: Bool,
+         timing: WorkoutActivityTiming? = nil, activeDuration: Double? = nil) {
+        startTimestamp = timing?.start ?? start.timeIntervalSince1970
+        endTimestamp = timing?.end ?? end.timeIntervalSince1970
         state = requested ? .pending : .notRequested
+        activityTiming = timing
+        expectedActiveDuration = activeDuration
     }
     static func syncIdentifier(_ id: UUID) -> String { "N4x4.workout.\(id.uuidString)" }
 }
@@ -96,7 +137,7 @@ enum HealthExportError: LocalizedError {
         case .unavailable: return "Apple Health is unavailable on this device."
         case .permission: return "Allow N4x4 to write workouts in Apple Health, then retry."
         case .unconfirmed: return "Apple Health did not confirm the save. It will be retried."
-        case .invalidTiming: return "This session does not have usable workout timing."
+        case .invalidTiming: return "This workout’s active time could not be verified. It remains in History, but Apple Health saving is on hold."
         case .heartRatePermission: return "Allow N4x4 to write Heart Rate in Apple Health, then retry this save."
         case .missingHeartRate: return "The recorded heart-rate data could not be loaded. This workout will retry saving later."
         }
@@ -164,10 +205,14 @@ final class SystemHealthWorkoutExportClient: HealthWorkoutExportClient {
             if let content = export.heartRateContent { metadata[Self.heartRateContentKey] = content.rawValue }
             try await builder.addMetadata(metadata)
             try await builder.beginCollection(at: export.start)
+            if !export.workoutEvents.isEmpty { try await builder.addWorkoutEvents(export.workoutEvents) }
             if export.heartRateContent == .included {
                 try await builder.addSamples(heartRateSamples.map(\.quantitySample))
             }
             try await builder.endCollection(at: export.end)
+            guard abs(builder.elapsedTime(at: export.end) - export.activeDuration) < 1 else {
+                throw HealthExportError.invalidTiming
+            }
             if let workout = try await builder.finishWorkout() {
                 return HealthWorkoutSaveResult(id: workout.uuid, heartRateContent: export.heartRateContent)
             }
@@ -222,8 +267,10 @@ extension TimerViewModel {
     }
     var healthSavingEnabled: Bool { healthKitEnabled && logWorkoutsToHealthKit }
 
-    func newHealthExport(start: Date, end: Date) -> HealthWorkoutExport {
-        HealthWorkoutExport(start: start, end: end, requested: healthSavingEnabled)
+    func newHealthExport(start: Date, end: Date, timing: WorkoutActivityTiming? = nil,
+                         activeDuration: Double? = nil) -> HealthWorkoutExport {
+        HealthWorkoutExport(start: start, end: end, requested: healthSavingEnabled,
+                            timing: timing, activeDuration: activeDuration)
     }
 
     func setHealthIntegrationEnabled(_ enabled: Bool) {
@@ -274,6 +321,9 @@ extension TimerViewModel {
                 export.lastError = nil
                 guard self.updateHealthExport(export, for: entry.id) else { break }
                 do {
+                    guard export.matchesActiveDuration(entry.sessionBreakdown?.totalDuration) else {
+                        throw HealthExportError.invalidTiming
+                    }
                     guard self.healthExportClient.isAvailable else { throw HealthExportError.unavailable }
                     guard self.healthExportClient.authorization == .sharingAuthorized else { throw HealthExportError.permission }
                     let samples = HealthWorkoutHeartRateSample.samples(
@@ -330,8 +380,13 @@ extension TimerViewModel {
         guard let entry = workoutLogEntries.first(where: { $0.id == id }) else { return nil }
         if let export = entry.healthExport { return export.isValid ? (export, false) : nil }
         if let series = HeartRateSeriesStore.load(for: id) {
-            let export = HealthWorkoutExport(start: series.startedAt, end: entry.completedAt, requested: true)
+            let export = HealthWorkoutExport(start: series.startedAt, end: entry.completedAt, requested: true,
+                                            timing: series.activityTiming,
+                                            activeDuration: entry.sessionBreakdown?.totalDuration)
             if export.isValid { return (export, false) }
+            // A known start with an unexplained gap must not be silently replaced
+            // by an invented continuous timeline (which also shifts recorded HR).
+            return nil
         }
         guard let duration = entry.sessionBreakdown?.totalDuration, duration.isFinite, duration > 0 else { return nil }
         let export = HealthWorkoutExport(start: entry.completedAt.addingTimeInterval(-duration), end: entry.completedAt, requested: true)

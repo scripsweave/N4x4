@@ -552,6 +552,16 @@ To verify:
 
 ## Health & Devices / durable Health exports (post-5.5)
 
+- Health duration must be **active exercise**, not end minus start. The shared
+  `WorkoutActivityTiming` records numeric wall-clock running stretches. Phone
+  checkpoints close a copy at last progress; Watch engine persistence retains
+  its running segment. Preserve the timing in completed records, series and
+  immutable export intent, and supply pause/resume events to HealthKit.
+  Validate against History's active duration and the builder's elapsed time
+  before saving. Older unexplained gaps must never become continuous exercise.
+- Every phone resume entry point goes through `startTimer`, which rebuilds the
+  deadline when previously paused. Watch resume must not reuse an old absolute
+  interval deadline. Regression tests are in `HealthWorkoutExportTests`.
 - Keep feature preferences, known write authorization, observed read data, and
   confirmed save status separate. HealthKit hides read denial; empty results
   are never proof of denial or of no existing legacy workout.

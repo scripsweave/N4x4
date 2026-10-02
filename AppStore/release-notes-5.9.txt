@@ -1,0 +1,7 @@
+This update fixes workout timing in Apple Health and improves Apple Watch pause and resume.
+
+• Paused time and gaps after recovering an interrupted workout no longer count toward the duration saved to Apple Health.
+• Resuming from Apple Watch continues the remaining interval without jumping ahead or ending the workout early.
+• Additional checks prevent inconsistent older workout records from being exported with an inflated duration.
+
+These fixes apply to future saves. Workouts already saved to Apple Health are not changed automatically.

@@ -44,6 +44,7 @@ struct HeartRateSeries: Codable, Equatable {
     var samples: [Sample]
     var spans: [IntervalSpan]
     let startedAt: Date
+    var activityTiming: WorkoutActivityTiming? = nil
 
     func samples(in span: IntervalSpan) -> [Sample] {
         samples.filter { $0.t >= span.start && $0.t <= span.end }
