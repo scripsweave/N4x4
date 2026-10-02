@@ -1,8 +1,17 @@
 # N4x4 — Session Handoff
 
-> **5.8 release prepared (2026-10-02):** User authorized version bump, commit
-> and App Store release. All six shipping configurations are 5.8; Cloud build
-> and submission are pending. Version 5.7 is live, verified via App Store Connect.
+> **5.8 submitted (2026-10-02):** Quieter Watch connection recovery with a
+> 30-second warning grace period and bounded synchronization retries. Release
+> commit `5452a98813ab42bef2c9bd7c85d68775bc0eb2e8`, tag `v5.8`;
+> [GitHub release](https://github.com/scripsweave/N4x4/releases/tag/v5.8).
+> Xcode Cloud build **44** (`844f8271-5de8-44f4-add5-ba3914a0767c`) passed all
+> three actions for that exact commit. `AppStore/submit.sh 5.8 44 --submit`
+> verified **WAITING_FOR_REVIEW** and **AFTER_APPROVAL** at 15:04 CEST. Apple
+> approval is pending; 5.7 remains live. Existing screenshots/listing retained.
+> Release tooling checks passed (4 tests, 18 assertions); the existing missing
+> copyright-year precheck warning was non-blocking. Physical-device timing
+> validation remains open. Post-submission docs are on
+> `chore/5.8-submission-handoff`, avoiding another main-branch Cloud upload.
 
 > **Watch disconnect grace period (2026-10-01):** Gowen reports
 > 5.7 delivered HR reliably apart from a few seconds and saved Health data,

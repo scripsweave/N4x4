@@ -86,12 +86,12 @@ The new screenshots were uploaded and verified separately before running the
 submission command (the lane deliberately preserves them). Version 5.4 was
 submitted through Safari before this automation was added.
 
-Latest live submission: 2026-09-30, `AppStore/submit.sh 5.7 43 --submit`.
-All three Xcode Cloud actions passed for release commit `d1acb0a`. The lane
-verified build 43 was VALID, uploaded the release notes, and confirmed
-**WAITING_FOR_REVIEW** with **AFTER_APPROVAL** at 12:04 CEST. Existing
+Latest live submission: 2026-10-02, `AppStore/submit.sh 5.8 44 --submit`.
+All three Xcode Cloud actions passed for release commit `5452a98`. The lane
+verified build 44 was VALID, uploaded the release notes, and confirmed
+**WAITING_FOR_REVIEW** with **AFTER_APPROVAL** at 15:04 CEST. Existing
 screenshots were retained. Precheck's existing missing copyright-year warning
-was non-blocking; submission completed successfully. Version 5.6 was already
+was non-blocking; submission completed successfully. Version 5.7 was already
 live before this submission.
 
 References: [fastlane deliver](https://docs.fastlane.tools/actions/deliver/),
