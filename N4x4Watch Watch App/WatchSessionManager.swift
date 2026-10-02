@@ -222,6 +222,9 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     /// Live WCSession reachability. From the Watch this means the paired
     /// iPhone is in range (the iOS app is woken on demand).
     @Published private(set) var isReachable: Bool = false
+    /// Passive warning only; controls still use immediate reachability.
+    @Published private(set) var showsPhoneDisconnected = false
+    private var connectionRecovery = WatchConnectionRecovery()
     /// True once any state payload has arrived (streak is meaningful).
     @Published private(set) var hasReceivedState: Bool = false
     /// Watch-run workouts waiting for the phone to ack them.
@@ -485,7 +488,24 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             }
         }
         publish(next)
+        refreshConnectionRecovery()
         updateTimer()
+    }
+
+    private func refreshConnectionRecovery() {
+        let retry = connectionRecovery.update(
+            active: mode == .mirror && timerState.sessionStarted && !timerState.workoutComplete,
+            reachable: isReachable, workoutID: timerState.workoutID,
+            now: ProcessInfo.processInfo.systemUptime)
+        if showsPhoneDisconnected != connectionRecovery.showsWarning {
+            showsPhoneDisconnected = connectionRecovery.showsWarning
+        }
+        if retry {
+            // watchOS owns the radio connection. Recheck/retry synchronization;
+            // never queue controls or restart a healthy sensor workout.
+            requestStateFromPhone()
+            onHeartRateRefreshRequested?()
+        }
     }
 
     private func idleState() -> WatchTimerState {
@@ -656,6 +676,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
                  error: Error?) {
         DispatchQueue.main.async { [weak self] in
             self?.isReachable = session.isReachable
+            self?.refreshConnectionRecovery()
             // Ask for fresh state as soon as the channel is up so the Home
             // screen (streak, plan) isn't stale from the last app context.
             self?.requestStateFromPhone()
@@ -667,6 +688,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     func sessionReachabilityDidChange(_ session: WCSession) {
         DispatchQueue.main.async { [weak self] in
             self?.isReachable = session.isReachable
+            self?.refreshConnectionRecovery()
             if session.isReachable {
                 self?.requestStateFromPhone()
                 self?.flushPendingWorkouts()

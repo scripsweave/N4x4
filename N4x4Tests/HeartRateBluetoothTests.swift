@@ -534,3 +534,55 @@ final class HeartRateAggregatorTests: XCTestCase {
         XCTAssertEqual(HeartRateAggregator.priority(fromRaw: " watch , monitor , airpods "), [.watch, .bluetooth, .appleSensor])
     }
 }
+
+final class WatchConnectionRecoveryTests: XCTestCase {
+    func testBriefDropoutIsQuietAndRecoveryResetsGracePeriod() {
+        var recovery = WatchConnectionRecovery()
+        XCTAssertTrue(recovery.update(active: true, reachable: false, workoutID: "a", now: 100))
+        XCTAssertFalse(recovery.showsWarning)
+        XCTAssertTrue(recovery.update(active: true, reachable: false, workoutID: "a", now: 129.999))
+        XCTAssertFalse(recovery.showsWarning)
+        XCTAssertFalse(recovery.update(active: true, reachable: true, workoutID: "a", now: 130))
+        XCTAssertTrue(recovery.update(active: true, reachable: false, workoutID: "a", now: 131))
+        XCTAssertFalse(recovery.showsWarning)
+        _ = recovery.update(active: true, reachable: false, workoutID: "a", now: 161)
+        XCTAssertTrue(recovery.showsWarning)
+        _ = recovery.update(active: true, reachable: true, workoutID: "a", now: 162)
+        XCTAssertFalse(recovery.showsWarning)
+    }
+
+    func testRetriesEveryFiveSecondsAndContinuesAfterWarning() {
+        var recovery = WatchConnectionRecovery()
+        var retries: [Int] = []
+        for second in 0...40 {
+            if recovery.update(active: true, reachable: false, workoutID: "a", now: Double(second)) {
+                retries.append(second)
+            }
+            XCTAssertEqual(recovery.showsWarning, second >= 30)
+        }
+        XCTAssertEqual(retries, [0, 5, 10, 15, 20, 25, 30, 35, 40])
+    }
+
+    func testIdleLocalAndCompletedWorkoutsDoNotWarnOrRetry() {
+        var recovery = WatchConnectionRecovery()
+        _ = recovery.update(active: true, reachable: false, workoutID: "a", now: 0)
+        _ = recovery.update(active: true, reachable: false, workoutID: "a", now: 30)
+        XCTAssertTrue(recovery.showsWarning)
+        XCTAssertFalse(recovery.update(active: false, reachable: false, workoutID: "a", now: 31))
+        XCTAssertFalse(recovery.showsWarning)
+        XCTAssertFalse(recovery.update(active: false, reachable: false, workoutID: nil, now: 100))
+        XCTAssertTrue(recovery.update(active: true, reachable: false, workoutID: "a", now: 101))
+        XCTAssertFalse(recovery.showsWarning)
+    }
+
+    func testNewWorkoutAndClockResetStartFreshGracePeriod() {
+        var recovery = WatchConnectionRecovery()
+        _ = recovery.update(active: true, reachable: false, workoutID: "a", now: 100)
+        _ = recovery.update(active: true, reachable: false, workoutID: "a", now: 130)
+        XCTAssertTrue(recovery.showsWarning)
+        XCTAssertTrue(recovery.update(active: true, reachable: false, workoutID: "b", now: 131))
+        XCTAssertFalse(recovery.showsWarning)
+        XCTAssertTrue(recovery.update(active: true, reachable: false, workoutID: "b", now: 1))
+        XCTAssertFalse(recovery.showsWarning)
+    }
+}

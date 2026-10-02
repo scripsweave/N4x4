@@ -1,0 +1,4 @@
+Quieter Apple Watch connection recovery
+Brief connection interruptions now recover quietly. The Watch only shows a disconnected warning if your iPhone remains unavailable for 30 seconds, with automatic synchronization retries during the interruption. The warning clears as soon as the connection returns.
+
+Thank you for your feedback and support!

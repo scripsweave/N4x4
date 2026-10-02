@@ -1,5 +1,33 @@
 # N4x4 — Session Handoff
 
+> **5.8 release prepared (2026-10-02):** User authorized version bump, commit
+> and App Store release. All six shipping configurations are 5.8; Cloud build
+> and submission are pending. Version 5.7 is live, verified via App Store Connect.
+
+> **Watch disconnect grace period (2026-10-01):** Gowen reports
+> 5.7 delivered HR reliably apart from a few seconds and saved Health data,
+> but the Watch's disconnected icon flashed during brief reachability changes.
+> On `fix/watch-disconnection-grace`, passive workout disconnect warnings now
+> wait for 30 continuous seconds of unreachability. Latest-only synchronization
+> retries immediately and every five seconds, continuing after the warning.
+> Raw reachability still gates controls; HR expiry remains ten seconds. Local,
+> idle and completed workouts do not run this recovery loop. Recovery or a new
+> workout resets the grace period; a monotonic clock avoids wall-clock changes.
+> WatchOS owns radio reconnection; retries cannot force a connection when the
+> counterpart is unreachable. The existing one-second workout tick and WC
+> callbacks drive the policy, without an extra timer or queued controls.
+> Calories were requested in the feedback but are not implemented here. The
+> Watch currently requests energy permission but only forwards HR. A future
+> change must persist/transfer its energy estimate and associate it with the
+> single phone-saved workout without duplicating Health energy samples.
+> See `WatchConnectionRecovery` in `Shared/WatchHeartRateStream.swift` and its
+> regression tests in `N4x4Tests/HeartRateBluetoothTests.swift`.
+> Validation: **16 targeted tests passed** (four new grace/retry tests plus
+> existing HR delivery/lifecycle tests), `/tmp/N4x4-watch-grace-tests.xcresult`.
+> iPhone/Watch Simulator build passed, `/tmp/N4x4-watch-grace-build.log`.
+> `git diff --check` passed. Real-device timing/radio behavior remains untested.
+> Included in 5.8; calories remain a separate future change.
+
 > **5.7 submitted (2026-09-30):** Heart-rate samples in Apple Health exports
 > and Watch startup, delivery/recovery and stale-display fixes. Release commit
 > `d1acb0a`, tag `v5.7`. Xcode Cloud build **43** passed all three actions for

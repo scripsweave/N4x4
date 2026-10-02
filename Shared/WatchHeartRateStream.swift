@@ -246,3 +246,34 @@ struct WatchHeartRateRefreshPolicy {
         return true
     }
 }
+
+/// Presentation/recovery policy only. Never use the grace period to authorize
+/// controls or extend sensor freshness. Call with a monotonic clock on the main
+/// queue; active workout ticks keep retries bounded without another timer.
+struct WatchConnectionRecovery {
+    private var disconnectedAt: TimeInterval?
+    private var lastRetryAt: TimeInterval?
+    private var workoutID: String?
+    private(set) var showsWarning = false
+
+    /// Returns true when the caller should retry latest-only synchronization.
+    mutating func update(active: Bool, reachable: Bool, workoutID: String?,
+                         now: TimeInterval) -> Bool {
+        if !active || reachable || self.workoutID != workoutID {
+            disconnectedAt = nil
+            lastRetryAt = nil
+            showsWarning = false
+        }
+        self.workoutID = workoutID
+        guard active, !reachable else { return false }
+        // Also tolerate a reset injected clock without delaying recovery forever.
+        if disconnectedAt.map({ now < $0 }) ?? true {
+            disconnectedAt = now
+            lastRetryAt = nil
+        }
+        showsWarning = now - (disconnectedAt ?? now) >= 30
+        guard lastRetryAt.map({ now - $0 >= 5 }) ?? true else { return false }
+        lastRetryAt = now
+        return true
+    }
+}

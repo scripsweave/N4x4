@@ -166,17 +166,18 @@ struct WatchTimerView: View {
     }
 
     /// Where the workout is running: Watch-led, or phone-led with the phone
-    /// currently out of range (controls unavailable). Nothing when the phone
-    /// leads and is in reach — the normal case needs no badge.
+    /// unavailable for at least 30 seconds. Brief interruptions recover quietly;
+    /// controls still use immediate reachability throughout the grace period.
     @ViewBuilder private var modeBadge: some View {
         if sessionManager.mode == .local {
             Image(systemName: "applewatch")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(WatchPalette.textTertiary)
-        } else if offline {
+        } else if sessionManager.showsPhoneDisconnected {
             Image(systemName: "iphone.slash")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(WatchPalette.amber)
+                .accessibilityLabel("iPhone disconnected")
         }
     }
 
@@ -261,7 +262,7 @@ struct WatchTimerView: View {
                     }
                 }
 
-                if offline {
+                if sessionManager.showsPhoneDisconnected {
                     HStack(spacing: 4) {
                         Image(systemName: "iphone.slash")
                         Text("Controls need your iPhone")
