@@ -86,13 +86,19 @@ The new screenshots were uploaded and verified separately before running the
 submission command (the lane deliberately preserves them). Version 5.4 was
 submitted through Safari before this automation was added.
 
-Latest live submission: 2026-10-02, `AppStore/submit.sh 5.8 44 --submit`.
-All three Xcode Cloud actions passed for release commit `5452a98`. The lane
-verified build 44 was VALID, uploaded the release notes, and confirmed
-**WAITING_FOR_REVIEW** with **AFTER_APPROVAL** at 15:04 CEST. Existing
-screenshots were retained. Precheck's existing missing copyright-year warning
-was non-blocking; submission completed successfully. Version 5.7 was already
-live before this submission.
+Latest verified submission: 2026-10-02, `AppStore/submit.sh 5.9 45 --submit`.
+All three Xcode Cloud actions passed for release commit `358a46f`. The lane
+verified build 45 was VALID, uploaded the release notes, and confirmed
+**WAITING_FOR_REVIEW** with **AFTER_APPROVAL** at 22:38 CEST. Existing
+screenshots/listing were retained. Version 5.7 remains live pending approval.
+
+The user authorized this new release while 5.8 (44) was waiting for review.
+After 5.9 (45) passed Cloud and became VALID, the exact 5.8 review submission
+was explicitly canceled and its editable version record changed to 5.9.
+The standard submission tool then attached and submitted build 45. This was
+a separately verified supersession; the tool itself still never cancels or
+replaces a different submitted version. See
+[`../docs/SESSION-HANDOFF-2026-10-02-WORKOUT-TIMING.md`](../docs/SESSION-HANDOFF-2026-10-02-WORKOUT-TIMING.md).
 
 References: [fastlane deliver](https://docs.fastlane.tools/actions/deliver/),
 [API-key authentication](https://docs.fastlane.tools/app-store-connect-api/),

@@ -42,8 +42,39 @@ recovery/pauses, finish while paused, a fresh subsequent workout, immutable
 retries with unchanged HR timestamps, old pending exports, old checkpoints,
 standalone Watch serialization/import, trailing pauses, and invalid timelines.
 
-Final test/build results and release identifiers are recorded in
-`SESSION-HANDOFF.md` once verified. No physical devices were connected; actual
+Final validation: **243 unit tests and 5 UI tests passed** in
+`/tmp/N4x4-5.9-final-tests.xcresult`. The five UI tests cover recovery, paused
+rotation, early finish/review persistence, cooldown finish/History, and pending
+versus confirmed Health saves. Generic-device Release build passed for all
+three shipping targets (`/tmp/N4x4-5.9-release-final.log`); all bundles report
+5.9. Exported simulator diagnostics contained no `.ips` files. Release tooling
+checks passed (4 tests / 18 assertions), as did project plist validation and
+`git diff --check`.
+
+No physical devices were connected; actual
 Health database writes, Fitness ring recalculation and paired-radio behavior
 still require physical-device validation. Simulator tests inject the Health
 save boundary; the event-duration assertion uses the real HealthKit model.
+
+## Release
+
+Release commit `358a46fff22866836ddd250c01de6ae3ebe6f958`, tag `v5.9`.
+[GitHub release](https://github.com/scripsweave/N4x4/releases/tag/v5.9).
+Xcode Cloud build **45**, run `48df1e4d-71b3-43a1-80d6-ec1f1bb80d0e`, passed
+Build - iOS, Build - watchOS and Archive - iOS for that exact commit.
+
+The user authorized fixing, testing and releasing a new version. Because 5.8
+(44) was still waiting for review, its exact submission
+`1035297b-d29b-447b-b284-cd6812d6153b` was canceled after verifying 5.9 (45) was
+VALID. The operation checked the app, version, old build and single review item.
+Once Developer Rejected, version record `3b1854d0-a4b5-42e6-9b0c-0da2588807a1`
+was changed to 5.9, preserving the listing and screenshots.
+
+`AppStore/submit.sh 5.9 45` passed read-only preflight, then the authorized
+`--submit` run attached build 45 and verified **WAITING_FOR_REVIEW** with
+**AFTER_APPROVAL** at 22:38 CEST on October 2. Apple approval is still pending;
+5.7 remains live. The existing missing-copyright-year precheck warning was
+non-blocking. Submission log: `/tmp/N4x4-5.9-submission.log`.
+
+Post-submission documentation is on `chore/5.9-submission-handoff`; do not push
+another main commit with the already-uploaded 5.9 marketing version.

@@ -1,18 +1,25 @@
 # N4x4 — Session Handoff
 
-> **5.9 timing fix (2026-10-02):** Health exports now exclude pauses and
-> interrupted-session recovery gaps. Watch resume rebuilds the paused interval
+> **5.9 submitted (2026-10-02):** Health exports now exclude pauses and
+> interrupted-session recovery gaps; Watch resume rebuilds the paused interval
 > deadline. See
 > [`SESSION-HANDOFF-2026-10-02-WORKOUT-TIMING.md`](SESSION-HANDOFF-2026-10-02-WORKOUT-TIMING.md).
+> Release commit `358a46fff22866836ddd250c01de6ae3ebe6f958`, tag `v5.9`;
+> [GitHub release](https://github.com/scripsweave/N4x4/releases/tag/v5.9).
+> Xcode Cloud build **45** (`48df1e4d-71b3-43a1-80d6-ec1f1bb80d0e`) passed all
+> three actions for that exact commit. `AppStore/submit.sh 5.9 45 --submit`
+> verified **WAITING_FOR_REVIEW**, automatic release **AFTER_APPROVAL**, at
+> 22:38 CEST. The pending 5.8 (44) review was canceled only after 5.9's build
+> passed and became VALID; its editable version was changed to 5.9, retaining
+> the listing/screenshots. Version 5.7 remains live pending Apple approval.
 > Validation: **243 unit tests + 5 UI tests passed**;
-> `/tmp/N4x4-5.9-final-tests.xcresult`. Unsigned generic-device Release build
-> passed for phone, Watch and Live Activity, all reporting 5.9. Release tooling
-> checks passed (4 tests / 18 assertions). No physical devices were connected.
-> Release submission is authorized; signed Cloud verification and App Store
-> submission are the next steps. Version 5.8 is still waiting for review and
-> will be superseded by 5.9 after its build passes.
+> `/tmp/N4x4-5.9-final-tests.xcresult`. Generic-device Release build passed for
+> phone, Watch and Live Activity, all reporting 5.9. Release tooling checks
+> passed (4 tests / 18 assertions). No physical devices were connected.
+> Previously saved Health records are unchanged. Submission details are on
+> `chore/5.9-submission-handoff`, avoiding another main-branch Cloud upload.
 
-> **5.8 submitted (2026-10-02):** Quieter Watch connection recovery with a
+> **5.8 submitted (2026-10-02; superseded by 5.9):** Quieter Watch connection recovery with a
 > 30-second warning grace period and bounded synchronization retries. Release
 > commit `5452a98813ab42bef2c9bd7c85d68775bc0eb2e8`, tag `v5.8`;
 > [GitHub release](https://github.com/scripsweave/N4x4/releases/tag/v5.8).
