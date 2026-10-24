@@ -297,6 +297,55 @@ struct RedesignRootView: View {
     }
 }
 
+// MARK: - Adaptive training content
+
+/// Each pane scrolls independently at large text sizes. The system arrangement
+/// owns the fold geometry; no device model, screen bounds or hinge-angle guesses.
+private struct TrainingPanes<Primary: View, Secondary: View>: View {
+    @ViewBuilder var primary: (CGSize) -> Primary
+    @ViewBuilder var secondary: (CGSize) -> Secondary
+
+    var body: some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27.1, *) {
+            ArrangementView {
+                pane(primary)
+            } secondary: {
+                pane(secondary)
+            }
+            .arrangementViewStyle(.split)
+        } else {
+            fallback
+        }
+        #else
+        fallback
+        #endif
+    }
+
+    private func pane<Content: View>(_ content: @escaping (CGSize) -> Content) -> some View {
+        GeometryReader { geometry in
+            ScrollView {
+                content(geometry.size)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+    }
+
+    private var fallback: some View {
+        GeometryReader { geometry in
+            let layout = geometry.size.width > geometry.size.height
+                ? AnyLayout(HStackLayout(spacing: 24))
+                : AnyLayout(VStackLayout(spacing: 24))
+            layout {
+                pane(primary)
+                pane(secondary)
+            }
+        }
+    }
+}
+
 // MARK: - Home screen (idle)
 
 struct HomeScreen: View {
@@ -305,6 +354,7 @@ struct HomeScreen: View {
     /// Dismisses the "connect your Watch" banner for this app session; it
     /// reappears next launch if the Watch app is still not installed.
     @State private var watchBannerDismissed = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var showVO2Card: Bool { viewModel.healthKitEnabled }
 
@@ -375,7 +425,36 @@ struct HomeScreen: View {
         }
     }
 
+    @ViewBuilder
     private var homeContent: some View {
+        if horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize {
+            TrainingPanes { size in
+                VStack(spacing: 16) {
+                    header
+                    startRing(side: max(120, min(380, size.width - 24, size.height - 90)))
+                        .frame(maxHeight: .infinity)
+                }
+                .padding(16)
+            } secondary: { _ in
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Norwegian 4×4")
+                        .font(.largeTitle.bold())
+                        .foregroundStyle(Palette.textPrimary)
+                    connectBannerIfNeeded
+                    expandedPlan
+                    if showVO2Card { VO2HistoryCard(viewModel: viewModel) }
+                }
+                .padding(16)
+                .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .padding(.horizontal, 8)
+            .accessibilityIdentifier("expanded-home")
+        } else {
+            compactHomeContent
+        }
+    }
+
+    private var compactHomeContent: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > geometry.size.height && !dynamicTypeSize.isAccessibilitySize
             ScrollView {
@@ -447,6 +526,53 @@ struct HomeScreen: View {
             if showVO2Card {
                 VO2HistoryCard(viewModel: viewModel)
             }
+        }
+    }
+
+    private var expandedPlan: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(planSummary)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.textSecondary)
+            IntervalTimelineBar(viewModel: viewModel, showProgress: false)
+            VStack(spacing: 14) {
+                planRow("Warm up", type: .warmup)
+                planRow("Work", type: .highIntensity)
+                planRow("Recovery", type: .rest)
+                planRow("Cool down", type: .cooldown)
+            }
+            Divider().overlay(Palette.hairline)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("WORK TARGET")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Palette.textSecondary)
+                Text("\(viewModel.highIntensityTargetRange.lowerBound)–\(viewModel.highIntensityTargetRange.upperBound) BPM")
+                    .font(.title.bold()).fontDesign(.rounded)
+                    .foregroundStyle(Palette.textPrimary)
+                    .monospacedDigit()
+            }
+            .accessibilityElement(children: .combine)
+        }
+        .padding(20)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Palette.hairline))
+    }
+
+    @ViewBuilder
+    private func planRow(_ title: String, type: IntervalType) -> some View {
+        let phases = viewModel.intervals.filter { $0.type == type }
+        if let first = phases.first {
+            HStack(spacing: 10) {
+                Circle().fill(intervalColor(type)).frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
+                Text(title).foregroundStyle(Palette.textPrimary)
+                Spacer(minLength: 8)
+                Text(phases.count > 1 ? "\(phases.count) × \(rdTime(first.duration))" : rdTime(first.duration))
+                    .foregroundStyle(Palette.textSecondary)
+                    .monospacedDigit()
+            }
+            .font(.body.weight(.medium))
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -891,19 +1017,24 @@ struct WorkoutScreen: View {
     @State private var showSkipConfirmation = false
     @State private var skipIsForCooldown = false
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > geometry.size.height && !dynamicTypeSize.isAccessibilitySize
-            ScrollView {
-                if wide {
-                    landscapeWorkout(size: geometry.size)
-                } else {
-                    portraitWorkout(size: geometry.size)
+            if horizontalSizeClass == .regular && !dynamicTypeSize.isAccessibilitySize {
+                expandedWorkout
+            } else {
+                ScrollView {
+                    if wide {
+                        landscapeWorkout(size: geometry.size)
+                    } else {
+                        portraitWorkout(size: geometry.size)
+                    }
                 }
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
         .alert("Finish workout?", isPresented: $showEndAlert) {
             Button("Finish & Save") {
@@ -919,6 +1050,87 @@ struct WorkoutScreen: View {
         .alert(skipIsForCooldown ? "End workout now?" : "Skip interval now?", isPresented: $showSkipConfirmation) {
             Button(skipIsForCooldown ? "End Now" : "Skip Now", role: .destructive) { viewModel.skip() }
             Button(skipIsForCooldown ? "Continue Cooldown" : "Continue", role: .cancel) {}
+        }
+    }
+
+    private var expandedWorkout: some View {
+        GeometryReader { geometry in
+            #if compiler(>=6.4)
+            if #available(iOS 27.1, *) {
+                // A horizontal division is the propped, portrait arrangement.
+                // Geometry is local and comes from the system's reserved region.
+                let propped = geometry.reservedRegions(kind: .division).contains {
+                    $0.frame.width > $0.frame.height
+                }
+                expandedWorkoutPanes(propped: propped)
+            } else {
+                expandedWorkoutPanes(propped: false)
+            }
+            #else
+            expandedWorkoutPanes(propped: false)
+            #endif
+        }
+        .accessibilityIdentifier("expanded-workout")
+    }
+
+    private func expandedWorkoutPanes(propped: Bool) -> some View {
+        TrainingPanes { size in
+            VStack(spacing: 12) {
+                header
+                if propped {
+                    HStack(spacing: 20) {
+                        WorkoutRing(viewModel: viewModel,
+                                    side: max(120, min(240, size.height - 80, size.width * 0.4)))
+                        HRZoneBar(viewModel: viewModel, compact: true,
+                                  onMissingHeartRateTap: { showWatchHelp = true })
+                    }
+                } else {
+                    WorkoutRing(viewModel: viewModel,
+                                side: max(120, min(400, size.width - 32, size.height - 130)))
+                        .frame(maxHeight: .infinity)
+                    IntervalTimelineBar(viewModel: viewModel)
+                }
+            }
+            .padding(16)
+        } secondary: { _ in
+            VStack(spacing: 18) {
+                if !propped {
+                    HRZoneBar(viewModel: viewModel, expanded: true,
+                              onMissingHeartRateTap: { showWatchHelp = true })
+                } else {
+                    IntervalTimelineBar(viewModel: viewModel)
+                }
+                upNext
+                controls
+            }
+            .padding(16)
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
+        .padding(.horizontal, 8)
+    }
+
+    @ViewBuilder
+    private var upNext: some View {
+        let nextIndex = viewModel.currentIntervalIndex + 1
+        if viewModel.intervals.indices.contains(nextIndex) {
+            let next = viewModel.intervals[nextIndex]
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("UP NEXT")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Palette.textSecondary)
+                    Text("\(next.type == .rest ? "Recovery" : next.type == .highIntensity ? "High intensity" : next.type == .cooldown ? "Cool down" : "Warm up") · \(rdTime(next.duration))")
+                        .font(.headline)
+                        .foregroundStyle(Palette.textPrimary)
+                }
+                Spacer(minLength: 0)
+                Circle().fill(intervalColor(next.type)).frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
+            }
+            .padding(18)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("up-next-interval")
         }
     }
 
@@ -1128,6 +1340,7 @@ struct HRZoneBar: View {
     @ObservedObject var viewModel: TimerViewModel
     var landscape = false
     var compact = false
+    var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .largeTitle) private var readingSize: CGFloat = 60
@@ -1184,16 +1397,23 @@ struct HRZoneBar: View {
         VStack(alignment: .leading, spacing: 6) {
             heartRateHeader
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
+            if expanded {
+                VStack(alignment: .leading, spacing: 16) {
                     heartRateReading
-                    Spacer(minLength: 0)
                     guidance
-                        .fixedSize(horizontal: true, vertical: false)
                 }
-                VStack(alignment: .leading, spacing: 8) {
-                    heartRateReading
-                    guidance
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        heartRateReading
+                        Spacer(minLength: 0)
+                        guidance.fixedSize(horizontal: true, vertical: false)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        heartRateReading
+                        guidance
+                    }
                 }
             }
 
@@ -1249,7 +1469,7 @@ struct HRZoneBar: View {
     private var heartRateReading: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(viewModel.currentHeartRate.map { "\(Int($0))" } ?? "—")
-                .font(.system(size: readingSize * (landscape ? 1.2 : 1), weight: .heavy, design: .rounded))
+                .font(.system(size: readingSize * (expanded ? 1.5 : landscape ? 1.2 : 1), weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(readingColor)
                 .fixedSize()
@@ -1423,8 +1643,9 @@ struct RedesignHistoryView: View {
     @ObservedObject var viewModel: TimerViewModel
     var embedded: Bool = false
     @Environment(\.dismiss) private var dismiss
-    /// Entry opened in the full-session detail sheet (charts + intervals).
-    @State private var detailedWorkout: WorkoutLogEntry?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var selectedWorkoutID: UUID?
+    @State private var compactColumn: NavigationSplitViewColumn = .sidebar
     @State private var selectedPerfModality: TrainingModality?
     @State private var selectedChartDate: Date?
     /// The month shown in the calendar grid. Defaults to today; the chevrons move
@@ -1436,6 +1657,46 @@ struct RedesignHistoryView: View {
     private struct WeekKey: Hashable { let year: Int; let week: Int }
 
     var body: some View {
+        NavigationSplitView(preferredCompactColumn: $compactColumn) {
+            historyOverview
+                .navigationSplitViewColumnWidth(min: 280, ideal: 360, max: 440)
+                .toolbar(.hidden, for: .navigationBar)
+        } detail: {
+            if let entry = viewModel.workoutLogEntries.first(where: { $0.id == selectedWorkoutID }) {
+                SessionDetailSheet(entry: entry, viewModel: viewModel, embedded: true,
+                                   onClose: clearSelection)
+                    .id(entry.id)
+            } else {
+                ContentUnavailableView("Your sessions", systemImage: "chart.xyaxis.line",
+                                       description: Text("Select a workout to see its heart rate and intervals."))
+                    .foregroundStyle(Palette.textSecondary)
+                    .background(Palette.background)
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .tint(Palette.electricBlue)
+        .preferredColorScheme(.dark)
+        .onAppear {
+            if horizontalSizeClass == .regular, selectedWorkoutID == nil {
+                selectedWorkoutID = viewModel.workoutLogEntries.first?.id
+            }
+        }
+        .onChange(of: viewModel.workoutLogEntries.map(\.id)) { _, ids in
+            if let selectedWorkoutID, !ids.contains(selectedWorkoutID) { clearSelection() }
+        }
+    }
+
+    private func selectWorkout(_ workout: WorkoutLogEntry) {
+        selectedWorkoutID = workout.id
+        compactColumn = .detail
+    }
+
+    private func clearSelection() {
+        selectedWorkoutID = nil
+        compactColumn = .sidebar
+    }
+
+    private var historyOverview: some View {
         ScrollView {
             VStack(spacing: 16) {
                 header
@@ -1454,9 +1715,6 @@ struct RedesignHistoryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.background.ignoresSafeArea())
         .preferredColorScheme(.dark)
-        .sheet(item: $detailedWorkout) { workout in
-            SessionDetailSheet(entry: workout, viewModel: viewModel)
-        }
     }
 
     private var header: some View {
@@ -1491,7 +1749,8 @@ struct RedesignHistoryView: View {
             }
             ForEach(viewModel.workoutLogEntries) { workout in
                 Button {
-                    detailedWorkout = workout
+                    selectedWorkoutID = workout.id
+                    compactColumn = .detail
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "checkmark.circle.fill")
@@ -1519,7 +1778,10 @@ struct RedesignHistoryView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 16).fill(Palette.surface))
+                    .background(RoundedRectangle(cornerRadius: 16).fill(
+                        selectedWorkoutID == workout.id ? Palette.electricBlue.opacity(0.16) : Palette.surface))
+                    .overlay(RoundedRectangle(cornerRadius: 16).stroke(
+                        selectedWorkoutID == workout.id ? Palette.electricBlue.opacity(0.6) : Palette.hairline))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1694,7 +1956,7 @@ struct RedesignHistoryView: View {
         let today = isToday(day)
         let future = isFutureDay(day)
         return Button {
-            if let w = workout { detailedWorkout = w }
+            if let w = workout { selectWorkout(w) }
         } label: {
             ZStack {
                 if workout != nil {
@@ -1784,7 +2046,7 @@ struct RedesignHistoryView: View {
                 }
                 if let nearest = candidates.min(by: {
                     abs($0.completedAt.timeIntervalSince(date)) < abs($1.completedAt.timeIntervalSince(date))
-                }) { detailedWorkout = nearest }
+                }) { selectWorkout(nearest) }
             }
         } else {
             Text("Log at least two \(modality.rawValue) sessions to see your trend.")

@@ -840,6 +840,8 @@ struct PostWorkoutSummaryRedesignView: View {
 struct SessionDetailSheet: View {
     let entry: WorkoutLogEntry
     @ObservedObject var viewModel: TimerViewModel
+    var embedded = false
+    var onClose: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var series: HeartRateSeries?
     @State private var ghost: HeartRateSeries?
@@ -847,7 +849,29 @@ struct SessionDetailSheet: View {
     @State private var showDeleteConfirmation = false
 
     var body: some View {
-        NavigationStack {
+        Group {
+            if embedded {
+                detailContent
+            } else {
+                NavigationStack { detailContent }
+            }
+        }
+        .alert("Delete workout?", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteWorkoutLogEntry(id: entry.id)
+                close()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the workout from N4x4 history.")
+        }
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
+    private var detailContent: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if entry.endedEarly == true {
@@ -945,6 +969,7 @@ struct SessionDetailSheet: View {
             .preferredColorScheme(.dark)
             .navigationTitle(entry.completedAt.formatted(date: .abbreviated, time: .shortened))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Delete", role: .destructive) { showDeleteConfirmation = true }
@@ -959,20 +984,10 @@ struct SessionDetailSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    Button("Done") { close() }
                 }
             }
             .onAppear { load() }
-        }
-        .alert("Delete workout?", isPresented: $showDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
-                viewModel.deleteWorkoutLogEntry(id: entry.id)
-                dismiss()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes the workout from N4x4 history.")
-        }
     }
 
     private func sectionTitle(_ text: String) -> some View {

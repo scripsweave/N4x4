@@ -174,9 +174,9 @@ final class N4x4UITests: XCTestCase {
             app.alerts["Skip interval now?"].buttons["Skip Now"].tap()
         }
         XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
-        assertVisible(app.navigationBars.buttons["Done"], in: app)
+        assertVisible(app.buttons["Done"], in: app)
         keepScreenshot("Landscape saved summary", app: app)
-        app.navigationBars.buttons["Done"].tap()
+        app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["History"].waitForExistence(timeout: 5))
     }
 
@@ -204,7 +204,7 @@ final class N4x4UITests: XCTestCase {
         reveal(workouts.firstMatch, in: app)
         XCTAssertEqual(workouts.count, 1)
         workouts.firstMatch.tap()
-        let delete = app.navigationBars.buttons["Delete"]
+        let delete = app.buttons["Delete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5))
         delete.tap()
         app.alerts["Delete workout?"].buttons["Delete"].tap()
@@ -220,12 +220,12 @@ final class N4x4UITests: XCTestCase {
         app.tabBars.buttons["Home"].tap()
         app.buttons["START"].tap()
         XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
-        app.navigationBars.buttons["Done"].tap()
+        app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["History"].waitForExistence(timeout: 5))
         reveal(workouts.firstMatch, in: app)
         workouts.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars.buttons["Delete"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Delete"].tap()
+        XCTAssertTrue(app.buttons["Delete"].waitForExistence(timeout: 5))
+        app.buttons["Delete"].tap()
         app.alerts["Delete workout?"].buttons["Delete"].tap()
         XCTAssertTrue(app.staticTexts["Completed workouts are saved here automatically."].waitForExistence(timeout: 5))
     }
@@ -256,10 +256,16 @@ final class N4x4UITests: XCTestCase {
         add(historyScreenshot)
         second.tap()
         XCTAssertTrue(app.staticTexts["Second workout"].waitForExistence(timeout: 5))
-        app.navigationBars.buttons["Delete"].tap()
+        // A selected session must survive the compact/expanded navigation reflow.
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(app.staticTexts["Second workout"].waitForExistence(timeout: 5))
+        keepScreenshot("Selected History session after resizing", app: app)
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(app.staticTexts["Second workout"].waitForExistence(timeout: 5))
+        app.buttons["Delete"].tap()
         app.alerts["Delete workout?"].buttons["Cancel"].tap()
         XCTAssertTrue(app.staticTexts["Second workout"].exists)
-        app.navigationBars.buttons["Delete"].tap()
+        app.buttons["Delete"].tap()
         app.alerts["Delete workout?"].buttons["Delete"].tap()
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertFalse(second.exists)
@@ -280,12 +286,12 @@ extension N4x4UITests {
         app.alerts["Finish workout?"].buttons["Finish & Save"].tap()
         XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Norwegian 4×4 complete"].exists)
-        app.navigationBars.buttons["Done"].tap()
+        app.buttons["Done"].tap()
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workout-"))
         reveal(rows.firstMatch, in: app)
         XCTAssertEqual(rows.count, 1)
         rows.firstMatch.tap()
-        XCTAssertTrue(app.navigationBars.buttons["Delete"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Delete"].waitForExistence(timeout: 5))
         keepScreenshot("Saved cooldown finish in History", app: app)
     }
 
@@ -431,7 +437,7 @@ extension N4x4UITests {
         reveal(confirm, in: app)
         XCTAssertFalse(confirm.isEnabled, "Saving is disabled until both preferences and workout permission allow it")
         keepScreenshot("Health recovery - Confirm before exporting", app: app)
-        app.navigationBars.buttons["Cancel"].tap()
+        app.buttons["Cancel"].tap()
         XCTAssertTrue(app.staticTexts["Health save status unknown"].exists)
     }
 }

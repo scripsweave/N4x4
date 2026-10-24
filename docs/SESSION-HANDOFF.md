@@ -1,5 +1,10 @@
 # N4x4 — Session Handoff
 
+> **iPhone Duo / 5.10 in progress (2026-10-24):** User authorized implementation,
+> Duo screenshots and App Store submission. See
+> [`SESSION-HANDOFF-2026-10-24-DUO.md`](SESSION-HANDOFF-2026-10-24-DUO.md).
+> 5.9 is now REJECTED; 5.7 remains live.
+
 > **5.9 submitted (2026-10-02):** Health exports now exclude pauses and
 > interrupted-session recovery gaps; Watch resume rebuilds the paused interval
 > deadline. See
