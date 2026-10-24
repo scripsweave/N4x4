@@ -63,13 +63,18 @@ final class N4x4UITests: XCTestCase {
          "-hasRequestedAppReview", "YES"]
     }
 
-    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<8 {
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication,
+                        scrollContainer: XCUIElement? = nil, maximumSwipes: Int = 8) {
+        for _ in 0..<maximumSwipes {
             let tabBar = app.tabBars.firstMatch
             let horizontalBar = tabBar.exists && tabBar.isHittable && tabBar.frame.width > tabBar.frame.height
             let bottom = horizontalBar ? tabBar.frame.minY : app.frame.maxY
             if element.exists && element.isHittable && element.frame.minY >= 0 && element.frame.maxY <= bottom {
                 return
+            }
+            if let scrollContainer, scrollContainer.exists && scrollContainer.isHittable {
+                scrollContainer.swipeUp()
+                continue
             }
             // Small swipes avoid scrolling straight past a large text control.
             // Duo can present the review as a popover. Swiping the application
@@ -437,7 +442,10 @@ extension N4x4UITests {
         XCTAssertTrue(app.navigationBars["Health & Devices"].waitForExistence(timeout: 5))
         keepScreenshot("Health and Devices - Largest text source priority", app: app)
         let diagnostics = app.buttons["Copy Diagnostics"]
-        reveal(diagnostics, in: app)
+        // At AX5 the Form can span many screens. Scroll the actual list;
+        // a slow application-wide gesture can drag an editable source row.
+        reveal(diagnostics, in: app, scrollContainer: app.collectionViews.firstMatch,
+               maximumSwipes: 24)
         assertVisible(diagnostics, in: app)
         keepScreenshot("Health and Devices - Largest text help", app: app)
     }

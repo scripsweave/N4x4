@@ -223,6 +223,22 @@ final class WatchStandaloneTests: XCTestCase {
         HeartRateSeriesStore.delete(for: record.id)
     }
 
+    func testEllipticalTypeSurvivesStandaloneWatchCompletionAndImport() throws {
+        var ellipticalPlan = plan
+        ellipticalPlan.workoutTypeRaw = WorkoutType.elliptical.rawValue
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: ellipticalPlan, now: recent))
+        engine.reconcile(now: recent + 420)
+        let record = try XCTUnwrap(engine.completedRecord())
+        let encoded = try JSONEncoder().encode(record)
+        let transferred = try JSONDecoder().decode(CompletedWatchWorkout.self, from: encoded)
+        let vm = TimerViewModel()
+        defer { HeartRateSeriesStore.delete(for: record.id) }
+        XCTAssertTrue(vm.importWatchWorkout(transferred))
+        let entry = try XCTUnwrap(vm.workoutLogEntries.first { $0.id == record.id })
+        XCTAssertEqual(entry.workoutType, .elliptical)
+        XCTAssertEqual(entry.modality, .elliptical)
+    }
+
     func testImportKeepsLogNewestFirstAndUpdatesStreak() {
         let vm = TimerViewModel()
         let old = makeRecord()                                   // completed ~an hour ago

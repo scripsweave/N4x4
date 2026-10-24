@@ -316,7 +316,7 @@ struct SettingsView: View {
     /// so "cooldown" finds Intervals and "strap" finds the monitor.
     private var searchEntries: [(title: String, keywords: String, row: AnyView)] {
         [
-            ("Default Workout", "default workout type kettlebells cycle run exercise",
+            ("Default Workout", "default workout type kettlebells cycle run elliptical cross trainer crosstrainer exercise",
              AnyView(defaultWorkoutRow)),
             ("Training Days & Reminders", "training days reminders schedule week notifications night morning comeback nudge interval change",
              AnyView(trainingDaysRow)),

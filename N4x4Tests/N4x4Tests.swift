@@ -525,7 +525,7 @@ final class N4x4Tests: XCTestCase {
     func testWorkoutTypeIncludesOtherOption() {
         XCTAssertTrue(WorkoutType.allCases.contains(.other))
         XCTAssertTrue(WorkoutType.allCases.contains(.kettlebell))
-        XCTAssertEqual(WorkoutType.allCases.count, 12)
+        XCTAssertEqual(WorkoutType.allCases.count, 13)
     }
 
     func testSelectableWorkoutTypesExcludeProtocolName() {
@@ -572,6 +572,48 @@ final class N4x4Tests: XCTestCase {
 
         XCTAssertEqual(vm.defaultWorkoutType, .rowing)
         XCTAssertEqual(vm.resolvedDefaultWorkoutType, .rowing)
+    }
+
+    func testEllipticalPreferenceRestoresWithoutChangingHeartRateTargets() {
+        let vm = TimerViewModel()
+        vm.setDefaultWorkoutType(.other)
+        let workTarget = vm.highIntensityTargetRange
+        let recoveryTarget = vm.recoveryTargetRange
+
+        vm.setDefaultWorkoutType(.elliptical)
+
+        XCTAssertTrue(WorkoutType.selectableCases.contains(.elliptical))
+        XCTAssertEqual(vm.preferredModality, .elliptical)
+        XCTAssertEqual(vm.highIntensityTargetRange, workTarget)
+        XCTAssertEqual(vm.recoveryTargetRange, recoveryTarget)
+        let restored = TimerViewModel()
+        XCTAssertEqual(restored.selectedWorkoutType, .elliptical)
+        XCTAssertEqual(restored.preferredModality, .elliptical)
+    }
+
+    func testEllipticalReviewPersistsResistanceWithoutSpeedConversion() throws {
+        let vm = TimerViewModel()
+        vm.unitPreference = .imperial
+        vm.numberOfIntervals = 2
+        vm.setDefaultWorkoutType(.elliptical)
+        vm.finishWorkout()
+        vm.preparePerformanceDraft()
+        XCTAssertEqual(vm.currentPerformanceMetric.label, "Resistance")
+        XCTAssertEqual(vm.currentPerformanceUnit, "level")
+        vm.performanceDraft = [8, 12]
+        XCTAssertTrue(vm.completeWorkoutReview())
+
+        let entry = try XCTUnwrap(vm.workoutLogEntries.first)
+        XCTAssertEqual(entry.workoutType, .elliptical)
+        XCTAssertEqual(entry.modality, .elliptical)
+        XCTAssertEqual(entry.intervalPerformances?.map(\.primary), [8, 12])
+        let restored = TimerViewModel()
+        let restoredEntry = try XCTUnwrap(restored.workoutLogEntries.first)
+        XCTAssertEqual(restoredEntry.id, entry.id)
+        XCTAssertEqual(restoredEntry.workoutType, .elliptical)
+        XCTAssertEqual(restoredEntry.modality, .elliptical)
+        XCTAssertEqual(restoredEntry.intervalPerformances, entry.intervalPerformances)
+        XCTAssertEqual(restored.displayValue(12, for: .elliptical), 12)
     }
 
     func testWorkoutLogMigrationFromLegacySchemaPreservesEntry() {

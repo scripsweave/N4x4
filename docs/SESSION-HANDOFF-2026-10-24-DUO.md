@@ -16,6 +16,7 @@ Activity configurations. Minimum iOS remains **17.5**.
   calendar/trends use a disclosure. Existing charts, intervals, sharing,
   deletion and Health recovery are reused. Toolbar actions have native symbols.
 - Settings values stack below their titles at accessibility text sizes.
+- Elliptical is a first-class workout type/modality with guidance and resistance-level logging. Existing Other logs remain unchanged; HR targets and effort feedback are independent of the exercise choice. Watch standalone records retain the new type through import.
 - No timer, Watch, HR arbitration, recording or Health export logic changed.
   No optional live HR chart was added. Birthday Home behavior is retained.
 
@@ -93,20 +94,17 @@ series. It restarts only that simulator to flush cached preferences/scenes.
 Demo HR uses the existing DEBUG fixture through the real aggregator; release
 builds do not enable it. No personal Health data is in the captures.
 
-## Outstanding App Review evidence
+## Physical App Review evidence
 
-Apple's Oct 2 **Guideline 2.5.4** rejection explicitly requests recordings on a
-**physical iOS device** demonstrating Bluetooth HR and audible spoken workout
-cues after returning to the Home Screen. No physical device appeared in the
-latest `devicectl list devices`, and no existing recordings were found in the
-repo/Desktop/Downloads/Movies. The user was asked asynchronously for a connected
-phone/monitor or existing recordings; no response yet.
+Apple's Oct 2 Guideline 2.5.4 rejection requested physical-device Bluetooth HR and background-audio recordings. The user supplied both privately under untracked `tmp/`. Keep original videos out of git.
 
-Do not fake evidence or remove the required `audio`/`bluetooth-central` modes.
-`AppStore/review-notes-5.10.txt` supplies exact reviewer navigation but does not
-claim recordings are attached. Checklist: `AppStore/DUO-SCREENSHOTS.md`.
-Review submission `fae7a6e0-5925-4e22-9c69-17b8c6fc5af5` is still
-UNRESOLVED_ISSUES. Inspect/resolve its item only after evidence is provided.
+- `N4x4-physical-iPhone-demo-1.mp4`: original Bluetooth pairing, live Garmin HR and workout demonstration; privately uploaded to App Review and verified COMPLETE.
+- `N4x4-physical-iPhone-demo-2.mp4`: original 40-second iPhone recording showing Home Screen icons and a spoken halfway warm-up cue at approximately 00:31. Verified using extracted frames and local audio transcription; upload/processing in progress.
+- Review notes describe exactly what each video demonstrates. Neither is a Simulator recording.
+
+Cloud **49** (`5bce09cf-1411-45c7-8727-67303559202e`, source `db5986e`) built and archived successfully, but the AX5 UI test failed while scrolling to Copy Diagnostics. Do not submit 49. The test now scrolls the actual Form collection view and allows the longer AX5 content; the assertion still requires the real button to be fully visible and hittable. Local targeted test passed: `/tmp/N4x4-elliptical-ui.xcresult` (179 seconds). All **246 unit tests passed**, including three Elliptical persistence/target/Watch-import regressions: `/tmp/N4x4-elliptical-tests.xcresult`. Release tooling: 4 tests/18 assertions passed.
+
+Review submission `fae7a6e0-5925-4e22-9c69-17b8c6fc5af5` remains UNRESOLVED_ISSUES. Build 49 is attached provisionally; replace it with the verified final Elliptical build before resolving the rejected item.
 
 ## Remaining release steps
 

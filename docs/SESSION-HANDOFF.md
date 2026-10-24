@@ -1,8 +1,9 @@
 # N4x4 — Session Handoff
 
 > **iPhone Duo / 5.10 (2026-10-24):** Adaptive layouts implemented; six authentic
-> Duo screenshots uploaded. Final release validation in progress; physical
-> Bluetooth/background-audio recordings required by Apple remain outstanding. See
+> Duo screenshots uploaded; Elliptical implemented and 246 unit tests passed.
+> Physical Bluetooth/background-audio recordings supplied; final Cloud validation
+> and resubmission are in progress. See
 > [`SESSION-HANDOFF-2026-10-24-DUO.md`](SESSION-HANDOFF-2026-10-24-DUO.md).
 > The rejected editable version is now 5.10; 5.7 remains live.
 

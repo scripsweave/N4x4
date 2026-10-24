@@ -15,3 +15,9 @@ Background audio (Guideline 2.5.4):
 The required background modes support these workout features. They are not used for advertisements, content downloads or unrelated background work.
 
 Version 5.10 also supports iPhone Duo: compact controls on the outer display, expanded workout/plan layouts on the inner display, a propped workout arrangement around the folding region, and adaptive History list/detail navigation. Open/close or rotate during a workout to inspect the same ongoing session. Heart-rate hardware works on physical devices; Simulator screenshots use illustrative readings.
+
+Physical-device video attachments for Guideline 2.5.4:
+• N4x4-physical-iPhone-demo-1.mp4: pairing a Garmin Forerunner 255S Music broadcasting standard Bluetooth heart rate, changing BPM in N4x4 and starting a workout.
+• N4x4-physical-iPhone-demo-2.mp4: starting a one-minute warm-up, returning to the iPhone Home Screen with app icons visible, then hearing “Halfway through warm up, 30 seconds remaining” at approximately 00:31 while N4x4 remains in the background. Both are original physical-iPhone screen recordings.
+
+Elliptical is now available under Settings > Default Workout and in the workout Type picker. Guide includes elliptical setup, work and recovery guidance. Completed elliptical workouts offer resistance-level logging; heart-rate targets and effort feedback follow the same protocol as other workout types.

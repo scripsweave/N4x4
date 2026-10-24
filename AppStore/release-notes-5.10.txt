@@ -1,5 +1,6 @@
 N4x4 is ready for iPhone Duo.
 
+• Choose Elliptical as your workout type, with dedicated training guidance and resistance-level logging.
 • Open your phone for a spacious workout view with a large countdown, live heart rate, target zone and a preview of your next interval.
 • Prop up iPhone Duo for hands-free training, with workout information and controls arranged around the fold.
 • See your training plan beside the Start ring, and browse History alongside each session’s heart-rate charts and intervals.

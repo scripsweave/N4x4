@@ -101,6 +101,7 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
     case kettlebell = "Kettlebells"
     case rowing = "Rowing"
     case treadmill = "Treadmill"
+    case elliptical = "Elliptical"
     case hillSprints = "Hill sprints"
     case stairs = "Stairs"
     case jumpRope = "Jump rope"
@@ -128,6 +129,7 @@ enum WorkoutType: String, CaseIterable, Identifiable, Codable {
         case .kettlebell:              return .kettlebell
         case .rowing:                  return .rowing
         case .stairs:                  return .stairClimber
+        case .elliptical:              return .elliptical
         case .norwegian4x4, .jumpRope, .circuit, .sports, .other:
                                        return .other
         }
@@ -252,6 +254,7 @@ enum TrainingModality: String, CaseIterable, Codable {
     case outdoorRun   = "Outdoor Run"
     case rowing       = "Rowing Machine"
     case bike         = "Stationary Bike"
+    case elliptical   = "Elliptical"
     case stairClimber = "Stair Climber"
     case kettlebell   = "Kettlebells"
     case other        = "Other"
@@ -262,6 +265,7 @@ enum TrainingModality: String, CaseIterable, Codable {
         case .outdoorRun:   return "leaf.fill"
         case .rowing:       return "drop.fill"
         case .bike:         return "bicycle"
+        case .elliptical:   return "figure.elliptical"
         case .stairClimber: return "arrow.up.circle.fill"
         case .kettlebell:   return "figure.strengthtraining.traditional"
         case .other:        return "ellipsis.circle.fill"
@@ -274,6 +278,7 @@ enum TrainingModality: String, CaseIterable, Codable {
         case .outdoorRun:   return "The natural way"
         case .rowing:       return "Full body power"
         case .bike:         return "Low impact"
+        case .elliptical:   return "A smooth, steady stride"
         case .stairClimber: return "Vertical power"
         case .kettlebell:   return "Strength meets cardio"
         case .other:        return "Any cardio works"
@@ -290,12 +295,14 @@ enum TrainingModality: String, CaseIterable, Codable {
             return "Set the damper (drag) to 4 or 6. High drag (10) causes muscle failure before heart failure — defeating the purpose."
         case .bike:
             return "Adjust the seat so your leg is almost fully extended at the bottom of the pedal stroke."
+        case .elliptical:
+            return "Start at light resistance with a comfortable stride. Stay upright and keep your movement smooth. Resistance levels vary by machine, so compare sessions on the same machine."
         case .stairClimber:
             return "Stand upright. Do not lean your weight onto the side handles — this reduces the load and defeats the purpose."
         case .kettlebell:
             return "Pick a bell you can swing continuously for 4 minutes with solid form — lighter than you think (12–16 kg is a common start). Clear space around you and keep your spine neutral."
         case .other:
-            return "Choose any continuous cardio activity — elliptical, swimming, jump rope, cross-trainer. Warm up for 5 minutes at moderate effort before starting intervals."
+            return "Choose any continuous cardio activity, such as swimming or jump rope. Warm up at moderate effort before starting intervals."
         }
     }
 
@@ -309,6 +316,8 @@ enum TrainingModality: String, CaseIterable, Codable {
             return "Focus on a powerful leg drive. Keep your Stroke Rate (SPM) between 24 and 28."
         case .bike:
             return "Maintain a high, consistent RPM — 80+ on a road bike or 60+ on an Air/Assault bike. Use your arms on an Air Bike to share the load."
+        case .elliptical:
+            return "Increase cadence or resistance gradually toward your target heart-rate zone. Keep a smooth, controlled stride throughout the four-minute effort."
         case .stairClimber:
             return "Increase speed until you can't breathe through your nose. Take full, consistent steps — not short choppy ones."
         case .kettlebell:
@@ -328,6 +337,8 @@ enum TrainingModality: String, CaseIterable, Codable {
             return "Keep the handle moving with very light tension. Focus on deep, rhythmic belly breaths."
         case .bike:
             return "Pedal very slowly with zero resistance. Do not stop moving your legs."
+        case .elliptical:
+            return "Lower the resistance and ease your pace while continuing to move. Let your heart rate settle toward the recovery target."
         case .stairClimber:
             return "Drop the machine to Level 1 or 2. Focus on standing tall to open up your lungs."
         case .kettlebell:
@@ -343,6 +354,7 @@ enum TrainingModality: String, CaseIterable, Codable {
         case .outdoorRun:   return .run
         case .rowing:       return .rowing
         case .bike:         return .cycle
+        case .elliptical:   return .elliptical
         case .stairClimber: return .stairs
         case .kettlebell:   return .kettlebell
         case .other:        return .other
@@ -366,6 +378,9 @@ enum TrainingModality: String, CaseIterable, Codable {
                                   imperialUnit: nil, imperialStep: nil, imperialRange: nil)
         case .stairClimber:
             return ModalityMetric(label: "Level", unit: "level", step: 1, range: 1...20,
+                                  imperialUnit: nil, imperialStep: nil, imperialRange: nil)
+        case .elliptical:
+            return ModalityMetric(label: "Resistance", unit: "level", step: 1, range: 0...100,
                                   imperialUnit: nil, imperialStep: nil, imperialRange: nil)
         case .kettlebell:
             return ModalityMetric(label: "Reps", unit: "reps", step: 5, range: 10...250,
