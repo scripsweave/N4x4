@@ -1,5 +1,13 @@
 # N4x4 — Session Handoff
 
+> **Animated header (2026-10-24):** User-selected chrome-ring artwork is now an
+> 8-second seamless header video. Standalone artwork review is WAITING_FOR_REVIEW.
+> A verified user LaunchAgent checks every 15 minutes and publishes after
+> approval, then ensures the header is on 5.10 after release and disables itself.
+> It requires this Mac awake/logged in. See the
+> [header publication record](../AppStore/creative-assets/chrome-ring/README.md).
+> Branch `design/animated-store-header`; no main push or new app build.
+
 > **5.10 submitted (2026-10-24):** iPhone Duo adaptive layouts, six authentic
 > Duo screenshots, Elliptical workout type/guidance/resistance logging, and
 > accessibility search/scroll fixes. Cloud **50** passed all four required

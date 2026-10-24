@@ -1,0 +1,16 @@
+{
+  "source_loop_endpoint_mae": 0.0,
+  "decoded_seam_mae": 0.990217024436344,
+  "decoded_adjacent_mae": 0.6380627067301202,
+  "decoded_phase_mae": 2.111407969235183,
+  "video": "N4x4-Chrome-Ring-Header-v2.mp4",
+  "width": 3840,
+  "height": 1646,
+  "durationSeconds": 8,
+  "fps": 30,
+  "decodedFrames": 240,
+  "audioTracks": 0,
+  "codec": "H.264",
+  "sourceLoopEndpointsIdentical": true,
+  "publicationTests": "4 passed / 14 assertions"
+}
