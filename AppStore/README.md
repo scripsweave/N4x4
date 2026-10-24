@@ -2,6 +2,9 @@
 
 Marketing screenshots for the App Store listing.
 
+For the new iPhone Duo profile, authentic screen captures and review evidence,
+see [Duo screenshots](DUO-SCREENSHOTS.md).
+
 For releasing an uploaded Xcode Cloud build, see [App Store submissions](SUBMISSIONS.md).
 
 ## `screenshots/` — final, upload-ready

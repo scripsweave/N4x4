@@ -29,6 +29,7 @@ struct SettingsIconTile: View {
 /// Top-level row: icon tile · title · current value · chevron (from the
 /// NavigationLink). The value preview is what saves the tap.
 struct SettingsRow<Destination: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let icon: String
     let tint: Color
     let title: String
@@ -39,14 +40,24 @@ struct SettingsRow<Destination: View>: View {
         NavigationLink {
             destination()
         } label: {
-            HStack(spacing: 12) {
+            HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
                 SettingsIconTile(systemName: icon, tint: tint)
-                Text(title)
-                Spacer()
-                if !value.isEmpty {
-                    Text(value)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title).fixedSize(horizontal: false, vertical: true)
+                        if !value.isEmpty {
+                            Text(value).foregroundStyle(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(title)
+                    Spacer()
+                    if !value.isEmpty {
+                        Text(value)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
         }

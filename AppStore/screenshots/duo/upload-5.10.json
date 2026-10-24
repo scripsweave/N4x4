@@ -1,0 +1,68 @@
+{
+  "version": "5.10",
+  "versionID": "3b1854d0-a4b5-42e6-9b0c-0da2588807a1",
+  "localizationID": "7189c06c-d265-46fc-90e5-3a5345858024",
+  "placementGroup": "IPHONE_DUO_PROFILE",
+  "images": [
+    {
+      "fileName": "01-home-open.png",
+      "sha256": "caf0d4c8f5d7be78d40fd17d33c6ab7a5deef3245f0f9b567a51fed438377178",
+      "width": 2853,
+      "height": 2007,
+      "specId": "b83915b8-5b87-4e63-bba5-ab3a0c439862",
+      "imageID": "b4800018-e8a7-8c74-803d-dec37b82e80a",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "placementID": "af000018-e8a7-8c74-8f36-eab406892cc1"
+    },
+    {
+      "fileName": "02-home-closed.png",
+      "sha256": "a283915a87552ec986bf8ccd99528351df9d183c47f2a41aabdb88ab573ea4a3",
+      "width": 1398,
+      "height": 2034,
+      "specId": "205e7ab6-a23a-4ee2-b327-0a99ec2a2520",
+      "imageID": "8c800018-e8a7-8c74-802c-dcc5a86e4c5f",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "placementID": "5bc00018-e8a7-8c74-8f3a-114256293247"
+    },
+    {
+      "fileName": "03-workout-closed.png",
+      "sha256": "c3dfd703d306ed61e1019f0505fcdbcf1b8921ad89e2989071f303509a351eaf",
+      "width": 1398,
+      "height": 2034,
+      "specId": "205e7ab6-a23a-4ee2-b327-0a99ec2a2520",
+      "imageID": "55800018-e8a7-8c74-800b-afc25eca52dd",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "placementID": "a6000018-e8a7-8c74-8f3e-f3d7aad3d94f"
+    },
+    {
+      "fileName": "04-workout-open.png",
+      "sha256": "9e8543ec0b449c77f8808e4c8f8aaf050cdd89f53a8df1bd5cf3040c4118e015",
+      "width": 2853,
+      "height": 2007,
+      "specId": "b83915b8-5b87-4e63-bba5-ab3a0c439862",
+      "imageID": "8ac00018-e8a7-8c74-8024-637e740fc7ab",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "placementID": "9ec00018-e8a7-8c74-8f23-8cedc4ea2d69"
+    },
+    {
+      "fileName": "05-workout-propped.png",
+      "sha256": "5a57cd64457c3fb00d163af4552e29f9350bdcda8f7fbfd426baa4994d07bc85",
+      "width": 2007,
+      "height": 2853,
+      "specId": "5d458eef-8339-4a1f-a484-83d53834cfec",
+      "imageID": "31400018-e8a7-8c74-8021-e7024548000b",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "placementID": "ac000018-e8a7-8c74-8f0a-7ab2854c5492"
+    },
+    {
+      "fileName": "06-history-open.png",
+      "sha256": "49de27156b98bebbccd45630fac66c0346af9016b297150c00515125e5b9d755",
+      "width": 2853,
+      "height": 2007,
+      "specId": "b83915b8-5b87-4e63-bba5-ab3a0c439862",
+      "imageID": "60c00018-e8a7-8c74-801b-4260836c6148",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "placementID": "ed000018-e8a7-8c74-8f2e-516ce00d3fc3"
+    }
+  ]
+}

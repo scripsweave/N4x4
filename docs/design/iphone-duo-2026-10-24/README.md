@@ -1,6 +1,7 @@
 # N4x4 on iPhone Duo — research and design review
 
-Researched 24 October 2026. Status: **concepts for discussion; no app implementation or release changes**.
+Researched 24 October 2026. This brief records the original research/design stage.
+Implementation and current release status: [Duo handoff](../../SESSION-HANDOFF-2026-10-24-DUO.md).
 
 Recommendation: use **A** for the core workout, add **B's hands-free arrangement**, and expand Home and History as in **C**. Treat B's live chart as a separate feature decision.
 

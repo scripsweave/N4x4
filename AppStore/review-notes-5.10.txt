@@ -1,0 +1,17 @@
+N4x4 is an interval-training timer with spoken workout coaching and live heart-rate feedback. No account or login is required.
+
+Background Bluetooth (Guideline 2.5.4):
+1. Turn on/wear a standard Bluetooth Low Energy heart-rate monitor, or enable Broadcast Heart Rate on a compatible Garmin/WHOOP device.
+2. Open N4x4 > Settings > Health & Devices > Heart Rate Monitor. Start discovery and select the monitor. Bluetooth discovery is intentionally user initiated, so no scan or Bluetooth permission prompt occurs merely by launching the app.
+3. Return to Home and tap START. The current BPM and sensor source appear in the workout view.
+4. Return to the iPhone Home Screen while the workout continues, then reopen N4x4. The monitor continues delivering HR measurements during the workout. The app uses Core Bluetooth's Heart Rate Service and HR Measurement characteristic; it is not a location or classic-Bluetooth feature.
+
+Background audio (Guideline 2.5.4):
+1. Open Settings > Audio > Audio Cues and select Voice Prompts. Enable Halfway Prompts and 10-Second Warnings.
+2. For a short demonstration, set short intervals under Settings > Intervals & Durations. Set the device's media volume to an audible level.
+3. Tap START, hear the spoken phase announcement, then return to the iPhone Home Screen while the workout is still running. Leave the workout running until the halfway, ten-second or next-interval announcement. Spoken coaching remains audible in the background or when the screen is locked.
+4. Pause/finish ends workout background audio. Silent mode does not provide spoken cues.
+
+The required background modes support these workout features. They are not used for advertisements, content downloads or unrelated background work.
+
+Version 5.10 also supports iPhone Duo: compact controls on the outer display, expanded workout/plan layouts on the inner display, a propped workout arrangement around the folding region, and adaptive History list/detail navigation. Open/close or rotate during a workout to inspect the same ongoing session. Heart-rate hardware works on physical devices; Simulator screenshots use illustrative readings.
