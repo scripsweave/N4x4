@@ -20,7 +20,7 @@ Activity configurations. Minimum iOS remains **17.5**.
   No optional live HR chart was added. Birthday Home behavior is retained.
 
 Main implementation commits: `2730946`, `5bd7fb4`, `3417fc5`; the final source
-commit also includes the Settings accessibility refinement and media below.
+commit also includes the Settings accessibility refinement, visible search drawer and media below.
 
 ## Verified
 
@@ -60,10 +60,10 @@ free after cleanup/simulator initialization. Use `-jobs 2` for local builds.
 - Development workflow, no archive: `08771d11-b415-43ae-b941-2175a460f659`.
 - Manual release workflow: `a09f71c6-d2f7-493b-96c2-9e28898f1a5c`.
 - Both and the existing Default main-delivery workflow are pinned to Xcode
-  27.1 / macOS 27.0.1. Default workflow still archives on every main push.
+  27.1 / macOS 27.0.1. Default workflow still archives on every main push and now also requires the Duo test action.
 - Candidate **48**, run `04bc4921-1171-4bd5-9db9-ed44c705c685`, exact source
   `3417fc5beb2115e196cdb88f1bb50dd7015e0716`: phone/Watch builds and App Store
-  archive succeeded; build is VALID. Full tests still running at this handoff.
+  archive succeeded; build is VALID. Tests finished **258/259 passed**, again failing only Settings search. The downloaded Cloud hierarchy proves the automatic navigation search drawer was hidden, with no field or Search button. Settings now explicitly uses an always-visible navigation-bar search drawer.
   **48 predates the final Settings row refinement; use the final main build.**
 
 Dedicated simulator: **N4x4 Duo Review**,
@@ -110,7 +110,7 @@ UNRESOLVED_ISSUES. Inspect/resolve its item only after evidence is provided.
 
 ## Remaining release steps
 
-Verify Cloud 48 full tests and the final main Cloud archive/commit, attach the
+Verify the final main Cloud build/tests/archive and exact commit, attach the
 final VALID build to 5.10, then add the physical review recordings. Finish the
 existing unresolved review draft deliberately; standard tooling refuses such
 drafts rather than canceling them. Use the authorized submission flow in

@@ -52,7 +52,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .searchable(text: $searchText, prompt: "Search settings")
+            .searchable(text: $searchText,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search settings")
             .toolbar {
                 if !embedded {
                     ToolbarItem(placement: .confirmationAction) {

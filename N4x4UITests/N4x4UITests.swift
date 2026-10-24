@@ -424,6 +424,10 @@ extension N4x4UITests {
             let searchButton = app.buttons["Search"]
             if searchButton.waitForExistence(timeout: 5) { searchButton.tap() }
         }
+        if !search.exists {
+            keepScreenshot("Settings search unavailable", app: app)
+            print(app.debugDescription)
+        }
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
         search.typeText("airpods")
