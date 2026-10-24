@@ -678,7 +678,7 @@ struct PostWorkoutSummaryRedesignView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Delete", role: .destructive) { showDeleteConfirmation = true }
+                    Button("Delete", systemImage: "trash", role: .destructive) { showDeleteConfirmation = true }
                     .foregroundStyle(Palette.danger)
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -690,7 +690,7 @@ struct PostWorkoutSummaryRedesignView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
+                    Button("Done", systemImage: "checkmark") {
                         if viewModel.completeWorkoutReview() { dismiss() }
                     }
                     .fontWeight(.bold)

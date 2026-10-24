@@ -14,6 +14,7 @@ final class N4x4UITests: XCTestCase {
 
         // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .portrait
 
         // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
@@ -71,11 +72,27 @@ final class N4x4UITests: XCTestCase {
                 return
             }
             // Small swipes avoid scrolling straight past a large text control.
+            // Duo can present the review as a popover. Swiping the application
+            // can hit its dismiss region instead of scrolling the review.
+            if element.exists {
+                let identifier = element.identifier.isEmpty ? element.label : element.identifier
+                let scrollView = app.scrollViews.containing(.any, identifier: identifier).firstMatch
+                if scrollView.exists && scrollView.isHittable {
+                    scrollView.swipeUp(velocity: .slow)
+                    continue
+                }
+            }
             app.swipeUp(velocity: .slow)
         }
         keepScreenshot("Could not reveal control", app: app)
         print(app.debugDescription)
         XCTFail("Could not fully reveal \(element)")
+    }
+
+    private func confirmWorkoutDeletion(in app: XCUIApplication) {
+        let alert = app.alerts["Delete workout?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.buttons["Delete"].tap()
     }
 
     private func keepScreenshot(_ name: String, app: XCUIApplication) {
@@ -208,7 +225,7 @@ final class N4x4UITests: XCTestCase {
         let delete = app.buttons["Delete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5))
         delete.tap()
-        app.alerts["Delete workout?"].buttons["Delete"].tap()
+        confirmWorkoutDeletion(in: app)
         XCTAssertTrue(app.staticTexts["Completed workouts are saved here automatically."].waitForExistence(timeout: 5))
 
         app.terminate()
@@ -227,7 +244,7 @@ final class N4x4UITests: XCTestCase {
         workouts.firstMatch.tap()
         XCTAssertTrue(app.buttons["Delete"].waitForExistence(timeout: 5))
         app.buttons["Delete"].tap()
-        app.alerts["Delete workout?"].buttons["Delete"].tap()
+        confirmWorkoutDeletion(in: app)
         XCTAssertTrue(app.staticTexts["Completed workouts are saved here automatically."].waitForExistence(timeout: 5))
     }
 
@@ -267,7 +284,7 @@ final class N4x4UITests: XCTestCase {
         app.alerts["Delete workout?"].buttons["Cancel"].tap()
         XCTAssertTrue(app.staticTexts["Second workout"].exists)
         app.buttons["Delete"].tap()
-        app.alerts["Delete workout?"].buttons["Delete"].tap()
+        confirmWorkoutDeletion(in: app)
         XCTAssertTrue(first.waitForExistence(timeout: 5))
         XCTAssertFalse(second.exists)
         first.tap()
@@ -402,6 +419,11 @@ extension N4x4UITests {
         app.launch()
         app.buttons["Settings"].tap()
         let search = app.searchFields.firstMatch
+        // Vertical navigation bars can collapse search into a toolbar action.
+        if !search.exists {
+            let searchButton = app.buttons["Search"]
+            if searchButton.waitForExistence(timeout: 5) { searchButton.tap() }
+        }
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
         search.typeText("airpods")
