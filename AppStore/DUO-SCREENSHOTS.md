@@ -39,3 +39,5 @@ made on a **physical iOS device**. Simulator screenshots cannot satisfy that:
 Attach the recordings to App Review Information and reference their exact
 filenames in the review notes. No recording or physical-device validation is
 claimed until those files actually exist.
+
+Physical review evidence was supplied on 24 October. Apple accepts one review attachment, so both original recordings are joined in `N4x4-physical-device-review.mp4` (100.15 seconds): Bluetooth at 00:00–01:00, Home Screen audio at 01:00–01:40, with the background halfway cue near 01:31. The private attachment is COMPLETE. Review notes identify these timestamps; recordings are excluded from git.

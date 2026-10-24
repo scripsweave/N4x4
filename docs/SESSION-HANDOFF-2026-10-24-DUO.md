@@ -1,4 +1,4 @@
-# iPhone Duo / 5.10 — release preparation
+# iPhone Duo / Elliptical / 5.10 — submitted
 
 User authorized autonomous implementation, authentic Duo screenshots and App
 Store publication. Version **5.10** is set in all six phone, Watch and Live
@@ -33,6 +33,7 @@ commit also includes the Settings accessibility refinement, visible search drawe
 | Cloud 47 on `5bd7fb4` | Phone/Watch builds passed; 258/259 tests passed. Remaining Settings search test assumed an inline field; fixed in `3417fc5`. |
 | Final native build | Succeeded, `/tmp/N4x4-duo-final-native-build.log` |
 | Final Duo UI checks | **3 passed**: AX5 Settings search/diagnostics, History selection through rotation and deletion, workout rotation/paused countdown. `/tmp/N4x4-duo-final-ui.xcresult` |
+| Final Cloud 50 on `fb9d1c8` | **262/262 tests passed**; phone/Watch builds and App Store archive succeeded |
 | Release tooling | 4 tests / 18 assertions passed |
 | Asset checks | All six shipping versions 5.10; icon filename case matches JSON; `git diff --check` passed |
 
@@ -74,7 +75,7 @@ with `simctl io UDID enumerate`, as erase invalidates previous display ports.
 
 ## App Store and media
 
-**5.7 remains live. Nothing new has been submitted for review.** The existing
+**5.10 (50) is WAITING_FOR_REVIEW, with automatic release AFTER_APPROVAL. 5.7 remains live pending Apple approval.** The existing
 rejected 5.9 version was changed to **5.10**, retaining its listing and older
 screenshots. Release and review notes were saved, automatic release selected.
 Version ID `3b1854d0-a4b5-42e6-9b0c-0da2588807a1`; en-US localization
@@ -98,21 +99,31 @@ builds do not enable it. No personal Health data is in the captures.
 
 Apple's Oct 2 Guideline 2.5.4 rejection requested physical-device Bluetooth HR and background-audio recordings. The user supplied both privately under untracked `tmp/`. Keep original videos out of git.
 
-- `N4x4-physical-iPhone-demo-1.mp4`: original Bluetooth pairing, live Garmin HR and workout demonstration; privately uploaded to App Review and verified COMPLETE.
-- `N4x4-physical-iPhone-demo-2.mp4`: original 40-second iPhone recording showing Home Screen icons and a spoken halfway warm-up cue at approximately 00:31. Verified using extracted frames and local audio transcription; upload/processing in progress.
-- Review notes describe exactly what each video demonstrates. Neither is a Simulator recording.
+Apple accepts at most one review attachment. Both unabridged recordings were joined in sequence using AVFoundation, preserving portrait geometry and audio, then independently checked for Home Screen frames and spoken cues. The combined 100.15-second file `N4x4-physical-device-review.mp4` is privately uploaded and verified **COMPLETE** (attachment `6b21ce19-37b3-4c9c-b800-d8b2b4713557`). It replaces the initial Bluetooth-only attachment.
+
+- 00:00–01:00: Bluetooth pairing, live Garmin HR and workout demonstration.
+- 01:00–01:40: physical iPhone Home Screen and a spoken halfway warm-up cue at approximately 01:31.
+- Review notes reference the combined filename and both time ranges. Original clips and the combined export stay out of git. Local transcription was used for audio QA; no external transcription service received the recordings.
+- Manual Elliptical UI check: selectable in the Settings workout picker and expanded Exercise guide shows the dedicated setup/work/recovery copy.
+
+Final release source is `fb9d1c87b4410055e87a4ad369f256afb2405645`; Cloud **50**, run `2683bafd-3c1d-474e-887d-26790262edee`, is validating that exact commit. All four required actions passed: phone build, Watch build, App Store archive and **262/262 tests**. Build 50 is VALID and submitted with non-exempt encryption explicitly false. Six live Duo screenshot placements, order and local SHA-256 values were reverified after the Elliptical update.
 
 Cloud **49** (`5bce09cf-1411-45c7-8727-67303559202e`, source `db5986e`) built and archived successfully, but the AX5 UI test failed while scrolling to Copy Diagnostics. Do not submit 49. The test now scrolls the actual Form collection view and allows the longer AX5 content; the assertion still requires the real button to be fully visible and hittable. Local targeted test passed: `/tmp/N4x4-elliptical-ui.xcresult` (179 seconds). All **246 unit tests passed**, including three Elliptical persistence/target/Watch-import regressions: `/tmp/N4x4-elliptical-tests.xcresult`. Release tooling: 4 tests/18 assertions passed.
 
-Review submission `fae7a6e0-5925-4e22-9c69-17b8c6fc5af5` remains UNRESOLVED_ISSUES. Build 49 is attached provisionally; replace it with the verified final Elliptical build before resolving the rejected item.
+Review submission `fae7a6e0-5925-4e22-9c69-17b8c6fc5af5` is now **WAITING_FOR_REVIEW**, submitted 2026-10-24 at **19:45:01 UTC / 21:45 CEST**. The existing rejected item was resolved and resubmitted after all final Cloud checks passed; it was not canceled or removed. Build 50 replaced 49 before submission.
 
-## Remaining release steps
+## Completed release
 
-Verify the final main Cloud build/tests/archive and exact commit, attach the
-final VALID build to 5.10, then add the physical review recordings. Finish the
-existing unresolved review draft deliberately; standard tooling refuses such
-drafts rather than canceling them. Use the authorized submission flow in
-`AppStore/SUBMISSIONS.md`, verify WAITING_FOR_REVIEW and AFTER_APPROVAL, and do
-not equate a processed build or submission with public release.
+- Release source/tag: `fb9d1c87b4410055e87a4ad369f256afb2405645`, `v5.10`.
+- [GitHub release](https://github.com/scripsweave/N4x4/releases/tag/v5.10).
+- Exact Cloud run: `2683bafd-3c1d-474e-887d-26790262edee`, build **50**; all four actions SUCCEEDED and all **262 tests SUCCESS**.
+- App Store build ID: `05a8dade-509f-41df-b8e5-d0749081aef4`.
+- Physical video attachment COMPLETE; review notes reference both segments and the Home Screen cue near 01:31. Six Duo placements and ordering verified.
+- Resubmission used Apple's existing unresolved-review flow: PATCH the rejected review item with `resolved: true`, then PATCH the existing review submission with `submitted: true`.
+- API does not allow GET of an individual reviewSubmissionItem; read the submission's `/items` relationship instead. An initial verification read failed after resolution; retry inspected the same item and completed the same submission safely.
+- `AppStore/submit.sh 5.10 50 --submit` then independently verified **WAITING_FOR_REVIEW**, **AFTER_APPROVAL**, with no further mutations. Local log: `/tmp/n4x4-final-submission.log`.
+- Post-submission metadata/handoff changes are on `chore/5.10-final-submission-handoff`, avoiding another main-triggered upload.
+
+Apple approval remains pending. Do not describe the update as live until its public release is confirmed. No further action is required to release after approval.
 
 Research/concepts: [Duo brief](design/iphone-duo-2026-10-24/README.md).

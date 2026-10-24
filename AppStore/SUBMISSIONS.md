@@ -103,3 +103,11 @@ replaces a different submitted version. See
 References: [fastlane deliver](https://docs.fastlane.tools/actions/deliver/),
 [API-key authentication](https://docs.fastlane.tools/app-store-connect-api/),
 [Apple's API access guide](https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/).
+
+## 5.10 resubmission after a rejection
+
+On 24 October 2026, version 5.10 (50) reused the existing rejected review submission. All four Cloud actions and 262 tests passed for release commit `fb9d1c8`; six Duo screenshots and a processed private physical-device video were verified first. The video joins the Bluetooth demonstration and Home Screen audio demonstration because App Review Information accepts one attachment.
+
+The normal lane deliberately refuses unresolved review drafts. The existing rejected item was resolved through `PATCH /v1/reviewSubmissionItems/{id}` with `resolved: true`, then the same review was resubmitted through `PATCH /v1/reviewSubmissions/{id}` with `submitted: true`. Read item status via the review submission's `/items` relationship; the API does not support an individual item GET. No review was canceled or removed.
+
+`AppStore/submit.sh 5.10 50 --submit` independently confirmed **WAITING_FOR_REVIEW** and **AFTER_APPROVAL** at 21:45 CEST. This is the latest verified submission; 5.7 remains public until approval. See the [5.10 handoff](../docs/SESSION-HANDOFF-2026-10-24-DUO.md) and [Apple's unresolved-submission workflow](https://developer.apple.com/help/app-store-connect/manage-submissions-to-app-review/manage-a-submission-with-unresolved-issues).

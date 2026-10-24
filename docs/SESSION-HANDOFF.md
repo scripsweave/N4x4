@@ -1,11 +1,15 @@
 # N4x4 — Session Handoff
 
-> **iPhone Duo / 5.10 (2026-10-24):** Adaptive layouts implemented; six authentic
-> Duo screenshots uploaded; Elliptical implemented and 246 unit tests passed.
-> Physical Bluetooth/background-audio recordings supplied; final Cloud validation
-> and resubmission are in progress. See
+> **5.10 submitted (2026-10-24):** iPhone Duo adaptive layouts, six authentic
+> Duo screenshots, Elliptical workout type/guidance/resistance logging, and
+> accessibility search/scroll fixes. Cloud **50** passed all four required
+> actions and **262/262 tests** for `fb9d1c87b4410055e87a4ad369f256afb2405645`.
+> App Store Connect verified **WAITING_FOR_REVIEW**, **AFTER_APPROVAL**, at
+> 21:45 CEST. Physical Bluetooth and Home Screen audio recordings are combined
+> into one processed private App Review attachment. Tag/release `v5.10`;
+> **5.7 remains live pending approval**. See
 > [`SESSION-HANDOFF-2026-10-24-DUO.md`](SESSION-HANDOFF-2026-10-24-DUO.md).
-> The rejected editable version is now 5.10; 5.7 remains live.
+> Post-submission docs are on `chore/5.10-final-submission-handoff`.
 
 > **5.9 submitted (2026-10-02):** Health exports now exclude pauses and
 > interrupted-session recovery gaps; Watch resume rebuilds the paused interval
