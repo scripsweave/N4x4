@@ -1057,27 +1057,27 @@ struct WorkoutScreen: View {
         GeometryReader { geometry in
             #if compiler(>=6.4)
             if #available(iOS 27.1, *) {
-                // A horizontal division is the propped, portrait arrangement.
-                // Geometry is local and comes from the system's reserved region.
-                let propped = geometry.reservedRegions(kind: .division).contains {
+                // Keep glanceable information together in vertically stacked panes,
+                // including a flat portrait display. An active fold takes precedence.
+                let stacked = geometry.size.height > geometry.size.width || geometry.reservedRegions(kind: .division).contains {
                     $0.frame.width > $0.frame.height
                 }
-                expandedWorkoutPanes(propped: propped)
+                expandedWorkoutPanes(stacked: stacked)
             } else {
-                expandedWorkoutPanes(propped: false)
+                expandedWorkoutPanes(stacked: geometry.size.height > geometry.size.width)
             }
             #else
-            expandedWorkoutPanes(propped: false)
+            expandedWorkoutPanes(stacked: geometry.size.height > geometry.size.width)
             #endif
         }
         .accessibilityIdentifier("expanded-workout")
     }
 
-    private func expandedWorkoutPanes(propped: Bool) -> some View {
+    private func expandedWorkoutPanes(stacked: Bool) -> some View {
         TrainingPanes { size in
             VStack(spacing: 12) {
                 header
-                if propped {
+                if stacked {
                     HStack(spacing: 20) {
                         WorkoutRing(viewModel: viewModel,
                                     side: max(120, min(240, size.height - 80, size.width * 0.4)))
@@ -1094,7 +1094,7 @@ struct WorkoutScreen: View {
             .padding(16)
         } secondary: { _ in
             VStack(spacing: 18) {
-                if !propped {
+                if !stacked {
                     HRZoneBar(viewModel: viewModel, expanded: true,
                               onMissingHeartRateTap: { showWatchHelp = true })
                 } else {
@@ -1645,7 +1645,9 @@ struct RedesignHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedWorkoutID: UUID?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var compactColumn: NavigationSplitViewColumn = .sidebar
+    @State private var showHistoryOverview = false
     @State private var selectedPerfModality: TrainingModality?
     @State private var selectedChartDate: Date?
     /// The month shown in the calendar grid. Defaults to today; the chevrons move
@@ -1657,7 +1659,7 @@ struct RedesignHistoryView: View {
     private struct WeekKey: Hashable { let year: Int; let week: Int }
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $compactColumn) {
+        NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
             historyOverview
                 .navigationSplitViewColumnWidth(min: 280, ideal: 360, max: 440)
                 .toolbar(.hidden, for: .navigationBar)
@@ -1676,11 +1678,6 @@ struct RedesignHistoryView: View {
         .navigationSplitViewStyle(.balanced)
         .tint(Palette.electricBlue)
         .preferredColorScheme(.dark)
-        .onAppear {
-            if horizontalSizeClass == .regular, selectedWorkoutID == nil {
-                selectedWorkoutID = viewModel.workoutLogEntries.first?.id
-            }
-        }
         .onChange(of: viewModel.workoutLogEntries.map(\.id)) { _, ids in
             if let selectedWorkoutID, !ids.contains(selectedWorkoutID) { clearSelection() }
         }
@@ -1703,11 +1700,37 @@ struct RedesignHistoryView: View {
                 if let notice = viewModel.historyRecoveryNotice {
                     Text(notice).font(.callout).foregroundStyle(Palette.textSecondary)
                 }
-                streakHero
-                statTiles
-                calendarCard
-                workoutList
-                performanceCard
+                if horizontalSizeClass == .regular {
+                    HStack(spacing: 8) {
+                        Image(systemName: "flame.fill").foregroundStyle(Palette.amber)
+                        Text("\(viewModel.currentStreak) week streak").font(.headline)
+                        Spacer(minLength: 8)
+                        Text("Best \(viewModel.longestStreak)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Palette.textSecondary)
+                    }
+                    .foregroundStyle(Palette.textPrimary)
+                    .padding(14)
+                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityElement(children: .combine)
+                    DisclosureGroup("Calendar and trends", isExpanded: $showHistoryOverview) {
+                        VStack(spacing: 16) {
+                            statTiles
+                            calendarCard
+                            performanceCard
+                        }
+                        .padding(.top, 12)
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.textSecondary)
+                    workoutList
+                } else {
+                    streakHero
+                    statTiles
+                    calendarCard
+                    workoutList
+                    performanceCard
+                }
             }
             .padding(20)
             .padding(.bottom, 24)
@@ -1786,6 +1809,7 @@ struct RedesignHistoryView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint("View workout details and deletion options")
+                .accessibilityAddTraits(selectedWorkoutID == workout.id ? .isSelected : [])
                 .accessibilityIdentifier("workout-\(workout.id.uuidString)")
             }
         }

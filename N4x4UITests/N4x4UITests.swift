@@ -25,7 +25,7 @@ final class N4x4UITests: XCTestCase {
             if app.alerts["Workout recovered"].exists {
                 app.alerts["Workout recovered"].buttons["Discard Workout"].tap()
             }
-            if app.tabBars.buttons["Home"].isHittable { app.tabBars.buttons["Home"].tap() }
+            if app.buttons["Home"].isHittable { app.buttons["Home"].tap() }
             if app.buttons["FINISH"].isHittable {
                 app.buttons["FINISH"].tap()
                 app.alerts["Finish workout?"].buttons["Discard Workout"].tap()
@@ -65,7 +65,8 @@ final class N4x4UITests: XCTestCase {
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         for _ in 0..<8 {
             let tabBar = app.tabBars.firstMatch
-            let bottom = tabBar.exists && tabBar.isHittable ? tabBar.frame.minY : app.frame.maxY
+            let horizontalBar = tabBar.exists && tabBar.isHittable && tabBar.frame.width > tabBar.frame.height
+            let bottom = horizontalBar ? tabBar.frame.minY : app.frame.maxY
             if element.exists && element.isHittable && element.frame.minY >= 0 && element.frame.maxY <= bottom {
                 return
             }
@@ -199,7 +200,7 @@ final class N4x4UITests: XCTestCase {
         app.terminate()
         app.launchArguments = reviewLaunchArguments + timerArguments
         app.launch()
-        app.tabBars.buttons["History"].tap()
+        app.buttons["History"].tap()
         let workouts = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workout-"))
         reveal(workouts.firstMatch, in: app)
         XCTAssertEqual(workouts.count, 1)
@@ -212,12 +213,12 @@ final class N4x4UITests: XCTestCase {
 
         app.terminate()
         app.launch()
-        app.tabBars.buttons["History"].tap()
+        app.buttons["History"].tap()
         reveal(app.staticTexts["Completed workouts are saved here automatically."], in: app)
         XCTAssertEqual(workouts.count, 0)
 
         // Done must also lead to a usable History sheet and nested detail.
-        app.tabBars.buttons["Home"].tap()
+        app.buttons["Home"].tap()
         app.buttons["START"].tap()
         XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
         app.buttons["Done"].tap()
@@ -245,7 +246,7 @@ final class N4x4UITests: XCTestCase {
         let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
         app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument]
         app.launch()
-        app.tabBars.buttons["History"].tap()
+        app.buttons["History"].tap()
         let first = app.buttons["workout-\(firstID)"]
         let second = app.buttons["workout-\(secondID)"]
         reveal(second, in: app)
@@ -311,7 +312,7 @@ extension N4x4UITests {
         app.terminate()
         app.launchArguments = reviewLaunchArguments + timerArguments
         app.launch()
-        app.tabBars.buttons["History"].tap()
+        app.buttons["History"].tap()
         let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workout-"))
         reveal(rows.firstMatch, in: app)
         XCTAssertEqual(rows.count, 1)
@@ -368,7 +369,7 @@ extension N4x4UITests {
         let app = XCUIApplication()
         app.launchArguments = reviewLaunchArguments + ["-AppleInterfaceStyle", "Light"]
         app.launch()
-        app.tabBars.buttons["Settings"].tap()
+        app.buttons["Settings"].tap()
         let link = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Health & Devices")).firstMatch
         reveal(link, in: app)
         link.tap()
@@ -399,7 +400,7 @@ extension N4x4UITests {
         let app = XCUIApplication()
         app.launchArguments = reviewLaunchArguments + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL", "-AppleInterfaceStyle", "Dark"]
         app.launch()
-        app.tabBars.buttons["Settings"].tap()
+        app.buttons["Settings"].tap()
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
@@ -424,7 +425,7 @@ extension N4x4UITests {
         let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
         app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument]
         app.launch()
-        app.tabBars.buttons["History"].tap()
+        app.buttons["History"].tap()
         let workout = app.buttons["workout-\(id)"]
         reveal(workout, in: app)
         workout.tap()
@@ -460,7 +461,7 @@ extension N4x4UITests {
         let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
         app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument, "-AppleInterfaceStyle", "Dark"]
         app.launch()
-        app.tabBars.buttons["Settings"].tap()
+        app.buttons["Settings"].tap()
         let link = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Health & Devices")).firstMatch
         reveal(link, in: app)
         link.tap()

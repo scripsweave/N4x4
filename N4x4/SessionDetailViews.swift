@@ -885,8 +885,6 @@ struct SessionDetailSheet: View {
                         inZonePct: entry.hrSummary?.workInZonePct
                     )
 
-                    WorkoutHealthSaveView(viewModel: viewModel, id: entry.id)
-
                     if let series {
                         sectionTitle("SESSION")
                         SessionStripChart(series: series)
@@ -952,6 +950,8 @@ struct SessionDetailSheet: View {
                         }
                     }
 
+                    WorkoutHealthSaveView(viewModel: viewModel, id: entry.id)
+
                     if !entry.notes.isEmpty {
                         sectionTitle("NOTES")
                         Text(entry.notes)
@@ -972,7 +972,7 @@ struct SessionDetailSheet: View {
             .toolbar(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Delete", role: .destructive) { showDeleteConfirmation = true }
+                    Button("Delete", systemImage: "trash", role: .destructive) { showDeleteConfirmation = true }
                         .foregroundStyle(Palette.danger)
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -984,7 +984,7 @@ struct SessionDetailSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { close() }
+                    Button("Done", systemImage: "checkmark") { close() }
                 }
             }
             .onAppear { load() }
