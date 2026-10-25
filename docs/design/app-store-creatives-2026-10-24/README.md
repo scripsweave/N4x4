@@ -15,7 +15,7 @@ more abstract depiction of four work efforts and three recovery valleys.
 - [B — Four efforts header](B-four-efforts-header.png)
 
 The user selected A and authorized animation/publication. The completed 8-second
-loop is submitted for standalone Apple review, with automatic publication queued.
+loop is approved and live on version 5.7; automatic carry-over to 5.10 is queued.
 See the [animation and publication record](../../../AppStore/creative-assets/chrome-ring/README.md).
 
 ## What these placements do

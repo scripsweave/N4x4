@@ -36,16 +36,18 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift \
 
 ## Apple review and publication queue
 
-Video `0a000018-e8a7-8c74-8128-2b84ccf4117b` processed against the exact header
-video specification; its poster is COMPLETE. The standalone artwork review is
-**WAITING_FOR_REVIEW**, submitted **2026-10-24 20:15:06 UTC / 22:15 CEST**,
-review `f57fe4ad-e288-4d65-976e-7a4084eaedba`. The 5.10 app submission remains
-separate and unchanged. **The header is not yet public.**
+The video is **APPROVED and published** as the active English product-page
+header on the live 5.7 version. The automatic publisher first verified
+publication at **2026-10-24 20:48:08 UTC**; the live placement was independently
+reverified on 25 October. Placement `36000018-e8a7-8c74-8f18-1362a43b6fb1`
+is **ACTIVE**, linked to approved video
+`0a000018-e8a7-8c74-8128-2b84ccf4117b`.
 
-Apple rejected placement on the approved/live parent with an explicit
-`The asset must be in the APPROVED state because the parent is already approved`
-response. Publication therefore waits for asset approval; no app review was
-canceled and no new app binary is required.
+The standalone artwork review was submitted at 2026-10-24 20:15:06 UTC,
+review `f57fe4ad-e288-4d65-976e-7a4084eaedba`. Apple approval arrived before
+the publisher's 20:48 check. The separate **5.10 app submission is still
+WAITING_FOR_REVIEW**. The publisher continues until the header is present on
+5.10 (or newer) after app release, then disables itself.
 
 User LaunchAgent **`com.n4x4.chrome-ring-publication`** is installed and was
 verified to run successfully. It checks every **900 seconds** while this Mac
