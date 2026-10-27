@@ -7,6 +7,18 @@ see [Duo screenshots](DUO-SCREENSHOTS.md).
 
 For releasing an uploaded Xcode Cloud build, see [App Store submissions](SUBMISSIONS.md).
 
+## Current English listing copy
+
+The [description source](../N4x4/app_store_description.txt) matches the 5.11
+App Store description. On 27 October its opening paragraph was updated to:
+
+> Supports iPhone Duo, with expanded workout views and hands-free training when propped open.
+
+Apple accepted this description edit while 5.11 (51) remained Waiting for
+Review. The live 5.10 description is locked (`STATE_ERROR`), so the same line
+was saved as its promotional text, above the description. Other listing fields
+were preserved. No build upload or review cancellation was needed.
+
 ## `screenshots/` — final, upload-ready
 
 Two sizes are provided; upload the set that matches the App Store Connect slot:

@@ -146,3 +146,19 @@ off main until the next app version bump, because main still uploads on push.
 
 Apple approval remains pending. The update releases automatically after
 approval; no further publication action is required.
+
+## Prominent iPhone Duo listing copy (27 October)
+
+User requested a prominent mention of iPhone Duo support. The en-US 5.11
+description now opens with:
+
+> Supports iPhone Duo, with expanded workout views and hands-free training when propped open.
+
+The description is 2,568 characters and is saved in
+`N4x4/app_store_description.txt`, synchronized with the existing store copy.
+Apple rejected a description edit on live 5.10 as state-locked, so the same
+line was saved as live 5.10's previously empty promotional text. Both changes
+were verified by reading the localization resources; other fields were
+preserved. Version 5.11 remained WAITING_FOR_REVIEW / AFTER_APPROVAL with
+the same build UUID. No review was canceled or resubmitted and no binary
+was uploaded. Copy records are on `chore/app-store-duo-description`.
