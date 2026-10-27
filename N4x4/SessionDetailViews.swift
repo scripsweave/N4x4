@@ -627,6 +627,34 @@ func renderShareCard(series: HeartRateSeries, title: String, dateText: String,
     return renderer.uiImage
 }
 
+/// Shared by the completed-workout review and History, including older
+/// workouts with no chart. Each ShareLink hands a snapshot to the share sheet.
+private struct WorkoutShareMenu: View {
+    let export: WorkoutExportFile?
+    let image: UIImage?
+
+    var body: some View {
+        Menu {
+            if let export {
+                ShareLink(item: export, preview: SharePreview("N4x4 Workout")) {
+                    Label("Export Workout (JSON)", systemImage: "doc.badge.arrow.up")
+                }
+                .accessibilityIdentifier("export-workout")
+            }
+            if let image {
+                ShareLink(item: Image(uiImage: image),
+                          preview: SharePreview("N4x4 Session", image: Image(uiImage: image))) {
+                    Label("Share Image", systemImage: "photo")
+                }
+            }
+        } label: {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+        .accessibilityIdentifier("session-share-menu")
+        .accessibilityHint("Export all recorded workout data or share an image")
+    }
+}
+
 // MARK: - Post-workout summary (redesigned)
 
 struct PostWorkoutSummaryRedesignView: View {
@@ -682,12 +710,9 @@ struct PostWorkoutSummaryRedesignView: View {
                     .foregroundStyle(Palette.danger)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    if let image = shareImage {
-                        ShareLink(item: Image(uiImage: image),
-                                  preview: SharePreview("N4x4 Session", image: Image(uiImage: image))) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                    }
+                    WorkoutShareMenu(export: viewModel.completedWorkoutEntryID.flatMap {
+                        viewModel.workoutExport(for: $0, series: series)
+                    }, image: shareImage)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", systemImage: "checkmark") {
@@ -976,12 +1001,8 @@ struct SessionDetailSheet: View {
                         .foregroundStyle(Palette.danger)
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    if let image = shareImage {
-                        ShareLink(item: Image(uiImage: image),
-                                  preview: SharePreview("N4x4 Session", image: Image(uiImage: image))) {
-                            Image(systemName: "square.and.arrow.up")
-                        }
-                    }
+                    WorkoutShareMenu(export: viewModel.workoutExport(for: entry.id, series: series),
+                                     image: shareImage)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", systemImage: "checkmark") { close() }

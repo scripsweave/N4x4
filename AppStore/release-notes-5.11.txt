@@ -1,0 +1,8 @@
+Export your complete workout for analysis.
+
+• Open a completed workout or a session in History, tap Share, then choose Export Workout (JSON).
+• Get all recorded stages, heart-rate samples and targets, interval statistics, performance values and notes in one file.
+• Clear units and timing details preserve pauses and recording gaps, making the file easy to use with AI analysis tools.
+• Older workouts can export all the data still available for them.
+
+Image sharing remains available alongside the new export option.

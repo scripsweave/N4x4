@@ -295,6 +295,64 @@ final class N4x4UITests: XCTestCase {
         first.tap()
         XCTAssertTrue(app.staticTexts["First workout"].waitForExistence(timeout: 5))
     }
+
+    func testFullWorkoutExportOpensShareSheetFromSummaryAndHistory() throws {
+        let app = XCUIApplication()
+        let timerArguments = ["-numberOfIntervals", "1", "-warmupDuration", "0",
+                              "-highIntensityDuration", "2", "-cooldownEnabled", "NO"]
+        app.launchArguments = reviewLaunchArguments + timerArguments + ["-workoutLogEntriesData", "\"[]\""]
+        app.launch()
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.staticTexts["Saved to History"].waitForExistence(timeout: 10))
+        app.buttons["session-share-menu"].tap()
+        let export = app.buttons["export-workout"]
+        XCTAssertTrue(export.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Share Image"].exists)
+        export.tap()
+        let save = app.cells["Save to Files"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+        keepScreenshot("Full workout JSON share sheet", app: app)
+        // The same saved workout must also export after relaunch, without
+        // requiring Done or depending on system share-popover dismissal.
+        app.terminate()
+        app.launchArguments = reviewLaunchArguments + timerArguments
+        app.launch()
+        app.buttons["History"].tap()
+        let workouts = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "workout-"))
+        reveal(workouts.firstMatch, in: app)
+        XCTAssertEqual(workouts.count, 1)
+        workouts.firstMatch.tap()
+        app.buttons["session-share-menu"].tap()
+        XCTAssertTrue(export.waitForExistence(timeout: 5))
+        export.tap()
+        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+    }
+
+    func testLegacyWorkoutCanExportWithoutAnImageOrRecording() throws {
+        let app = XCUIApplication()
+        let id = UUID().uuidString
+        let rows: [[String: Any]] = [["id": id,
+            "completedAt": ISO8601DateFormatter().string(from: Date()),
+            "workoutType": "Run", "notes": "An older workout without a recording"]]
+        let json = String(decoding: try JSONSerialization.data(withJSONObject: rows), as: UTF8.self)
+        let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
+        app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument]
+        app.launch()
+        app.buttons["History"].tap()
+        let workout = app.buttons["workout-\(id)"]
+        reveal(workout, in: app)
+        workout.tap()
+        app.buttons["session-share-menu"].tap()
+        let export = app.buttons["export-workout"]
+        XCTAssertTrue(export.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Share Image"].exists)
+        export.tap()
+        XCTAssertTrue(app.cells["Save to Files"].waitForExistence(timeout: 10), app.debugDescription)
+        app.cells["Save to Files"].tap()
+        XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 10), app.debugDescription)
+        keepScreenshot("Workout JSON ready to save in Files", app: app)
+    }
+
 }
 
 extension N4x4UITests {

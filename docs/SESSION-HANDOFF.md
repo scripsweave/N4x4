@@ -1,5 +1,15 @@
 # N4x4 — Session Handoff
 
+> **Complete workout export (2026-10-27):** On
+> `feature/full-workout-export`, Share → Export Workout (JSON) is available
+> in completed-workout review and History, alongside image sharing. It includes
+> the full saved record, every retained HR sample, all recorded stages/targets,
+> stage statistics, performance/notes and pause timing, with explicit units and
+> missing-data semantics. User authorized release; **5.11** is prepared in all
+> six shipping configurations, with Cloud validation/submission pending. See
+> [`SESSION-HANDOFF-2026-10-27-WORKOUT-EXPORT.md`](SESSION-HANDOFF-2026-10-27-WORKOUT-EXPORT.md)
+> for the reply draft and validation status.
+
 > **Animated header live (verified 2026-10-25):** Apple approved the chrome-ring
 > video. The automatic publisher activated it on live version 5.7 at
 > 2026-10-24 20:48 UTC; its ACTIVE placement was reverified on 25 October.

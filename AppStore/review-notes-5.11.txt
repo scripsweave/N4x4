@@ -1,0 +1,22 @@
+N4x4 is an interval-training timer with spoken workout coaching and live heart-rate feedback. No account or login is required.
+
+New in 5.11: complete workout export
+1. Complete a workout, or open a saved workout in History.
+2. Tap Share in the session toolbar, then Export Workout (JSON).
+3. Save the file through the system share sheet or share it with another app.
+The file includes all locally saved workout fields, recorded interval stages and targets, heart-rate samples, interval statistics, performance values and notes. It documents units, pauses and unavailable data. Older workouts can export their available fields without a heart-rate recording. No new Health queries, permissions or network service are involved in preparing the export. Share Image remains available for recorded sessions.
+
+Existing Bluetooth and background-audio functionality is unchanged from approved version 5.10.
+
+Background Bluetooth (Guideline 2.5.4):
+1. Wear a standard Bluetooth Low Energy heart-rate monitor, or enable Broadcast Heart Rate on a compatible Garmin/WHOOP device.
+2. Open Settings > Health & Devices > Heart Rate Monitor. Start discovery and select the monitor. Discovery is user initiated; launching the app or opening settings does not scan or request Bluetooth permission.
+3. Tap START. Current BPM appears in the workout view. Return to the iPhone Home Screen, then reopen N4x4: the monitor continues delivering readings during the workout. This uses Core Bluetooth's Heart Rate Service and HR Measurement characteristic.
+
+Background audio (Guideline 2.5.4):
+1. Select Voice Prompts under Settings > Audio > Audio Cues. Enable Halfway Prompts and 10-Second Warnings, with audible media volume.
+2. Set short intervals under Settings > Intervals & Durations.
+3. Tap START, hear the phase announcement, then return to the iPhone Home Screen while the workout continues. Halfway, ten-second and interval coaching remains audible in the background or under screen lock.
+4. Pause/finish ends workout background audio. Silent mode does not provide spoken cues.
+
+The required background modes support these workout features, not advertisements, downloads or unrelated work. Heart-rate hardware requires physical devices. JSON export also works without heart-rate hardware.

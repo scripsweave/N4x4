@@ -1052,6 +1052,130 @@ final class N4x4Tests: XCTestCase {
 
 // MARK: - Heart-rate series recording
 
+final class WorkoutExportTests: XCTestCase {
+    private func object(_ export: WorkoutExport) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: export.jsonData()) as? [String: Any])
+    }
+
+    func testFullExportPreservesAllStoredWorkoutAndRecordingFields() throws {
+        let start = Date(timeIntervalSince1970: 1_790_000_000.125)
+        var timing = WorkoutActivityTiming(startedAt: start)
+        timing.pause(at: start + 20)
+        timing.resume(at: start + 40)
+        timing.finish(at: start + 90)
+        let samples = (0..<35).map { HeartRateSeries.Sample(t: Double($0 * 2), bpm: 140.25 + Double($0)) }
+        let spans: [HeartRateSeries.IntervalSpan] = [
+            .init(kind: "warmup", workNumber: 0, start: 0, end: 10, targetLo: 0, targetHi: 0),
+            .init(kind: "work", workNumber: 1, start: 10, end: 60, targetLo: 150, targetHi: 170),
+            .init(kind: "recovery", workNumber: 0, start: 60, end: 80, targetLo: 110, targetHi: 130),
+            .init(kind: "cooldown", workNumber: 0, start: 80, end: 90, targetLo: 0, targetHi: 0)
+        ]
+        let series = HeartRateSeries(samples: samples, spans: spans, startedAt: start, activityTiming: timing)
+        var health = HealthWorkoutExport(start: start, end: start + 90, requested: true)
+        health.state = .saved
+        health.attempts = 2
+        health.lastAttempt = start + 91
+        health.healthID = UUID()
+        health.savedAt = start + 92
+        health.heartRateContent = .included
+        health.activityTiming = timing
+        health.expectedActiveDuration = 70
+        let entry = WorkoutLogEntry(completedAt: start + 90, workoutType: .treadmill,
+            notes: "Felt strong 🏃\nIncline 4%", sessionBreakdown: .init(totalDuration: 70,
+                warmupDuration: 10, highIntensityDuration: 30, recoveryDuration: 20,
+                cooldownDuration: 10, cooldownSkipped: false), modality: .treadmill,
+            intervalPerformances: [.init(intervalNumber: 1, primary: 12.345, secondary: 4, note: "First effort"),
+                                   .init(intervalNumber: 4, note: "Unmatched interval note")],
+            hrSummary: HeartRateSeriesAnalytics.summary(for: series), endedEarly: true, healthExport: health)
+        let root = try object(WorkoutExport(entry: entry, series: series, exportedAt: start + 100))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let value = try decoder.singleValueContainer().decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return try XCTUnwrap(formatter.date(from: value))
+        }
+        // Round-trip the entire original documents, not a hand-picked subset.
+        let exportedEntry = try decoder.decode(WorkoutLogEntry.self,
+            from: JSONSerialization.data(withJSONObject: XCTUnwrap(root["workout"])))
+        let exportedSeries = try decoder.decode(HeartRateSeries.self,
+            from: JSONSerialization.data(withJSONObject: XCTUnwrap(root["recording"])))
+        XCTAssertEqual(exportedEntry, entry)
+        XCTAssertEqual(exportedSeries, series)
+        XCTAssertEqual(root["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(root["recordingStatus"] as? String, "heartRateAvailable")
+        let metric = try XCTUnwrap(root["performanceMetric"] as? [String: Any])
+        XCTAssertEqual(metric["primaryUnit"] as? String, "km/h")
+        let stages = try XCTUnwrap(root["stages"] as? [[String: Any]])
+        XCTAssertEqual(stages.map { $0["kind"] as? String }, ["warmup", "work", "recovery", "cooldown"])
+        XCTAssertEqual(stages[1]["elapsedDurationSeconds"] as? Double, 50)
+        XCTAssertEqual(stages[1]["activeDurationSeconds"] as? Double, 30)
+        XCTAssertEqual(stages[1]["inZonePercent"] as? Int,
+                       HeartRateSeriesAnalytics.inZonePct(series, span: spans[1]))
+        XCTAssertEqual(stages[1]["timeToZoneSeconds"] as? Double,
+                       HeartRateSeriesAnalytics.timeToZone(series, span: spans[1]))
+        XCTAssertNil(stages[0]["inZonePercent"])
+        XCTAssertNil(stages[3]["averageBPM"], "No measurements must not become zero BPM")
+    }
+
+    func testLegacyExportDoesNotInventTimelineOrMeasurements() throws {
+        let entry = WorkoutLogEntry(workoutType: .run, notes: "An older workout",
+            intervalPerformances: [.init(intervalNumber: 2, primary: 10, note: "Still available")],
+            hrSummary: .init(avgBPM: 160, maxBPM: 175, workInZonePct: 80, sparkline: [155, 165]))
+        let root = try object(WorkoutExport(entry: entry, series: nil))
+        XCTAssertEqual(root["recordingStatus"] as? String, "unavailable")
+        XCTAssertNil(root["recording"])
+        XCTAssertNil(root["stages"])
+        let saved = try XCTUnwrap(root["workout"] as? [String: Any])
+        XCTAssertNotNil(saved["hrSummary"])
+        XCTAssertNotNil(saved["intervalPerformances"])
+        XCTAssertNil(saved["endedEarly"])
+    }
+
+    func testTimelineWithoutHeartRateStillExportsEveryStageAndNoInventedActiveTime() throws {
+        let spans: [HeartRateSeries.IntervalSpan] = [
+            .init(kind: "work", workNumber: 1, start: 0, end: 60, targetLo: 150, targetHi: 170),
+            .init(kind: "recovery", workNumber: 0, start: 60, end: 80, targetLo: 110, targetHi: 130)
+        ]
+        let series = HeartRateSeries(samples: [], spans: spans, startedAt: Date())
+        let entry = WorkoutLogEntry(workoutType: .elliptical, notes: "", modality: .elliptical)
+        let export = WorkoutExport(entry: entry, series: series)
+        let root = try object(export)
+        XCTAssertEqual(export.performanceMetric.primaryUnit, "level")
+        XCTAssertEqual(export.performanceMetric.primaryLabel, "Resistance")
+        XCTAssertEqual(root["recordingStatus"] as? String, "timelineOnly")
+        let stages = try XCTUnwrap(root["stages"] as? [[String: Any]])
+        XCTAssertEqual(stages.count, 2)
+        XCTAssertEqual(stages[0]["sampleCount"] as? Int, 0)
+        XCTAssertNil(stages[0]["activeDurationSeconds"])
+        XCTAssertNil(stages[0]["averageBPM"])
+        XCTAssertNil(stages[0]["timeToZoneSeconds"])
+    }
+
+    func testActiveStageTimeCanUseSavedHealthTimingWithoutBridgingPause() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        var timing = WorkoutActivityTiming(startedAt: start)
+        timing.pause(at: start + 10)
+        timing.resume(at: start + 40)
+        timing.finish(at: start + 60)
+        var health = HealthWorkoutExport(start: start, end: start + 60, requested: true)
+        health.activityTiming = timing
+        let entry = WorkoutLogEntry(workoutType: .cycle, notes: "", healthExport: health)
+        let series = HeartRateSeries(samples: [], spans: [
+            .init(kind: "work", workNumber: 1, start: 0, end: 60, targetLo: 150, targetHi: 170)
+        ], startedAt: start)
+        let export = WorkoutExport(entry: entry, series: series)
+        XCTAssertEqual(export.stages?.first?.activeDurationSeconds, 30)
+        XCTAssertEqual(export.stages?.first?.elapsedDurationSeconds, 60)
+    }
+
+    func testFilenameUsesStableWorkoutIdentity() {
+        let entry = WorkoutLogEntry(workoutType: .run, notes: "")
+        let file = WorkoutExportFile(entry: entry, series: nil)
+        XCTAssertEqual(file.filename, "N4x4-Workout-\(entry.id.uuidString).json")
+    }
+}
+
 final class HeartRateSeriesTests: XCTestCase {
 
     private func span(_ kind: String, _ start: Double, _ end: Double,
@@ -1498,6 +1622,33 @@ extension N4x4Tests {
         XCTAssertEqual(row.workoutType, .rowing)
         XCTAssertNil(row.intervalPerformances, "Speed cannot become a rowing stroke rate")
         vm.reset()
+    }
+
+    func testWorkoutExportUsesLatestReviewEditsAndRejectsDeletedWorkout() throws {
+        let vm = recoveryViewModel()
+        let start = Date()
+        vm.startTimer(now: start)
+        vm.finishAndSaveWorkout(now: start + 2)
+        let id = try XCTUnwrap(vm.completedWorkoutEntryID)
+        defer { HeartRateSeriesStore.delete(for: id); vm.reset() }
+        vm.selectedWorkoutType = .treadmill
+        vm.preparePerformanceDraft()
+        vm.unitPreference = .imperial
+        vm.workoutNotesDraft = "Updated after opening summary"
+        vm.performanceDraft[0] = 12.5
+        vm.performanceNotesDraft[0] = "Incline 3%"
+        // No Done tap is needed and a nil view recording uses completed memory.
+        let file = try XCTUnwrap(vm.workoutExport(for: id, series: nil))
+        XCTAssertEqual(file.entry.notes, "Updated after opening summary")
+        XCTAssertEqual(file.entry.intervalPerformances?.first?.primary, PerformanceUnits.mphToKmh(12.5))
+        XCTAssertEqual(file.entry.intervalPerformances?.first?.note, "Incline 3%")
+        XCTAssertEqual(file.series, vm.completedSeries)
+        XCTAssertNotNil(file.series)
+        let count = vm.workoutLogEntries.count
+        _ = try WorkoutExport(entry: file.entry, series: file.series).jsonData()
+        XCTAssertEqual(vm.workoutLogEntries.count, count, "Export must not insert a workout")
+        vm.deleteWorkoutLogEntry(id: id)
+        XCTAssertNil(vm.workoutExport(for: id, series: file.series))
     }
 
     func testDamagedCheckpointIsPreservedWithoutBlockingANewWorkout() throws {
