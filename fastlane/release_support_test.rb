@@ -5,6 +5,33 @@ require 'ostruct'
 require_relative 'release_support'
 
 class ReleaseSupportTest < Minitest::Test
+  class AttachmentUploader
+    attr_reader :options, :replacements
+
+    def initialize(options)
+      @options = options
+      @replacements = []
+    end
+
+    def review_attachment_file(version)
+      @replacements << version
+    end
+
+    prepend N4x4Release::PreserveReviewAttachments
+  end
+
+  def test_metadata_only_release_preserves_existing_review_evidence
+    uploader = AttachmentUploader.new({})
+    uploader.review_attachment_file(:existing_evidence)
+    assert_empty uploader.replacements
+  end
+
+  def test_explicit_review_attachment_replacement_uses_normal_uploader
+    uploader = AttachmentUploader.new(app_review_attachment_file: '/private/evidence.mp4')
+    uploader.review_attachment_file(:new_evidence)
+    assert_equal [:new_evidence], uploader.replacements
+  end
+
   def build(**changes)
     OpenStruct.new({ id: 'build-40', app_id: N4x4Release::APP_ID,
       bundle_id: N4x4Release::BUNDLE_ID, app_version: '5.4', version: '40',

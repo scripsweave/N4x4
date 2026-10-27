@@ -1,22 +1,20 @@
 # N4x4 — Session Handoff
 
-> **Complete workout export (2026-10-27):** On
-> `feature/full-workout-export`, Share → Export Workout (JSON) is available
-> in completed-workout review and History, alongside image sharing. It includes
-> the full saved record, every retained HR sample, all recorded stages/targets,
-> stage statistics, performance/notes and pause timing, with explicit units and
-> missing-data semantics. User authorized release; **5.11** is prepared in all
-> six shipping configurations, with Cloud validation/submission pending. See
+> **5.11 submitted (2026-10-27):** Complete workout export from the saved
+> summary and History: all recorded stages/targets, retained HR samples,
+> interval statistics, performance/notes and pause timing in self-describing
+> JSON. Cloud **51** passed all four required actions and **270/270 tests**
+> for `ea361a306fda3080fa74acad4dba8170d16cf6aa`. App Store Connect verified
+> **WAITING_FOR_REVIEW**, **AFTER_APPROVAL**, at 19:10 CET. Existing screenshots,
+> animated header and private physical-device review evidence are retained.
+> Tag/release `v5.11`; **5.10 is live until Apple approves 5.11**. See
 > [`SESSION-HANDOFF-2026-10-27-WORKOUT-EXPORT.md`](SESSION-HANDOFF-2026-10-27-WORKOUT-EXPORT.md)
-> for the reply draft and validation status.
+> for the reply draft and submission record. Post-submission docs are on
+> `chore/5.11-submission-handoff`, avoiding another main-triggered upload.
 
-> **Animated header live (verified 2026-10-25):** Apple approved the chrome-ring
-> video. The automatic publisher activated it on live version 5.7 at
-> 2026-10-24 20:48 UTC; its ACTIVE placement was reverified on 25 October.
-> Version 5.10 remains WAITING_FOR_REVIEW. The LaunchAgent continues until
-> the header is also present on 5.10 after release, then disables itself.
+> **Animated header live (verified 2026-10-27):** The approved chrome-ring
+> video is ACTIVE on live version 5.10 and has been retained on 5.11.
 > See the [header publication record](../AppStore/creative-assets/chrome-ring/README.md).
-> Branch `design/animated-store-header`; no main push or new app build.
 
 > **5.10 submitted (2026-10-24):** iPhone Duo adaptive layouts, six authentic
 > Duo screenshots, Elliptical workout type/guidance/resistance logging, and

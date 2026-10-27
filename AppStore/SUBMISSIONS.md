@@ -4,6 +4,25 @@ N4x4 has a repeatable API-based submission command. It promotes a specific
 build already uploaded by Xcode Cloud; Safari and Apple ID sessions are not
 needed. This is an on-demand release tool, not a scheduled job.
 
+**Latest submission (2026-10-27):** `AppStore/submit.sh 5.11 51 --submit`
+verified **WAITING_FOR_REVIEW** and **AFTER_APPROVAL** at 19:10 CET. Cloud 51
+passed all four required actions and **270/270 tests** for release source/tag
+`ea361a306fda3080fa74acad4dba8170d16cf6aa` / `v5.11`. Existing listing,
+screenshots and animated header were preserved, and the original private
+physical-device review evidence is attached and processed. **5.10 remains
+live pending approval of 5.11.** See the
+[5.11 handoff](../docs/SESSION-HANDOFF-2026-10-27-WORKOUT-EXPORT.md).
+
+**Review attachment preservation:** fastlane deliver 2.240.1 deletes existing
+App Review attachments when `app_review_attachment_file` is omitted. The lane
+now installs `N4x4Release::PreserveReviewAttachments` to leave existing evidence
+untouched unless a replacement file is explicitly provided. Six release-tool
+tests / 21 assertions and the actual installed deliver class verify this guard.
+During 5.11 submission, final verification caught this behavior and the original
+video was restored to the already-submitted version, verified linked and
+COMPLETE, without canceling/resubmitting. The correction is on
+`chore/5.11-submission-handoff`; include it with the next main version bump.
+
 ## Release workflow
 
 1. Finish the change and appropriate simulator/device tests. Bump

@@ -20,3 +20,6 @@ Background audio (Guideline 2.5.4):
 4. Pause/finish ends workout background audio. Silent mode does not provide spoken cues.
 
 The required background modes support these workout features, not advertisements, downloads or unrelated work. Heart-rate hardware requires physical devices. JSON export also works without heart-rate hardware.
+
+Physical-device evidence (same original recordings used for approved version 5.10):
+N4x4-physical-device-review.mp4: 00:00–01:00 demonstrates Garmin Bluetooth pairing, live HR and workout start; 01:00–01:40 demonstrates a running workout on the iPhone Home Screen with the spoken halfway warm-up cue near 01:31. The original recordings are joined without abridgment and are not Simulator recordings.

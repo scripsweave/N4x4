@@ -11,6 +11,16 @@ module N4x4Release
                                       PENDING_APPLE_RELEASE PENDING_DEVELOPER_RELEASE
                                       PROCESSING_FOR_DISTRIBUTION WAITING_FOR_EXPORT_COMPLIANCE]).freeze
 
+  # deliver 2.240.1 deletes existing App Review attachments when no replacement
+  # path is supplied. Our metadata-only release must preserve that evidence.
+  # Explicit replacements still use deliver's normal upload implementation.
+  module PreserveReviewAttachments
+    def review_attachment_file(version)
+      return unless options[:app_review_attachment_file]
+      super
+    end
+  end
+
   def self.inputs(root, version, number)
     version, number = version.to_s, number.to_s
     raise 'Specify a numeric version, e.g. 5.5.' unless version.match?(/\A(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){1,2}\z/)
