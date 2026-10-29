@@ -31,8 +31,56 @@ to be retained. User replies remain drafts, not sent.
 
 ## Submission
 
-Release source is being committed and pushed for Xcode Cloud's Default
-workflow. Verify its exact source commit, all four required actions and uploaded
-build before running `AppStore/submit.sh 5.12 BUILD --submit`. Automatic release
-after Apple approval is intended. Successful submission does not mean live.
-Final Cloud and submission identifiers will be recorded after verification.
+**Blocked by the updated Apple Developer Program License Agreement.** Xcode's
+Cloud Notices popover explicitly says the Account Holder for Jan van Rensburg
+must review and accept the updated agreement before Xcode Cloud can be accessed.
+The API returns HTTP 500 for otherwise valid build-start requests. No new build
+run or uploaded 5.12 binary exists yet; do not claim a submitted/released update.
+The user has been asked to accept at https://developer.apple.com/account/.
+No agreement was accepted by the agent.
+
+- Release source: `0655ac6a0f21d8a23c06de1b4d6cc39b233965a1`, pushed to main
+  and `feature/workout-calories`. Annotated tag `v5.12` points to that source.
+- GitHub release is a **draft**, awaiting Cloud validation and App Store
+  submission. Publish/update it once the release has passed.
+- App Store version: `1e914dc1-19c2-4cfb-92a7-b5648101f5ec`, 5.12,
+  PREPARE_FOR_SUBMISSION, AFTER_APPROVAL.
+- English localization: `d0c14711-b8e8-4339-a63a-60b3a447bbe9`. What's New
+  matches the release file. Review detail: `369bba7a-fea2-4f7e-b8f3-383786ffde24`;
+  detailed review notes uploaded, no demo login required.
+- All **17** existing media placements were compared by source image/video
+  identity, type and group against 5.11, including the six Duo screenshots and
+  active animated chrome-ring header. Description, keywords, promotional text
+  and URLs are unchanged. `/tmp/n4x4-5.12-media-check.json` records the check.
+- The previous joined temporary review video was missing, so both original
+  unabridged physical-device recordings under `tmp/` were joined again with
+  AVFoundation. Duration 100.15 seconds, original portrait geometry and audio.
+  Private attachment `65840aee-d905-44d1-9cf6-ee81700b483b` is **COMPLETE**.
+  Durable private copy:
+  `~/.local/share/n4x4-review-evidence/N4x4-physical-device-review-5.12.mp4`
+  (directory 700, file 600; excluded from git). It demonstrates existing
+  Bluetooth and Home Screen audio, not the new calorie feature.
+
+## Resume after agreement acceptance
+
+1. Do not change/re-push main: it already contains the release source. Query
+   Cloud first in case acceptance starts a queued run. Default workflow:
+   `E35511FE-4DB2-4B4B-82AE-AF58FA6FEA5D`; product:
+   `b9e9c87c-19b1-4458-a6be-9f7f25737f1c`. Main Git reference:
+   `7c95d54a-6ba4-4d22-b524-6567f0989659`. Start Default on main if needed.
+2. `/tmp/n4x4-5.12-cloud.rb` checks the exact release commit, required actions,
+   test statuses and uploaded builds, writing `/tmp/n4x4-5.12-cloud-state.json`.
+   It uses `/tmp/n4x4-asc.rb` for credential-backed requests without printing
+   tokens. Ruby needs the existing Homebrew fastlane GEM_HOME/GEM_PATH setup.
+3. Verify all four actions and the uploaded build, then run
+   `AppStore/submit.sh 5.12 BUILD` followed by
+   `AppStore/submit.sh 5.12 BUILD --submit`. No new release authorization is
+   needed: the user already requested this release.
+4. Independently verify WAITING_FOR_REVIEW/IN_REVIEW with the exact build and
+   AFTER_APPROVAL. Re-run `/tmp/n4x4-5.12-media-check.rb` to confirm assets and
+   COMPLETE review attachment remain intact. Publish the GitHub draft and
+   record the final identifiers on the handoff branch, not main.
+
+Automatic release after Apple approval is intended. Successful submission
+does not mean live. Post-release documentation belongs on
+`chore/5.12-submission-handoff`, avoiding another main-triggered upload.

@@ -1,5 +1,14 @@
 # App Store submissions
 
+**5.12 preparation (2026-10-29):** Source/tag `0655ac6` / `v5.12` is on main;
+Release builds pass. App Store draft, release/review notes, all 17 inherited
+media placements and COMPLETE private review video are verified. **Cloud is
+blocked by the updated Developer Program License Agreement**, which Xcode says
+the Account Holder must accept. No new binary or review submission yet. User
+was asked to accept at developer.apple.com/account; release authorization is
+already given. See the [5.12 handoff](../docs/SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md)
+for exact identifiers and continuation steps. 5.11 is live.
+
 N4x4 has a repeatable API-based submission command. It promotes a specific
 build already uploaded by Xcode Cloud; Safari and Apple ID sessions are not
 needed. This is an on-demand release tool, not a scheduled job.

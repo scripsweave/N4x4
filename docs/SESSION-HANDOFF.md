@@ -1,8 +1,11 @@
 # N4x4 — Session Handoff
 
-> **5.12 release preparation (2026-10-29):** User authorized App Store release
-> of calories, FIT export, workout names, optional bonus round and voice picker.
-> All six shipping configs are 5.12 and the Release build passes. 5.11 is live.
+> **5.12 release blocked by Apple agreement (2026-10-29):** Release source/tag
+> `0655ac6` / `v5.12` is pushed to main. Release build passes and App Store draft,
+> notes, 17 media placements and COMPLETE review video are verified. Xcode says
+> the Account Holder must accept the updated Developer Program License Agreement
+> before Cloud can run. User has been asked; no 5.12 build/submission exists yet.
+> 5.11 is live. Release authorization persists once the agreement is accepted.
 > Read [`SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md`](SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md)
 > for release verification and current submission status.
 
