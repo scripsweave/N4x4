@@ -1,5 +1,6 @@
 import XCTest
 import UserNotifications
+import AVFoundation
 @testable import N4x4
 
 private final class TestIntervalNotificationCenter: IntervalNotificationCenter {
@@ -1726,5 +1727,392 @@ extension N4x4Tests {
         XCTAssertEqual(expired.upperBound, end + 10)
         XCTAssertEqual(state.countdownRange(at: end), end...end)
         XCTAssertEqual(state.countdownRange(at: end - 10), (end - 10)...end)
+    }
+}
+
+final class WorkoutEnhancementTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        for key in ["workoutLogEntriesData", "discardedPhoneWorkoutIDs", "bonusRoundEnabled", "appleSensorHREnabled"] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        UserDefaults.standard.set(false, forKey: "healthKitEnabled")
+        UserDefaults.standard.set(true, forKey: "healthKitUserOptedOut")
+        UserDefaults.standard.set(false, forKey: "workoutRemindersEnabled")
+    }
+
+    private func fixture() -> (WorkoutLogEntry, HeartRateSeries, [WorkoutEnergyReport]) {
+        let start = Date(timeIntervalSince1970: 1_790_000_000.125)
+        var timing = WorkoutActivityTiming(startedAt: start)
+        timing.pause(at: start + 30)
+        timing.resume(at: start + 60)
+        timing.finish(at: start + 90)
+        let series = HeartRateSeries(samples: [0.0, 12, 28, 62, 80, 90].enumerated().map {
+            .init(t: $0.element, bpm: Double(120 + $0.offset * 10))
+        }, spans: [.init(kind: "warmup", workNumber: 0, start: 0, end: 10, targetLo: 0, targetHi: 0),
+                    .init(kind: "work", workNumber: 1, start: 10, end: 75, targetLo: 150, targetHi: 170),
+                    .init(kind: "cooldown", workNumber: 0, start: 75, end: 90, targetLo: 0, targetHi: 0)],
+            startedAt: start, activityTiming: timing)
+        let row = WorkoutLogEntry(completedAt: start + 90, workoutType: .treadmill, notes: "Private note",
+            sessionBreakdown: .init(totalDuration: 60, warmupDuration: 10, highIntensityDuration: 35,
+                                    recoveryDuration: 0, cooldownDuration: 15, cooldownSkipped: false), customTitle: "Fjord intervals — 4×4")
+        let samples: [WorkoutEnergySample] = [(0.0, 10.0, 2.0), (10, 28, 7), (32, 58, 100), (60, 90, 10)].map {
+            .init(id: UUID(), start: start.timeIntervalSince1970 + $0.0,
+                  end: start.timeIntervalSince1970 + $0.1, kilocalories: $0.2)
+        }
+        let report = WorkoutEnergyReport(id: UUID(), workoutID: row.id, start: start.timeIntervalSince1970,
+            end: (start + 90).timeIntervalSince1970, samples: samples, finalized: true)
+        return (row, series, [report])
+    }
+
+    func testFITPreservesTimingHeartRateLapsCaloriesAndOriginalIdentity() throws {
+        let (row, series, energy) = fixture()
+        let export = WorkoutFITExport(entry: row, series: series, energyReports: energy)
+        let data = try export.data()
+        XCTAssertTrue(export.isAvailable)
+        XCTAssertEqual(String(decoding: data[8..<12], as: UTF8.self), ".FIT")
+        XCTAssertEqual(data.count, Int(data[4..<8].enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) }) + 16)
+        var crc: UInt16 = 0
+        for byte in data {
+            crc ^= UInt16(byte)
+            for _ in 0..<8 { crc = crc & 1 == 1 ? (crc >> 1) ^ 0xA001 : crc >> 1 }
+        }
+        XCTAssertEqual(crc, 0)
+        XCTAssertEqual(data, try export.data(), "Re-exporting the same snapshot must keep stable FIT identity")
+        XCTAssertNotNil(data.range(of: Data(row.displayTitle.utf8)))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("N4x4-validation-paused.fit")
+        try data.write(to: url)
+        print("FIT validation fixture: \(url.path)")
+        let attachment = XCTAttachment(data: data, uniformTypeIdentifier: "public.data")
+        attachment.name = "N4x4-validation-paused.fit"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testFITWithoutHeartRateKeepsKnownTimingAndDoesNotInventLegacyDates() throws {
+        let (row, series, _) = fixture()
+        var export = HealthWorkoutExport(start: series.startedAt, end: row.completedAt, requested: false,
+            timing: series.activityTiming, activeDuration: 60)
+        export.workoutTypeRaw = row.workoutType.rawValue
+        let timed = WorkoutLogEntry(id: row.id, completedAt: row.completedAt, workoutType: .cycle,
+                                    notes: "", healthExport: export)
+        let file = WorkoutFITExport(entry: timed, series: nil)
+        XCTAssertTrue(file.isAvailable)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("N4x4-validation-no-hr.fit")
+        try file.data().write(to: url)
+        print("FIT validation fixture: \(url.path)")
+        let attachment = XCTAttachment(data: try file.data(), uniformTypeIdentifier: "public.data")
+        attachment.name = "N4x4-validation-no-hr.fit"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let legacy = WorkoutLogEntry(workoutType: .other, notes: "", sessionBreakdown: .init(totalDuration: 600,
+            warmupDuration: 0, highIntensityDuration: 600, recoveryDuration: 0, cooldownDuration: 0, cooldownSkipped: false))
+        XCTAssertFalse(WorkoutFITExport(entry: legacy, series: nil).isAvailable)
+        XCTAssertNil(WorkoutExportFile(entry: legacy, series: nil).fitFile)
+        XCTAssertThrowsError(try WorkoutFITExport(entry: legacy, series: nil).data())
+    }
+
+    func testFITRejectsNonFiniteAndOutOfRangeTimeline() {
+        let (row, series, _) = fixture()
+        let broken = HeartRateSeries(samples: [], spans: [], startedAt: Date(timeIntervalSince1970: .nan))
+        XCTAssertFalse(WorkoutFITExport(entry: row, series: broken).isAvailable)
+        let ancient = HeartRateSeries(samples: [], spans: [], startedAt: Date(timeIntervalSince1970: 0))
+        XCTAssertFalse(WorkoutFITExport(entry: row, series: ancient).isAvailable)
+        XCTAssertTrue(WorkoutExportFile(entry: row, series: series).fitFile?.filename.hasSuffix(".fit") == true)
+    }
+
+    @MainActor
+    private func model(checkpoint: URL? = nil) -> TimerViewModel {
+        let vm = TimerViewModel(checkpointURL: checkpoint ?? FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json"), seriesSaver: { _, _ in true })
+        vm.healthKitEnabled = false
+        vm.audioMode = .silent
+        vm.hapticsEnabled = false
+        vm.notificationsEnabled = false
+        vm.liveActivitiesEnabled = false
+        return vm
+    }
+
+    @MainActor
+    private func start(_ vm: TimerViewModel, at date: Date) {
+        vm.numberOfIntervals = 2
+        vm.warmupDuration = 0
+        vm.highIntensityDuration = 10
+        vm.restDuration = 5
+        vm.cooldownEnabled = true
+        vm.cooldownDuration = 5
+        vm.startTimer(now: date)
+    }
+
+    @MainActor
+    func testBonusIsOptInAndOnlyQueuesOnceDuringLastWorkInterval() {
+        let vm = model(), date = Date()
+        start(vm, at: date)
+        XCTAssertFalse(vm.bonusRoundEnabled)
+        vm.bonusRoundEnabled = true
+        XCTAssertFalse(vm.canAddBonusRound)
+        vm.reconcileTimerState(now: date + 16, playAlarm: false)
+        XCTAssertTrue(vm.canAddBonusRound)
+        let deadline = vm.intervalEndTime
+        vm.addBonusRound(now: date + 17)
+        XCTAssertEqual(vm.sessionIntervalCount, 3)
+        XCTAssertEqual(vm.numberOfIntervals, 2, "The next workout's settings must stay unchanged")
+        XCTAssertEqual(vm.intervalEndTime, deadline)
+        XCTAssertTrue(vm.canUndoBonusRound)
+        XCTAssertFalse(vm.canAddBonusRound)
+        vm.addBonusRound(now: date + 18)
+        XCTAssertEqual(vm.sessionIntervalCount, 3)
+        vm.undoBonusRound(now: date + 19)
+        XCTAssertEqual(vm.sessionIntervalCount, 2)
+        XCTAssertEqual(vm.intervalEndTime, deadline)
+        vm.reset()
+    }
+
+    @MainActor
+    func testBonusQueuedWhilePausedUsesSessionDurationsAndKeepsPause() {
+        let vm = model(), date = Date()
+        start(vm, at: date)
+        vm.bonusRoundEnabled = true
+        vm.pause(now: date + 17)
+        let remaining = vm.timeRemaining
+        vm.highIntensityDuration = 240
+        vm.restDuration = 180
+        vm.addBonusRound(now: date + 200)
+        XCTAssertFalse(vm.isRunning)
+        XCTAssertEqual(vm.timeRemaining, remaining)
+        XCTAssertEqual(vm.intervals[3].duration, 5)
+        XCTAssertEqual(vm.intervals[4].duration, 10)
+        vm.reset()
+    }
+
+    @MainActor
+    func testBonusBoundaryAndStaleCommandsCannotExtendAnotherPhaseOrSession() {
+        let vm = model(), date = Date()
+        start(vm, at: date)
+        vm.bonusRoundEnabled = true
+        vm.addBonusRound(for: UUID(), now: date + 16)
+        XCTAssertEqual(vm.sessionIntervalCount, 2)
+        vm.addBonusRound(now: date + 25) // Tap arrives exactly as the final work interval ends.
+        XCTAssertEqual(vm.currentIntervalType, .cooldown)
+        XCTAssertEqual(vm.sessionIntervalCount, 2)
+        vm.reset()
+    }
+
+    @MainActor
+    func testCancellingBonusAfterCoreCompletionDoesNotLoseCompletedWorkout() {
+        let vm = model(), date = Date()
+        start(vm, at: date)
+        vm.bonusRoundEnabled = true
+        vm.addBonusRound(now: date + 16)
+        vm.finishAndSaveWorkout(now: date + 26)
+        XCTAssertFalse(vm.sessionEndedEarly)
+        XCTAssertTrue(vm.workoutLogEntries.first?.countsTowardStreak == true)
+        XCTAssertEqual(vm.workoutLogEntries.first?.bonusRounds, 0)
+        vm.reset()
+    }
+
+    @MainActor
+    func testFinishedBonusIsRecordedAndNamedWithoutSecondWorkout() {
+        let vm = model(), date = Date()
+        start(vm, at: date)
+        vm.bonusRoundEnabled = true
+        vm.addBonusRound(now: date + 16)
+        vm.reconcileTimerState(now: date + 100, playAlarm: false)
+        XCTAssertEqual(vm.workoutLogEntries.count, 1)
+        XCTAssertEqual(vm.workoutLogEntries.first?.bonusRounds, 1)
+        XCTAssertEqual(vm.completedSeries?.spans.filter { $0.kind == "work" }.count, 3)
+        XCTAssertTrue(vm.workoutLogEntries.first?.displayTitle.contains("+ bonus") == true)
+        XCTAssertFalse(vm.sessionEndedEarly)
+        vm.reset()
+    }
+
+    @MainActor
+    func testBonusCheckpointRestoresExtensionAndOriginalCompletionThreshold() {
+        let checkpoint = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json")
+        defer { try? FileManager.default.removeItem(at: checkpoint.deletingLastPathComponent()) }
+        let vm = model(checkpoint: checkpoint), date = Date()
+        start(vm, at: date)
+        vm.bonusRoundEnabled = true
+        vm.addBonusRound(now: date + 16)
+        vm.pause(now: date + 17)
+        let restored = model(checkpoint: checkpoint)
+        XCTAssertEqual(restored.sessionIntervalCount, 3)
+        XCTAssertEqual(restored.bonusInsertionIndex, 3)
+        XCTAssertTrue(restored.canUndoBonusRound)
+        restored.startTimer(now: date + 100)
+        restored.finishAndSaveWorkout(now: date + 109) // Eight work seconds, then one recovery second.
+        XCTAssertFalse(restored.sessionEndedEarly)
+        restored.reset()
+        vm.reset()
+    }
+
+    @MainActor
+    func testCustomNamePersistsWithoutChangingSavedHealthIntent() throws {
+        let vm = model(), date = Date()
+        var health = HealthWorkoutExport(start: date - 600, end: date, requested: true)
+        health.workoutTitle = "Original Health title"
+        health.workoutTypeRaw = WorkoutType.cycle.rawValue
+        health.state = .saved
+        let row = WorkoutLogEntry(completedAt: date, workoutType: .cycle, notes: "", healthExport: health)
+        vm.workoutLogEntries = [row]
+        vm.updateWorkoutTitle("Hill session", for: row.id)
+        XCTAssertEqual(vm.workoutLogEntries.first?.displayTitle, "Hill session")
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport, health)
+        XCTAssertEqual(vm.workoutExport(for: row.id, series: nil)?.entry.displayTitle, "Hill session")
+        let restored = model()
+        XCTAssertEqual(restored.workoutLogEntries.first?.customTitle, "Hill session")
+        vm.updateWorkoutTitle("  ", for: row.id)
+        XCTAssertEqual(vm.workoutLogEntries.first?.displayTitle, "Norwegian 4×4 — Cycle")
+    }
+
+    func testStandaloneBonusRoundPersistsAndDoesNotPenalizeCoreCompletion() throws {
+        var plan = WatchWorkoutPlan.fallback
+        plan.steps = [.init(phase: .highIntensity, duration: 10), .init(phase: .rest, duration: 5),
+                      .init(phase: .highIntensity, duration: 10), .init(phase: .cooldown, duration: 5)]
+        plan.totalIntervals = 2
+        plan.bonusRoundEnabled = true
+        let date = Date()
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: date))
+        engine.addBonusRound(now: date + 16)
+        XCTAssertEqual(engine.plan.totalIntervals, 3)
+        var restored = try JSONDecoder().decode(WatchWorkoutEngine.self, from: JSONEncoder().encode(engine))
+        restored.finish(now: date + 26)
+        XCTAssertEqual(restored.completedRecord()?.endedEarly, false)
+        XCTAssertEqual(restored.completedRecord()?.bonusRounds, 0)
+        engine.reconcile(now: date + 45)
+        XCTAssertEqual(engine.completedRecord()?.bonusRounds, 1)
+        XCTAssertEqual(engine.completedRecord()?.endedEarly, false)
+    }
+
+    func testStandaloneBonusUndoAndDisabledLegacyPlan() throws {
+        var plan = WatchWorkoutPlan.fallback
+        plan.steps = [.init(phase: .highIntensity, duration: 10)]
+        plan.totalIntervals = 1
+        let date = Date()
+        var engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: date))
+        engine.addBonusRound(now: date + 1)
+        XCTAssertEqual(engine.plan.steps.count, 1)
+        plan.bonusRoundEnabled = true
+        plan.bonusRecoveryDuration = 5
+        engine = try XCTUnwrap(WatchWorkoutEngine.start(plan: plan, now: date))
+        engine.pause(now: date + 2)
+        engine.addBonusRound(now: date + 3)
+        XCTAssertFalse(engine.isRunning)
+        XCTAssertEqual(engine.plan.steps.map(\.duration), [10, 5, 10])
+        engine.undoBonusRound(now: date + 4)
+        XCTAssertEqual(engine.plan.steps.count, 1)
+        engine.resume(now: date + 100)
+        engine.reconcile(now: date + 108)
+        XCTAssertEqual(engine.completedRecord()?.endedEarly, false)
+    }
+}
+
+extension WorkoutEnhancementTests {
+    @MainActor
+    func testBonusWorkCannotTurnSkippedOriginalWorkIntoFullCompletion() {
+        let vm = model(), date = Date()
+        start(vm, at: date)
+        vm.bonusRoundEnabled = true
+        vm.skip(now: date + 5) // Five of the first ten work seconds were skipped.
+        vm.reconcileTimerState(now: date + 11, playAlarm: false)
+        vm.addBonusRound(now: date + 12)
+        vm.reconcileTimerState(now: date + 200, playAlarm: false)
+        XCTAssertTrue(vm.sessionEndedEarly, "Bonus work must not hide skipped original intervals")
+        vm.reset()
+    }
+
+    @MainActor
+    func testHealthNameAndActivityAreFrozenWhenReviewChanges() throws {
+        let vm = model(), date = Date()
+        vm.setDefaultWorkoutType(.treadmill)
+        start(vm, at: date)
+        vm.finishAndSaveWorkout(now: date + 5)
+        let original = try XCTUnwrap(vm.workoutLogEntries.first?.healthExport)
+        XCTAssertEqual(original.workoutTypeRaw, WorkoutType.treadmill.rawValue)
+        XCTAssertEqual(original.workoutTitle, "Norwegian 4×4 — Treadmill")
+        vm.workoutTitleDraft = "Hill session"
+        vm.selectedWorkoutType = .cycle
+        XCTAssertEqual(vm.workoutLogEntries.first?.displayTitle, "Hill session")
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport, original)
+        XCTAssertEqual(WorkoutType.treadmill.healthActivityType, .running)
+        XCTAssertEqual(WorkoutType.cycle.healthActivityType, .cycling)
+        XCTAssertEqual(WorkoutType.elliptical.healthActivityType, .elliptical)
+        vm.reset()
+    }
+}
+
+final class SpeechVoiceSettingsTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: SpeechManager.voicePreferenceKey)
+        UserDefaults.standard.set(false, forKey: "healthKitEnabled")
+        UserDefaults.standard.set(true, forKey: "healthKitUserOptedOut")
+        UserDefaults.standard.set(false, forKey: "workoutRemindersEnabled")
+    }
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: SpeechManager.voicePreferenceKey)
+        super.tearDown()
+    }
+
+    @MainActor
+    func testDefaultVoiceAndMissingVoiceUseTheExistingEnglishLookup() {
+        let vm = TimerViewModel(checkpointURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        XCTAssertEqual(vm.speechVoiceIdentifier, "")
+        XCTAssertEqual(SpeechManager.voice(identifier: "")?.identifier,
+                       AVSpeechSynthesisVoice(language: "en-US")?.identifier)
+        XCTAssertEqual(SpeechManager.voice(identifier: "com.apple.unavailable.n4x4-test")?.identifier,
+                       SpeechManager.voice(identifier: "")?.identifier)
+        vm.reset()
+    }
+
+    @MainActor
+    func testChosenVoicePersistsAndInventoryRefreshDoesNotReplaceIt() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let vm = TimerViewModel(checkpointURL: url)
+        let voice = SpeechVoiceOption(id: "com.apple.test.english", name: "Example", language: "en-GB", quality: .premium)
+        vm.refreshSpeechVoiceOptions(options: [voice])
+        XCTAssertEqual(vm.speechVoiceIdentifier, "", "Installing premium voices must not change the default")
+        vm.speechVoiceIdentifier = voice.id
+        XCTAssertFalse(vm.selectedSpeechVoiceUnavailable)
+        vm.refreshSpeechVoiceOptions(options: [])
+        XCTAssertTrue(vm.selectedSpeechVoiceUnavailable)
+        XCTAssertEqual(vm.speechVoiceIdentifier, voice.id)
+        let restored = TimerViewModel(checkpointURL: url)
+        XCTAssertEqual(restored.speechVoiceIdentifier, voice.id)
+        restored.refreshSpeechVoiceOptions(options: [voice])
+        XCTAssertFalse(restored.selectedSpeechVoiceUnavailable)
+        restored.speechVoiceIdentifier = ""
+        XCTAssertFalse(restored.selectedSpeechVoiceUnavailable)
+        vm.reset()
+        restored.reset()
+    }
+
+    func testInstalledSelectionResolvesTheChosenAppleEnglishVoice() throws {
+        guard let option = SpeechVoiceOption.installed().first else { throw XCTSkip("No English voice is exposed by this simulator") }
+        XCTAssertEqual(SpeechManager.voice(identifier: option.id)?.identifier, option.id)
+        XCTAssertTrue(option.label.contains(option.name))
+        XCTAssertTrue(SpeechVoiceOption.installed().allSatisfy { $0.id.hasPrefix("com.apple.") && $0.language.hasPrefix("en") })
+    }
+
+    func testLatePreviewCallbacksCannotFinishNewWorkoutCues() {
+        let preview = NSObject(), cue = NSObject()
+        var state = SpeechPlaybackState()
+        state.begin(preview, preview: true)
+        state.begin(cue, preview: false)
+        XCTAssertFalse(state.finish(preview))
+        XCTAssertNil(state.consumePreviewStop(), "Leaving Audio settings must not stop the new cue")
+        XCTAssertTrue(state.finish(cue))
+        XCTAssertFalse(state.finish(cue), "Duplicate callbacks must not restore the session twice")
+    }
+
+    func testClosingPreviewThenStartingCueKeepsLateCancellationBoundToPreview() {
+        let preview = NSObject(), cue = NSObject()
+        var state = SpeechPlaybackState()
+        state.begin(preview, preview: true)
+        XCTAssertNotNil(state.consumePreviewStop())
+        XCTAssertNil(state.consumePreviewStop())
+        state.begin(cue, preview: false)
+        XCTAssertFalse(state.finish(preview))
+        XCTAssertTrue(state.finish(cue))
     }
 }

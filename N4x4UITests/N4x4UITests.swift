@@ -462,6 +462,10 @@ extension N4x4UITests {
             .matching(NSPredicate(format: "label BEGINSWITH %@", "Heart Rate write permission")).firstMatch
         reveal(heartRatePermission, in: app)
         XCTAssertTrue(heartRatePermission.exists)
+        let energyPermission = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Active Energy write permission")).firstMatch
+        reveal(energyPermission, in: app)
+        XCTAssertTrue(energyPermission.exists)
         XCTAssertEqual(app.alerts.count, 0, "Viewing the new write-permission status must not prompt")
         keepScreenshot("Health and Devices - Health saving", app: app)
         let watch = app.buttons.containing(.staticText, identifier: "Apple Watch").firstMatch
@@ -536,6 +540,42 @@ extension N4x4UITests {
 }
 
 extension N4x4UITests {
+    func testHistoryShowsWatchCaloriesAndExplainsPendingEnergy() throws {
+        let app = XCUIApplication()
+        let id = "44444444-4444-4444-4444-444444444444"
+        for state in ["saved", "pending"] {
+            let now = Date(), timestamp = Date().timeIntervalSince1970
+            var export: [String: Any] = ["startTimestamp": timestamp - 600, "endTimestamp": timestamp,
+                                         "state": state, "attempts": 0,
+                                         "energyContent": state == "saved" ? "included" : "awaitingWatch"]
+            if state == "saved" { export["activeEnergyKilocalories"] = 127.25 }
+            let row: [String: Any] = ["id": id, "completedAt": ISO8601DateFormatter().string(from: now),
+                                     "workoutType": "Run", "notes": "", "healthExport": export]
+            let json = String(decoding: try JSONSerialization.data(withJSONObject: [row]), as: UTF8.self)
+            let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
+            app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument]
+            app.launch()
+            app.buttons["History"].tap()
+            let workout = app.buttons["workout-\(id)"]
+            reveal(workout, in: app)
+            workout.tap()
+            let label = state == "saved" ? "127 kcal active energy from Apple Watch included." : "Waiting for Apple Watch calories."
+            reveal(app.staticTexts[label], in: app)
+            XCTAssertTrue(app.staticTexts[label].exists)
+            if state == "pending" {
+                let skip = app.buttons["Save Without Calories"]
+                reveal(skip, in: app)
+                XCTAssertTrue(skip.exists)
+                XCTAssertFalse(skip.isEnabled, "Health is off in this UI test")
+            }
+            keepScreenshot("History calories - \(state)", app: app)
+            XCTAssertEqual(app.alerts.count, 0)
+            app.terminate()
+        }
+    }
+}
+
+extension N4x4UITests {
     func testHealthDevicesSeparatesPendingSavesFromConfirmedSaves() throws {
         let app = XCUIApplication()
         let now = Date()
@@ -562,5 +602,148 @@ extension N4x4UITests {
         reveal(retry, in: app)
         XCTAssertFalse(retry.isEnabled)
         keepScreenshot("Health and Devices - Pending and confirmed saves", app: app)
+    }
+}
+
+extension N4x4UITests {
+    func testBonusRoundIsHiddenByDefaultAndCanBeQueuedAndUndone() {
+        let app = XCUIApplication()
+        let timer = ["-numberOfIntervals", "1", "-warmupDuration", "0", "-highIntensityDuration", "240", "-cooldownEnabled", "YES"]
+        app.launchArguments = reviewLaunchArguments + timer + ["-bonusRoundEnabled", "NO"]
+        app.launch()
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.buttons["PAUSE"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["bonus-round-button"].exists)
+        app.buttons["FINISH"].tap()
+        app.alerts["Finish workout?"].buttons["Discard Workout"].tap()
+        app.terminate()
+        app.launchArguments = reviewLaunchArguments + timer + ["-bonusRoundEnabled", "YES"]
+        app.launch()
+        app.buttons["START"].tap()
+        let bonus = app.buttons["bonus-round-button"]
+        assertVisible(bonus, in: app)
+        bonus.tap()
+        XCTAssertTrue(app.staticTexts["ROUND 1 OF 2"].waitForExistence(timeout: 5))
+        XCTAssertTrue(bonus.label.contains("Undo"))
+        keepScreenshot("Bonus round queued on final work interval", app: app)
+        bonus.tap()
+        XCTAssertTrue(app.staticTexts["ROUND 1 OF 1"].waitForExistence(timeout: 5))
+        XCTAssertTrue(bonus.label.contains("+1"))
+        XCUIDevice.shared.orientation = .landscapeLeft
+        assertVisible(bonus, in: app)
+        keepScreenshot("Bonus round landscape", app: app)
+        XCUIDevice.shared.orientation = .portrait
+    }
+
+    func testBonusSettingIsSearchableAndOffByDefault() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-bonusRoundEnabled", "NO"]
+        app.launch()
+        app.buttons["Settings"].tap()
+        let search = app.searchFields.firstMatch
+        if !search.exists, app.buttons["Search"].waitForExistence(timeout: 5) { app.buttons["Search"].tap() }
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("bonus")
+        let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Intervals & Durations")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        result.tap()
+        let setting = app.switches["bonus-round-setting"]
+        reveal(setting, in: app)
+        XCTAssertEqual(setting.value as? String, "0")
+        keepScreenshot("Bonus round setting - off by default", app: app)
+    }
+
+    func testRenameHistoryWorkoutAndExportFITToFiles() throws {
+        let app = XCUIApplication(), id = UUID().uuidString, now = Date()
+        let timestamp = now.timeIntervalSince1970
+        let row: [String: Any] = ["id": id, "completedAt": ISO8601DateFormatter().string(from: now),
+            "workoutType": "Run", "notes": "", "sessionBreakdown": ["totalDuration": 60],
+            "healthExport": ["startTimestamp": timestamp - 60, "endTimestamp": timestamp,
+                             "expectedActiveDuration": 60, "attempts": 0, "state": "notRequested"]]
+        let json = String(decoding: try JSONSerialization.data(withJSONObject: [row]), as: UTF8.self)
+        let argument = String(decoding: try JSONEncoder().encode(json), as: UTF8.self)
+        app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", argument]
+        app.launch()
+        app.buttons["History"].tap()
+        let workout = app.buttons["workout-\(id)"]
+        reveal(workout, in: app)
+        workout.tap()
+        let title = app.textFields["history-workout-title"]
+        reveal(title, in: app)
+        title.tap()
+        title.typeText("Hill session")
+        app.buttons["session-share-menu"].tap()
+        let fit = app.buttons["export-workout-fit"]
+        XCTAssertTrue(fit.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["export-workout"].exists)
+        fit.tap()
+        let save = app.cells["Save to Files"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+        keepScreenshot("FIT export share sheet", app: app)
+        save.tap()
+        XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 10), app.debugDescription)
+        keepScreenshot("FIT activity ready to save in Files", app: app)
+    }
+}
+
+extension N4x4UITests {
+    private func openAudioSettings(_ app: XCUIApplication) {
+        app.buttons["Settings"].tap()
+        let audio = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Audio")).firstMatch
+        reveal(audio, in: app)
+        audio.tap()
+        XCTAssertTrue(app.navigationBars["Audio"].waitForExistence(timeout: 5))
+    }
+
+    func testVoicePickerKeepsDefaultAndPersistsAnInstalledVoiceWithPreview() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-audioModeRaw", "Voice Prompts"]
+        app.launch()
+        openAudioSettings(app)
+        let picker = app.descendants(matching: .any).matching(identifier: "speech-voice-picker").firstMatch
+        reveal(picker, in: app)
+        XCTAssertTrue((picker.value as? String)?.contains("Default (current voice)") == true || picker.label.contains("Default (current voice)"))
+        XCTAssertEqual(app.alerts.count, 0, "Listing voices must not request authorization")
+        keepScreenshot("Audio voices - unchanged default", app: app)
+        picker.tap()
+        let option = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "speech-voice-option-")).firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 10), "Simulator must expose an Apple English voice")
+        let selectedLabel = option.label
+        option.tap()
+        XCTAssertTrue(app.navigationBars["Audio"].waitForExistence(timeout: 5))
+        let preview = app.buttons["speech-voice-preview"]
+        reveal(preview, in: app)
+        XCTAssertTrue(preview.isEnabled)
+        preview.tap()
+        XCTAssertEqual(app.alerts.count, 0)
+        keepScreenshot("Audio voices - selected installed voice", app: app)
+        app.terminate()
+        app.launch()
+        openAudioSettings(app)
+        XCTAssertTrue((picker.value as? String)?.contains(selectedLabel) == true || picker.label.contains(selectedLabel), app.debugDescription)
+        picker.tap()
+        let defaultOption = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Default (current voice)")).firstMatch
+        XCTAssertTrue(defaultOption.waitForExistence(timeout: 5))
+        defaultOption.tap()
+        XCTAssertTrue(app.navigationBars["Audio"].waitForExistence(timeout: 5))
+    }
+
+    func testMissingVoiceFallsBackAndPreviewIsDisabledDuringWorkout() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-audioModeRaw", "Voice Prompts",
+            "-speechVoiceIdentifier", "com.apple.unavailable.n4x4-test", "-warmupDuration", "0",
+            "-numberOfIntervals", "1", "-highIntensityDuration", "240"]
+        app.launch()
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.buttons["PAUSE"].waitForExistence(timeout: 5))
+        openAudioSettings(app)
+        let preview = app.buttons["speech-voice-preview"]
+        reveal(preview, in: app)
+        XCTAssertFalse(preview.isEnabled, "Preview must not interrupt active workout audio")
+        let picker = app.descendants(matching: .any).matching(identifier: "speech-voice-picker").firstMatch
+        XCTAssertTrue((picker.value as? String)?.contains("Unavailable voice") == true || picker.label.contains("Unavailable voice"))
+        XCTAssertEqual(app.alerts.count, 0)
+        keepScreenshot("Audio voices - unavailable fallback during workout", app: app)
     }
 }

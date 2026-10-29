@@ -22,6 +22,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var sessionToken = 0
     private var workoutID: String?
     private var expiryWork: DispatchWorkItem?
+    private var energyReportID: UUID?
+    private var queryingEnergy: Set<UUID> = []
     var onReading: ((WatchHeartRateSample) -> Void)?
     @Published private(set) var latestReading: WatchHeartRateSample?
     @Published private(set) var lastPhoneAcknowledgement: Date?
@@ -30,8 +32,8 @@ final class WorkoutManager: NSObject, ObservableObject {
     private lazy var heartRateDelivery = WatchHeartRateDelivery(
         activated: { WCSession.isSupported() && WCSession.default.activationState == .activated },
         reachable: { WCSession.default.isReachable },
-        send: { message, completed in
-            WCSession.default.sendMessage(message, replyHandler: { reply in
+        send: { [weak self] message, completed in
+            WCSession.default.sendMessage(self?.addingEnergySession(to: message) ?? message, replyHandler: { reply in
                 let acknowledged = reply[WatchMessageKey.hrAcknowledgement] as? Double
                 let sent = message[WatchMessageKey.hrTimestamp] as? Double
                 DispatchQueue.main.async { completed(acknowledged != nil && acknowledged == sent) }
@@ -40,8 +42,8 @@ final class WorkoutManager: NSObject, ObservableObject {
                 DispatchQueue.main.async { completed(false) }
             })
         },
-        saveContext: { message in
-            do { try WCSession.default.updateApplicationContext(message) }
+        saveContext: { [weak self] message in
+            do { try WCSession.default.updateApplicationContext(self?.addingEnergySession(to: message) ?? message) }
             catch { print("[WorkoutManager] HR context failed: \(error.localizedDescription)") }
         },
         retryLater: { retry in DispatchQueue.main.asyncAfter(deadline: .now() + 2) { retry() } },
@@ -113,6 +115,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         recoveringSession = nil
         isPreparing = false
         lastSessionError = nil
+        recoverEnergyReports()
         perform(lifecycle.preparationFinished())
     }
 
@@ -122,6 +125,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func refreshOnForeground() {
         discardAbandonedSession()
+        recoverEnergyReports()
         perform(lifecycle.retry())
         expireReadingIfNeeded()
         resendLatestHeartRate()
@@ -137,6 +141,7 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     private func startWorkout(workoutID: String, token: Int) {
         sessionToken = token
+        energyReportID = nil
         self.workoutID = workoutID == "legacy" ? nil : workoutID
         let config = HKWorkoutConfiguration()
         config.activityType = .highIntensityIntervalTraining
@@ -157,6 +162,16 @@ final class WorkoutManager: NSObject, ObservableObject {
             )
 
             let startDate = Date()
+            if let id = UUID(uuidString: workoutID) {
+                let report = WorkoutEnergyReport(id: UUID(), workoutID: id,
+                                                 start: startDate.timeIntervalSince1970,
+                                                 end: startDate.timeIntervalSince1970)
+                do {
+                    try WorkoutEnergyStore.shared.save(report)
+                    energyReportID = report.id
+                    flushEnergyReports()
+                } catch { print("[WorkoutManager] Couldn’t checkpoint calories: \(error)") }
+            }
             // IMPORTANT: startActivity must come before beginCollection.
             // The reverse order crashes on some watchOS versions.
             session?.startActivity(with: startDate)
@@ -182,6 +197,7 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func stopWorkout() {
         guard let session else { return }
         isStopping = true
+        checkpointEnergy(at: Date())
         clearReading()
         session.end()
         // isSessionActive flips to false via the delegate callback.
@@ -190,8 +206,124 @@ final class WorkoutManager: NSObject, ObservableObject {
     // MARK: - HR streaming to phone
 
     func resendLatestHeartRate() {
+        recoverEnergyReports()
         guard isSessionActive, !isStopping else { return }
         heartRateDelivery.resendLatest()
+    }
+
+    private func addingEnergySession(to message: [String: Any]) -> [String: Any] {
+        guard let id = energyReportID, let workoutID, let workout = UUID(uuidString: workoutID),
+              let report = try? WorkoutEnergyStore.shared.reports(for: workout).first(where: { $0.id == id }) else { return message }
+        var message = message
+        message[WatchMessageKey.energySessionID] = id.uuidString
+        message[WatchMessageKey.energySessionStart] = report.start
+        return message
+    }
+
+    private func checkpointEnergy(at date: Date) {
+        guard let id = energyReportID, let workoutID, let workout = UUID(uuidString: workoutID),
+              var report = try? WorkoutEnergyStore.shared.reports(for: workout).first(where: { $0.id == id }),
+              !report.finalized else { return }
+        report.end = max(report.start, date.timeIntervalSince1970)
+        do { try WorkoutEnergyStore.shared.save(report) }
+        catch { print("[WorkoutManager] Couldn’t checkpoint calories: \(error)") }
+    }
+
+    private func finishEnergy(at date: Date) {
+        checkpointEnergy(at: date)
+        guard let id = energyReportID, let workoutID, let workout = UUID(uuidString: workoutID),
+              let report = try? WorkoutEnergyStore.shared.reports(for: workout).first(where: { $0.id == id }) else { return }
+        energyReportID = nil
+        collectEnergy(report)
+    }
+
+    /// The session's sensor samples already exist in Health, even though its
+    /// workout builder is discarded. Send identifiers rather than new samples.
+    private func collectEnergy(_ report: WorkoutEnergyReport) {
+        guard !report.finalized, !queryingEnergy.contains(report.id), let end = report.end else { return }
+        queryingEnergy.insert(report.id)
+        let dates = HKQuery.predicateForSamples(withStart: Date(timeIntervalSince1970: report.start),
+                                               end: Date(timeIntervalSince1970: end),
+                                               options: [.strictStartDate, .strictEndDate])
+        let device = HKQuery.predicateForObjects(from: Set([HKDevice.local()]))
+        let query = HKSampleQuery(sampleType: HKQuantityType(.activeEnergyBurned),
+                                  predicate: NSCompoundPredicate(andPredicateWithSubpredicates: [dates, device]),
+                                  limit: HKObjectQueryNoLimit, sortDescriptors: nil) { [weak self] _, samples, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.queryingEnergy.remove(report.id)
+                guard error == nil else { return } // Retained for the next foreground/reconnect.
+                var sealed = report
+                sealed.samples = (samples as? [HKQuantitySample] ?? []).map {
+                    WorkoutEnergySample(id: $0.uuid, start: $0.startDate.timeIntervalSince1970,
+                                        end: $0.endDate.timeIntervalSince1970,
+                                        kilocalories: $0.quantity.doubleValue(for: .kilocalorie()))
+                }.filter(\.isValid)
+                sealed.finalized = true
+                do {
+                    try WorkoutEnergyStore.shared.save(sealed)
+                    self.flushEnergyReports()
+                } catch { print("[WorkoutManager] Couldn’t retain calories: \(error)") }
+            }
+        }
+        healthStore.execute(query)
+    }
+
+    private func recoverEnergyReports() {
+        guard let reports = try? WorkoutEnergyStore.shared.allReports() else { return }
+        for report in reports where !report.finalized && report.id != energyReportID { collectEnergy(report) }
+        flushEnergyReports()
+    }
+
+    func flushEnergyReports() {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated,
+              let reports = try? WorkoutEnergyStore.shared.allReports() else { return }
+        let transfers = WCSession.default.outstandingUserInfoTransfers
+        for report in reports {
+            if report.finalized {
+                guard !WCSession.default.outstandingFileTransfers.contains(where: {
+                    $0.file.metadata?[WatchMessageKey.energySessionID] as? String == report.id.uuidString
+                }) else { continue }
+                // A full workout's UUID manifest can exceed the message-size
+                // limit. File transfer is durable and has no small-packet cap.
+                do {
+                    let directory = WorkoutEnergyStore.shared.directory.appendingPathComponent("Outgoing", isDirectory: true)
+                    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                    // A late completion from an earlier attempt must only
+                    // remove its own file, never a newly queued retry's file.
+                    let file = directory.appendingPathComponent(UUID().uuidString + ".json")
+                    try JSONEncoder().encode(report).write(to: file, options: .atomic)
+                    WCSession.default.transferFile(file, metadata: [
+                        WatchMessageKey.messageType: WatchMessageKey.energyReport,
+                        WatchMessageKey.workoutID: report.workoutID.uuidString,
+                        WatchMessageKey.energySessionID: report.id.uuidString
+                    ])
+                } catch { print("[WorkoutManager] Couldn’t queue calories: \(error)") }
+                continue
+            }
+            guard !transfers.contains(where: {
+                $0.userInfo[WatchMessageKey.messageType] as? String == WatchMessageKey.energyReport
+                    && $0.userInfo[WatchMessageKey.energySessionID] as? String == report.id.uuidString
+                    && $0.userInfo[WatchMessageKey.energyFinalized] as? Bool == report.finalized
+            }), let data = try? JSONEncoder().encode(report) else { continue }
+            let message: [String: Any] = [WatchMessageKey.messageType: WatchMessageKey.energyReport,
+                                         WatchMessageKey.energySessionID: report.id.uuidString,
+                                         WatchMessageKey.workoutID: report.workoutID.uuidString,
+                                         WatchMessageKey.energyFinalized: report.finalized, WatchMessageKey.workoutRecord: data]
+            WCSession.default.transferUserInfo(message)
+            // Announce the expectation before a short phone-led workout ends.
+            if WCSession.default.isReachable {
+                WCSession.default.sendMessage(message, replyHandler: nil, errorHandler: nil)
+            }
+        }
+    }
+
+    func acknowledgeEnergy(_ message: [String: Any]) {
+        guard let rawID = message[WatchMessageKey.energySessionID] as? String, let id = UUID(uuidString: rawID),
+              let rawWorkout = message[WatchMessageKey.workoutID] as? String, let workout = UUID(uuidString: rawWorkout),
+              let report = try? WorkoutEnergyStore.shared.reports(for: workout).first(where: { $0.id == id }),
+              report.finalized else { return }
+        try? WorkoutEnergyStore.shared.remove(sessionID: id, workoutID: workout)
     }
     private func clearReading() {
         expiryWork?.cancel()
@@ -246,6 +378,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             self.isSessionActive = toState != .ended && toState != .stopped
             if toState == .stopped { workoutSession.end() }
             if toState == .ended {
+                self.finishEnergy(at: date)
                 if !self.isStopping {
                     self.lastSessionError = "The Watch heart-rate session ended. Tap Retry Heart Rate to reconnect."
                 }
@@ -269,6 +402,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                 return
             }
             guard workoutSession === self.session else { return }
+            self.finishEnergy(at: Date())
             self.isSessionActive = false
             self.clearReading()
             self.builder = nil
@@ -287,6 +421,13 @@ extension WorkoutManager: HKLiveWorkoutBuilderDelegate {
 
     func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder,
                         didCollectDataOf collectedTypes: Set<HKSampleType>) {
+
+        if collectedTypes.contains(HKQuantityType(.activeEnergyBurned)) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, workoutBuilder === self.builder, !self.isStopping else { return }
+                self.checkpointEnergy(at: Date())
+            }
+        }
 
         guard let hrType = HKQuantityType.quantityType(forIdentifier: .heartRate),
               collectedTypes.contains(hrType) else { return }

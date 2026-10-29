@@ -17,6 +17,11 @@ enum WatchMessageKey {
     static let cmdFinish            = "cmd_finish"
     static let cmdDiscard           = "cmd_discard"
     static let cmdDeleteCompleted   = "cmd_deleteCompleted"
+    static let cmdAddBonus          = "cmd_addBonus"
+    static let cmdUndoBonus         = "cmd_undoBonus"
+    static let bonusRoundEnabled    = "bonusRoundEnabled"
+    static let bonusInsertionIndex  = "bonusInsertionIndex"
+    static let bonusRecoveryDuration = "bonusRecoveryDuration"
     static let cmdRequestState      = "request_state"
     // Phone → Watch: resend the latest still-fresh sensor sample.
     static let cmdRequestHeartRate  = "request_heart_rate"
@@ -63,4 +68,9 @@ enum WatchMessageKey {
     static let heartRate            = "hr_update"
     static let hrBPM                = "hrBPM"               // Double
     static let hrTimestamp          = "hrTimestamp"         // Double (timeIntervalSince1970)
+    static let energyReport         = "energy_report"
+    static let energyAck            = "energy_ack"
+    static let energySessionID      = "energySessionID"
+    static let energySessionStart   = "energySessionStart"
+    static let energyFinalized      = "energyFinalized"
 }

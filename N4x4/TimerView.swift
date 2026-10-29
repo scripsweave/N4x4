@@ -770,7 +770,7 @@ struct StreakHistoryView: View {
             HStack {
                 VStack(alignment: .leading) {
                     Text("Type").font(.caption).foregroundColor(.secondary)
-                    Text(workout.workoutType.rawValue).font(.body.weight(.medium))
+                    Text(workout.displayTitle).font(.body.weight(.medium))
                 }
                 Spacer()
                 VStack(alignment: .trailing) {

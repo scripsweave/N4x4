@@ -1,5 +1,31 @@
 # N4x4 — Session Handoff
 
+> **5.12 release preparation (2026-10-29):** User authorized App Store release
+> of calories, FIT export, workout names, optional bonus round and voice picker.
+> All six shipping configs are 5.12 and the Release build passes. 5.11 is live.
+> Read [`SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md`](SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md)
+> for release verification and current submission status.
+
+> **Voice picker (2026-10-29, unreleased):** Settings → Audio now offers
+> installed Apple English voices and Preview Voice. The current default stays
+> unchanged. Read [`SESSION-HANDOFF-2026-10-29-VOICES.md`](SESSION-HANDOFF-2026-10-29-VOICES.md)
+> for behavior, validation and the unsent voice/bonus requester reply.
+> All preceding calorie/FIT/naming/bonus changes remain included. No push or release.
+
+> **FIT, names and bonus round (2026-10-29, unreleased):** Added FIT activity
+> export, editable workout names, activity-specific Health export metadata,
+> and a final-work-interval bonus round behind an off-by-default setting.
+> Read [`SESSION-HANDOFF-2026-10-29-FIT-BONUS.md`](SESSION-HANDOFF-2026-10-29-FIT-BONUS.md)
+> for current validation, the unsent reply draft and Apple voice findings.
+> The preceding calorie changes remain included. No release or push performed.
+
+> **Calories implementation (2026-10-29, unreleased):**
+> `feature/workout-calories` adds Watch Active Energy to new Health workouts,
+> using original Health sample UUIDs to avoid duplicate energy entries. Read
+> [`SESSION-HANDOFF-2026-10-29-CALORIES.md`](SESSION-HANDOFF-2026-10-29-CALORIES.md)
+> for validation and the required physical-device check. Version remains 5.11;
+> no push or submission has been performed.
+
 > **5.11 submitted (2026-10-27):** Complete workout export from the saved
 > summary and History: all recorded stages/targets, retained HR samples,
 > interval statistics, performance/notes and pause timing in self-describing

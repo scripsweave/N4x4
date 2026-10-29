@@ -52,6 +52,16 @@ struct WatchTimerState: Equatable {
     var workoutID: String? = nil
     var workoutSaved: Bool = false
     var endedEarly: Bool = false
+    var bonusRoundEnabled = false
+    var bonusInsertionIndex: Int? = nil
+    var bonusRecoveryDuration: Double? = nil
+    var canAddBonusRound: Bool {
+        bonusRoundEnabled && sessionStarted && !workoutComplete && bonusInsertionIndex == nil
+            && phase == .highIntensity && currentIntervalIndex == planPhases.lastIndex(of: .highIntensity)
+    }
+    var canUndoBonusRound: Bool {
+        sessionStarted && !workoutComplete && bonusInsertionIndex.map { currentIntervalIndex < $0 } == true
+    }
 
     /// While running, derive the countdown live from the absolute end-time so no
     /// per-second messages are needed. While paused, the end-time is a stale
@@ -108,7 +118,8 @@ struct WatchTimerState: Equatable {
             recoveryLow: recoveryLow, recoveryHigh: recoveryHigh,
             zoneHapticEnabled: zoneHapticEnabled,
             intervalHapticsEnabled: intervalHapticsEnabled,
-            workoutTypeRaw: workoutTypeRaw
+            workoutTypeRaw: workoutTypeRaw, bonusRoundEnabled: bonusRoundEnabled,
+            bonusRecoveryDuration: bonusRecoveryDuration
         )
     }
 
@@ -174,6 +185,8 @@ struct WatchTimerState: Equatable {
         s.planPhases = plan.phases
         s.planDurations = plan.durations
         s.totalIntervals = plan.totalIntervals
+        s.bonusRoundEnabled = plan.bonusRoundEnabled == true
+        s.bonusRecoveryDuration = plan.bonusRecoveryDuration
         s.workLow = plan.workLow; s.workHigh = plan.workHigh
         s.recoveryLow = plan.recoveryLow; s.recoveryHigh = plan.recoveryHigh
         s.zoneHapticEnabled = plan.zoneHapticEnabled
@@ -201,6 +214,9 @@ extension WatchWorkoutEngine {
         s.sessionStarted = true
         s.workoutID = id.uuidString
         s.currentIntervalIndex = currentIndex
+        s.bonusRoundEnabled = plan.bonusRoundEnabled == true
+        s.bonusRecoveryDuration = plan.bonusRecoveryDuration
+        s.bonusInsertionIndex = bonusInsertionIndex
         return s
     }
 }
@@ -246,6 +262,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     private var lastEnginePersist = Date.distantPast
     /// Root-owned WorkoutManager supplies fresh HR without tying transport to a screen.
     var onHeartRateRefreshRequested: (() -> Void)?
+    var onEnergyAcknowledgement: (([String: Any]) -> Void)?
 
     /// Drives haptic nudges when the wearer drifts out of zone.
     private let zoneEngine = ZoneFeedbackEngine()
@@ -331,6 +348,17 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         case .mirror:
             guard isReachable else { return }
             sendCommand(WatchMessageKey.cmdSkip)
+        }
+    }
+
+    func toggleBonusRound(now: Date = Date()) {
+        if mode == .local {
+            if timerState.canUndoBonusRound { engine?.undoBonusRound(now: now) }
+            else { engine?.addBonusRound(now: now) }
+            persistEngine(force: true)
+            tick(now: now)
+        } else if isReachable {
+            sendBoundCommand(timerState.canUndoBonusRound ? WatchMessageKey.cmdUndoBonus : WatchMessageKey.cmdAddBonus)
         }
     }
 
@@ -471,9 +499,10 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
                 // anything else rides the 30 s HR-sample throttle.
                 persistEngine(force: e.isComplete || e.currentIndex != previousIndex)
             }
-            if e.isComplete, let record = e.completedRecord(),
+            if e.isComplete, var record = e.completedRecord(),
                !pendingWorkouts.contains(where: { $0.id == record.id }),
                lastAckedWorkoutID != record.id {
+                record.expectsWatchEnergy = (try? WorkoutEnergyStore.shared.reports(for: record.id).isEmpty) != true
                 pendingWorkouts.append(record)
                 persistPending()
                 persistEngine(force: true)
@@ -643,7 +672,12 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func cachePlan(from state: WatchTimerState) {
-        guard let plan = state.plan, plan != cachedPlan else { return }
+        guard var plan = state.plan else { return }
+        if let index = state.bonusInsertionIndex, plan.steps.indices.contains(index + 1) {
+            plan.steps.removeSubrange(index...(index + 1))
+            plan.totalIntervals -= 1
+        }
+        guard plan != cachedPlan else { return }
         cachedPlan = plan
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         if let data = try? encoder.encode(plan) {
@@ -718,15 +752,22 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         case WatchMessageKey.cmdRequestHeartRate: onHeartRateRefreshRequested?()
         case WatchMessageKey.stateSync:  applyStatePayload(p)
         case WatchMessageKey.workoutAck: handleAck(p)
+        case WatchMessageKey.energyAck: onEnergyAcknowledgement?(p)
         default: break
         }
+    }
+
+    func session(_ session: WCSession, didFinish fileTransfer: WCSessionFileTransfer, error: Error?) {
+        guard fileTransfer.file.metadata?[WatchMessageKey.messageType] as? String == WatchMessageKey.energyReport else { return }
+        // The acknowledged manifest is separate and survives failed delivery.
+        try? FileManager.default.removeItem(at: fileTransfer.file.fileURL)
     }
 
     // MARK: - State parsing
 
     private func applyStatePayload(_ p: [String: Any]) {
         guard stateInbox.accept(p) else { return }
-        let state = WatchTimerState(
+        var state = WatchTimerState(
             isRunning:            p[WatchMessageKey.isRunning]            as? Bool   ?? false,
             intervalEndTime:      Date(timeIntervalSince1970:
                                     p[WatchMessageKey.intervalEndTime]    as? Double ?? 0),
@@ -760,6 +801,11 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
             workoutSaved:         p[WatchMessageKey.workoutSaved]         as? Bool ?? false,
             endedEarly:           p[WatchMessageKey.endedEarly]           as? Bool ?? false
         )
+        // Missing keys are safe for an older phone build.
+        state.bonusRoundEnabled = p[WatchMessageKey.bonusRoundEnabled] as? Bool ?? false
+        let bonusIndex = p[WatchMessageKey.bonusInsertionIndex] as? Int ?? -1
+        state.bonusInsertionIndex = bonusIndex >= 0 ? bonusIndex : nil
+        state.bonusRecoveryDuration = p[WatchMessageKey.bonusRecoveryDuration] as? Double
         lastPhoneState = state
         hasReceivedState = true
         cachePlan(from: state)

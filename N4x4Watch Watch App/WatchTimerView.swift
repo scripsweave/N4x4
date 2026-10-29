@@ -312,6 +312,14 @@ struct WatchTimerView: View {
                 .disabled(!state.isRunning || !canControl)
                 .opacity(state.isRunning && canControl ? 1 : 0.45)
 
+                if state.canAddBonusRound || state.canUndoBonusRound {
+                    Button(state.canUndoBonusRound ? "UNDO BONUS ROUND" : "+1 BONUS ROUND") {
+                        sessionManager.toggleBonusRound()
+                    }
+                    .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.electricBlue, outlined: true))
+                    .disabled(!canControl)
+                }
+
                 Button {
                     finishingWorkoutID = sessionManager.currentWorkoutID
                     showEndAlert = true

@@ -95,6 +95,9 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.recoveryHRLow:          vm.recoveryTargetRange.lowerBound,
             WatchMessageKey.recoveryHRHigh:         vm.recoveryTargetRange.upperBound,
             WatchMessageKey.workoutTypeRaw:         vm.resolvedDefaultWorkoutType.rawValue,
+            WatchMessageKey.bonusRoundEnabled:      vm.bonusRoundEnabled,
+            WatchMessageKey.bonusInsertionIndex:    vm.bonusInsertionIndex ?? -1,
+            WatchMessageKey.bonusRecoveryDuration:  vm.sessionRecoveryDuration ?? vm.restDuration,
         ]
 
         // Publish the newest context now. An old send's error callback must
@@ -203,6 +206,15 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
         DispatchQueue.main.async { [weak self] in self?.handle(userInfo) }
     }
 
+    func session(_ session: WCSession, didReceive file: WCSessionFile) {
+        guard var message = file.metadata,
+              message[WatchMessageKey.messageType] as? String == WatchMessageKey.energyReport,
+              // WCSession removes its temporary file when this callback returns.
+              let data = try? Data(contentsOf: file.fileURL) else { return }
+        message[WatchMessageKey.workoutRecord] = data
+        DispatchQueue.main.async { [weak self] in self?.handle(message) }
+    }
+
     // MARK: - Incoming message routing
 
     private func handle(_ message: [String: Any]) {
@@ -214,7 +226,8 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             if vm.isRunning { vm.pause() } else { vm.startTimer() }
         case WatchMessageKey.cmdSkip:
             vm.skip()
-        case WatchMessageKey.cmdFinish, WatchMessageKey.cmdDiscard, WatchMessageKey.cmdDeleteCompleted:
+        case WatchMessageKey.cmdFinish, WatchMessageKey.cmdDiscard, WatchMessageKey.cmdDeleteCompleted,
+             WatchMessageKey.cmdAddBonus, WatchMessageKey.cmdUndoBonus:
             if let rawID = message[WatchMessageKey.workoutID] as? String, let id = UUID(uuidString: rawID) {
                 vm.handleWorkoutCommand(type, workoutID: id)
             }
@@ -228,6 +241,18 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             vm.ingestWatchHeartRate(message)
         case WatchMessageKey.workoutCompleted:
             handleCompletedWatchWorkout(message, vm: vm)
+        case WatchMessageKey.energyReport:
+            guard let data = message[WatchMessageKey.workoutRecord] as? Data,
+                  let report = try? JSONDecoder().decode(WorkoutEnergyReport.self, from: data),
+                  message[WatchMessageKey.workoutID] as? String == report.workoutID.uuidString,
+                  message[WatchMessageKey.energySessionID] as? String == report.id.uuidString,
+                  vm.receiveWatchEnergy(report), report.finalized,
+                  WCSession.default.activationState == .activated else { return }
+            WCSession.default.transferUserInfo([
+                WatchMessageKey.messageType: WatchMessageKey.energyAck,
+                WatchMessageKey.workoutID: report.workoutID.uuidString,
+                WatchMessageKey.energySessionID: report.id.uuidString
+            ])
         case WatchMessageKey.workoutDiscard:
             if let idString = message[WatchMessageKey.workoutID] as? String,
                let id = UUID(uuidString: idString) {

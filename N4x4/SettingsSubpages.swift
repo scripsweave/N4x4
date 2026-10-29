@@ -5,6 +5,7 @@
 // TimerViewModel — this file moves UI, not logic.
 
 import SwiftUI
+import AVFoundation
 import WatchConnectivity
 import HealthKit
 import UIKit
@@ -222,6 +223,12 @@ struct IntervalSettingsView: View {
                 Toggle("Confirm Cool-Down Skip", isOn: $viewModel.confirmSkipCooldown)
                 Toggle("Confirm Other Skips", isOn: $viewModel.confirmSkipOtherIntervals)
             }
+            Section {
+                Toggle("Show Bonus Round Button", isOn: $viewModel.bonusRoundEnabled)
+                    .accessibilityIdentifier("bonus-round-setting")
+            } header: { Text("Bonus Round") } footer: {
+                Text("Show +1 Bonus Round during the final work interval on iPhone and Watch. Adds recovery and one more work interval before cooldown, for this workout only.")
+            }
         }
         .navigationTitle("Intervals")
         .navigationBarTitleDisplayMode(.inline)
@@ -232,6 +239,7 @@ struct IntervalSettingsView: View {
 
 struct AudioSettingsView: View {
     @ObservedObject var viewModel: TimerViewModel
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Form {
@@ -245,6 +253,37 @@ struct AudioSettingsView: View {
             }
 
             if viewModel.audioMode == .voice {
+                Section {
+                    Picker("Voice", selection: $viewModel.speechVoiceIdentifier) {
+                        Text("Default (current voice)").tag("")
+                        if viewModel.selectedSpeechVoiceUnavailable {
+                            Text("Unavailable voice (using default)").tag(viewModel.speechVoiceIdentifier)
+                        }
+                        ForEach(viewModel.speechVoiceOptions) { voice in
+                            Text(voice.label).tag(voice.id)
+                                .accessibilityIdentifier("speech-voice-option-\(voice.id)")
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .accessibilityIdentifier("speech-voice-picker")
+                    Button {
+                        viewModel.previewSpeechVoice()
+                    } label: {
+                        Label("Preview Voice", systemImage: "play.circle")
+                    }
+                    .accessibilityIdentifier("speech-voice-preview")
+                    .disabled(viewModel.workoutStartDate != nil || viewModel.isRunning)
+                    if viewModel.selectedSpeechVoiceUnavailable {
+                        Text("Your selected voice is no longer installed. The default voice is used until it becomes available again.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                    if viewModel.workoutStartDate != nil {
+                        Text("Preview is available between workouts. Voice changes apply to the next spoken cue.")
+                            .font(.footnote).foregroundStyle(.secondary)
+                    }
+                } header: { Text("Spoken Voice") } footer: {
+                    Text(voiceHelp)
+                }
                 Section(header: Text("Voice Prompts")) {
                     Toggle("Halfway Prompts", isOn: $viewModel.halfwayVoicePromptsEnabled)
                     Toggle("10-Second Warnings", isOn: $viewModel.tenSecondVoicePromptsEnabled)
@@ -253,6 +292,24 @@ struct AudioSettingsView: View {
         }
         .navigationTitle("Audio")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { viewModel.refreshSpeechVoiceOptions() }
+        .onReceive(NotificationCenter.default.publisher(for: AVSpeechSynthesizer.availableVoicesDidChangeNotification)
+            .receive(on: DispatchQueue.main)) { _ in
+            viewModel.refreshSpeechVoiceOptions()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { viewModel.refreshSpeechVoiceOptions() }
+            else { viewModel.stopSpeechVoicePreview() }
+        }
+        .onChange(of: viewModel.audioMode) { _, _ in viewModel.stopSpeechVoicePreview() }
+        .onDisappear { viewModel.stopSpeechVoicePreview() }
+    }
+
+    private var voiceHelp: String {
+        let settings: String
+        if #available(iOS 26.0, *) { settings = "Read & Speak" }
+        else { settings = "Spoken Content" }
+        return "The default voice stays unchanged. Choose an installed Apple voice for English cues. For more voices, open iPhone Settings → Accessibility → \(settings) → Voices → English and download an Enhanced or Premium voice, then return here."
     }
 
     private var modeDescription: String {

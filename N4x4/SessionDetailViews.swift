@@ -636,6 +636,12 @@ private struct WorkoutShareMenu: View {
     var body: some View {
         Menu {
             if let export {
+                if let fit = export.fitFile {
+                    ShareLink(item: fit, preview: SharePreview(export.entry.displayTitle)) {
+                        Label("Export Activity (FIT)", systemImage: "doc.badge.arrow.up")
+                    }
+                    .accessibilityIdentifier("export-workout-fit")
+                }
                 ShareLink(item: export, preview: SharePreview("N4x4 Workout")) {
                     Label("Export Workout (JSON)", systemImage: "doc.badge.arrow.up")
                 }
@@ -811,6 +817,16 @@ struct PostWorkoutSummaryRedesignView: View {
 
     private var logSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("WORKOUT NAME")
+            TextField(WorkoutLogEntry.defaultTitle(for: viewModel.selectedWorkoutType, bonus: viewModel.performedBonusRounds > 0),
+                      text: $viewModel.workoutTitleDraft)
+                .accessibilityLabel("Workout name")
+                .accessibilityIdentifier("workout-title")
+                .textInputAutocapitalization(.sentences)
+                .padding(14)
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+            Text("Names update History and exported files. A workout already saved to Apple Health keeps its original name.")
+                .font(.footnote).foregroundStyle(.secondary)
             sectionTitle("NOTES")
             TextField("Session notes (optional)", text: $viewModel.workoutNotesDraft, axis: .vertical)
                 .accessibilityIdentifier("workout-notes")
@@ -850,7 +866,7 @@ struct PostWorkoutSummaryRedesignView: View {
         formatter.dateStyle = .medium
         shareImage = renderShareCard(
             series: series,
-            title: viewModel.selectedWorkoutType.rawValue,
+            title: viewModel.completedWorkoutEntryID.flatMap { id in viewModel.workoutLogEntries.first { $0.id == id }?.displayTitle } ?? viewModel.selectedWorkoutType.rawValue,
             dateText: formatter.string(from: Date()),
             duration: durationText,
             summary: summary
@@ -909,6 +925,16 @@ struct SessionDetailSheet: View {
                         max: entry.hrSummary?.maxBPM,
                         inZonePct: entry.hrSummary?.workInZonePct
                     )
+
+                    TextField(entry.displayTitle, text: Binding(
+                        get: { viewModel.workoutLogEntries.first { $0.id == entry.id }?.customTitle ?? "" },
+                        set: { viewModel.updateWorkoutTitle($0, for: entry.id) }))
+                        .accessibilityLabel("Workout name")
+                        .accessibilityIdentifier("history-workout-title")
+                        .padding(14)
+                        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+                    Text("Names update History and exported files. A workout already saved to Apple Health keeps its original name.")
+                        .font(.footnote).foregroundStyle(.secondary)
 
                     if let series {
                         sectionTitle("SESSION")
@@ -1042,7 +1068,7 @@ struct SessionDetailSheet: View {
             formatter.dateStyle = .medium
             shareImage = renderShareCard(
                 series: series,
-                title: entry.workoutType.rawValue,
+            title: viewModel.workoutLogEntries.first(where: { $0.id == entry.id })?.displayTitle ?? entry.displayTitle,
                 dateText: formatter.string(from: entry.completedAt),
                 duration: mmss(entry.sessionBreakdown?.totalDuration ?? 0),
                 summary: entry.hrSummary

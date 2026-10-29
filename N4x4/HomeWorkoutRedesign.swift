@@ -1136,7 +1136,8 @@ struct WorkoutScreen: View {
 
     private func portraitWorkout(size: CGSize) -> some View {
         let compact = size.height < 650 && !dynamicTypeSize.isAccessibilitySize
-        let ringSide = min(330, max(180, size.height - (compact ? 365 : 390)) * 1.1, size.width - 40)
+        let bonusVisible = viewModel.canAddBonusRound || viewModel.canUndoBonusRound
+        let ringSide = min(bonusVisible ? 270 : 330, max(180, size.height - (compact ? 365 : 390)) * 1.1, size.width - 40)
         return VStack(spacing: compact ? 8 : 12) {
             header
             IntervalTimelineBar(viewModel: viewModel, showProgress: !compact)
@@ -1148,6 +1149,7 @@ struct WorkoutScreen: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 8)
+        .padding(.bottom, bonusVisible ? 48 : 0)
         .frame(minHeight: size.height)
     }
 
@@ -1163,7 +1165,12 @@ struct WorkoutScreen: View {
                 header
                 HRZoneBar(viewModel: viewModel, landscape: true,
                           onMissingHeartRateTap: { showWatchHelp = true })
-                controls
+                HStack(spacing: 10) {
+                    primaryControls
+                    if viewModel.canAddBonusRound || viewModel.canUndoBonusRound {
+                        bonusButton(compact: true).frame(width: 100)
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
         }
@@ -1214,6 +1221,7 @@ struct WorkoutScreen: View {
     }
 
     private var roundText: String {
+        if viewModel.bonusInsertionIndex.map({ viewModel.currentIntervalIndex == $0 + 1 }) == true { return "BONUS ROUND" }
         switch viewModel.currentIntervalType {
         case .warmup:        return "WARM UP"
         case .highIntensity: return "ROUND \(viewModel.highIntensityCount) OF \(viewModel.sessionIntervalCount)"
@@ -1224,6 +1232,38 @@ struct WorkoutScreen: View {
     }
 
     private var controls: some View {
+        VStack(spacing: 10) {
+            primaryControls
+            if viewModel.canAddBonusRound || viewModel.canUndoBonusRound {
+                bonusButton(compact: false)
+            }
+        }
+    }
+
+    private func bonusButton(compact: Bool) -> some View {
+        Button {
+            if viewModel.canUndoBonusRound { viewModel.undoBonusRound() }
+            else { viewModel.addBonusRound() }
+        } label: {
+            if compact {
+                controlLabel(icon: viewModel.canUndoBonusRound ? "arrow.uturn.backward" : "plus",
+                             text: viewModel.canUndoBonusRound ? "UNDO" : "BONUS")
+            } else {
+                Label(viewModel.canUndoBonusRound ? "Undo Bonus Round" : "+1 Bonus Round",
+                      systemImage: viewModel.canUndoBonusRound ? "arrow.uturn.backward" : "plus.circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.electricBlue)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("bonus-round-button")
+        .accessibilityLabel(viewModel.canUndoBonusRound ? "Undo Bonus Round" : "+1 Bonus Round")
+        .accessibilityHint("Adds recovery and one more work interval before cooldown")
+    }
+
+    private var primaryControls: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 12))
             : AnyLayout(HStackLayout(spacing: 16))
@@ -1779,7 +1819,7 @@ struct RedesignHistoryView: View {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(Palette.recovery)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(workout.workoutType.rawValue)
+                            Text(workout.displayTitle)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(Palette.textPrimary)
                             Text(workout.completedAt.formatted(date: .abbreviated, time: .shortened))

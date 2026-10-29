@@ -56,7 +56,10 @@ struct HealthDevicesView: View {
             }
             statusRow("Workout write permission", value: permissionText(viewModel.healthKitPermissionState))
             statusRow("Heart Rate write permission", value: permissionText(viewModel.heartRateWritePermissionState))
+            statusRow("Active Energy write permission", value: permissionText(viewModel.energyWritePermissionState))
             Text("Allow Heart Rate write access to include recorded readings with new workouts in Apple Health and Fitness. Workouts can still save without it.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Text("Apple Watch calories are included with new workouts when Active Energy read and write access is allowed. Your Watch must run N4x4 during the workout. Calorie data may take time to sync; workouts without Watch calorie data still save.")
                 .font(.footnote).foregroundStyle(.secondary)
             if let saved = viewModel.latestHealthSave {
                 statusRow("Last confirmed save", value: saved.formatted(date: .abbreviated, time: .shortened))
@@ -76,7 +79,7 @@ struct HealthDevicesView: View {
                     .disabled(!viewModel.healthSavingEnabled || !viewModel.healthAuthorizationGranted)
             }
             Button("Review Health Access") { viewModel.requestHealthKitAuthorizationIfNeeded() }
-            Text("To change an existing permission, open Settings → Privacy & Security → Health → N4x4. Allow Workouts and Heart Rate under write access. Read permissions are separate.")
+            Text("To change an existing permission, open Settings → Privacy & Security → Health → N4x4. Allow Workouts, Heart Rate and Active Energy under write access, and Active Energy under read access. Read permissions cannot be confirmed by the app.")
                 .font(.footnote).foregroundStyle(.secondary)
         } header: {
             Label("Apple Health", systemImage: "heart.text.square")
@@ -229,6 +232,9 @@ struct WorkoutHealthSaveView: View {
                     NavigationLink("Review Health & Devices") { HealthDevicesView(viewModel: viewModel) }
                 }
             }
+            if let energyStatus = viewModel.healthEnergyStatus(for: id) {
+                Text(energyStatus).font(.footnote).foregroundStyle(.secondary)
+            }
             if let error = viewModel.workoutLogEntries.first(where: { $0.id == id })?.healthExport?.lastError {
                 Text(error).font(.footnote).foregroundStyle(.secondary)
             }
@@ -242,6 +248,10 @@ struct WorkoutHealthSaveView: View {
                 if state == .pending {
                     Button("Retry Health Save") { viewModel.retryHealthExports() }
                         .disabled(!viewModel.healthSavingEnabled || !viewModel.healthAuthorizationGranted)
+                    if viewModel.workoutLogEntries.first(where: { $0.id == id })?.healthExport?.energyContent == .awaitingWatch {
+                        Button("Save Without Calories") { viewModel.saveHealthWorkoutWithoutCalories(id) }
+                            .disabled(!viewModel.healthSavingEnabled || !viewModel.healthAuthorizationGranted)
+                    }
                 } else {
                     Button(checking ? "Checking Apple Health…" : "Save to Apple Health") {
                         checking = true

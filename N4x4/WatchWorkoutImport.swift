@@ -69,7 +69,10 @@ extension TimerViewModel {
             intervalPerformances: nil,
             hrSummary: hrSummary, endedEarly: record.endedEarly,
             healthExport: newHealthExport(start: record.startedAt, end: record.completedAt,
-                                         timing: record.activityTiming, activeDuration: record.totalSeconds)
+                                         timing: record.activityTiming, activeDuration: record.totalSeconds,
+                                         id: record.id, expectsWatchEnergy: record.expectsWatchEnergy == true,
+                                         workoutType: type, title: WorkoutLogEntry.defaultTitle(for: type, bonus: (record.bonusRounds ?? 0) > 0)),
+            bonusRounds: record.bonusRounds
         )
 
         // The record may arrive after newer phone sessions; keep newest-first.
@@ -97,6 +100,7 @@ extension TimerViewModel {
     /// The user discarded the workout on the Watch. Remove it if it already
     /// landed, and remember the id so a queued copy can't resurrect it.
     func discardWatchWorkout(id: UUID) {
+        energyStore.delete(for: id)
         pendingWatchImports.removeValue(forKey: id)
         var discarded = Self.ids(forKey: Self.discardedIDsKey)
         discarded.insert(id.uuidString)
@@ -104,6 +108,10 @@ extension TimerViewModel {
         if workoutLogEntries.contains(where: { $0.id == id }) {
             deleteWorkoutLogEntry(id: id)
         }
+    }
+
+    func isDiscardedWatchWorkout(_ id: UUID) -> Bool {
+        Self.ids(forKey: Self.discardedIDsKey).contains(id.uuidString)
     }
 
     private static func ids(forKey key: String) -> Set<String> {

@@ -5,18 +5,34 @@ import HealthKit
 private final class FakeHealthExportClient: HealthWorkoutExportClient {
     var authorization: HKAuthorizationStatus = .sharingAuthorized
     var heartRateAuthorization: HKAuthorizationStatus = .sharingAuthorized
+    var energyAuthorization: HKAuthorizationStatus = .sharingAuthorized
     var isAvailable = true
     var failSave = false
     var failQuery = false
+    var energyReady = true
     var calls: [UUID] = []
     var objects: [UUID: UUID] = [:]
     var heartRates: [UUID: [HealthWorkoutHeartRateSample]] = [:]
     var contents: [UUID: HealthWorkoutExport.HeartRateContent] = [:]
+    var energyContents: [UUID: HealthWorkoutExport.EnergyContent] = [:]
+    var calories: [UUID: Double] = [:]
     var exports: [HealthWorkoutExport] = []
     var candidates: [HealthWorkoutMatch] = []
     var onSave: (() -> Void)?
     var hold = false
     var continuation: CheckedContinuation<Void, Never>?
+    var holdPreparation = false
+    var onPreparation: (() -> Void)?
+    var preparationContinuation: CheckedContinuation<Void, Never>?
+    func prepareEnergy(_ export: HealthWorkoutExport, id: UUID) async throws {
+        if holdPreparation {
+            await withCheckedContinuation { continuation in
+                preparationContinuation = continuation
+                onPreparation?()
+            }
+        }
+        if export.energyContent == .included && !energyReady { throw HealthExportError.waitingForHealthEnergy }
+    }
     func save(_ export: HealthWorkoutExport, id: UUID,
               heartRateSamples: [HealthWorkoutHeartRateSample] = []) async throws -> HealthWorkoutSaveResult {
         calls.append(id)
@@ -28,7 +44,14 @@ private final class FakeHealthExportClient: HealthWorkoutExportClient {
             }
         }
         if failSave { throw HealthExportError.unconfirmed }
-        if let result = objects[id] { return HealthWorkoutSaveResult(id: result, heartRateContent: contents[id]) }
+        if let result = objects[id] {
+            return HealthWorkoutSaveResult(id: result, heartRateContent: contents[id],
+                                           energyContent: energyContents[id], activeEnergyKilocalories: calories[id])
+        }
+        if export.energyContent == .included {
+            guard energyReady else { throw HealthExportError.waitingForHealthEnergy }
+            guard energyAuthorization == .sharingAuthorized else { throw HealthExportError.energyPermission }
+        }
         if export.heartRateContent == .included && heartRateAuthorization != .sharingAuthorized {
             throw HealthExportError.heartRatePermission
         }
@@ -36,7 +59,10 @@ private final class FakeHealthExportClient: HealthWorkoutExportClient {
         objects[id] = result
         heartRates[id] = heartRateSamples
         contents[id] = export.heartRateContent
-        return HealthWorkoutSaveResult(id: result, heartRateContent: export.heartRateContent)
+        energyContents[id] = export.energyContent
+        calories[id] = export.activeEnergyKilocalories
+        return HealthWorkoutSaveResult(id: result, heartRateContent: export.heartRateContent,
+                                       energyContent: export.energyContent, activeEnergyKilocalories: export.activeEnergyKilocalories)
     }
     func matches(_ export: HealthWorkoutExport, id: UUID) async throws -> [HealthWorkoutMatch] {
         if failQuery { throw HealthExportError.unavailable }
@@ -56,9 +82,10 @@ final class HealthWorkoutExportTests: XCTestCase {
 
     @MainActor
     private func model(_ client: FakeHealthExportClient, checkpoint: URL? = nil,
+                       energyStore: WorkoutEnergyStore = .shared,
                        seriesSaver: @escaping (HeartRateSeries, UUID) -> Bool = { HeartRateSeriesStore.save($0, for: $1) }) -> TimerViewModel {
         let vm = TimerViewModel(checkpointURL: checkpoint ?? FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("current.json"),
-                                healthExportClient: client, seriesSaver: seriesSaver)
+                                healthExportClient: client, energyStore: energyStore, seriesSaver: seriesSaver)
         vm.healthKitEnabled = true
         vm.logWorkoutsToHealthKit = true
         vm.audioMode = .silent
@@ -880,5 +907,344 @@ extension HealthWorkoutExportTests {
         valid.finish(at: start + 20)
         XCTAssertFalse(HealthWorkoutExport(start: start, end: start + 20, requested: true,
                                           timing: valid, activeDuration: 10).isValid)
+    }
+}
+
+extension HealthWorkoutExportTests {
+    private func calorieStore() -> WorkoutEnergyStore {
+        WorkoutEnergyStore(directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("N4x4-EnergyTests-" + UUID().uuidString))
+    }
+
+    private func calorieTimeline() -> WorkoutActivityTiming {
+        let start = Date(timeIntervalSince1970: 1_790_000_000.125)
+        var timing = WorkoutActivityTiming(startedAt: start)
+        timing.pause(at: start + 100)
+        timing.resume(at: start + 200)
+        timing.finish(at: start + 300)
+        return timing
+    }
+
+    private func calorieReport(id: UUID, timing: WorkoutActivityTiming, finalized: Bool = true) -> WorkoutEnergyReport {
+        WorkoutEnergyReport(id: UUID(), workoutID: id, start: timing.start, end: timing.end,
+            samples: [WorkoutEnergySample(id: UUID(), start: timing.start + 5, end: timing.start + 90, kilocalories: 12.25),
+                      WorkoutEnergySample(id: UUID(), start: timing.start + 205, end: timing.start + 290, kilocalories: 16.75)],
+            finalized: finalized)
+    }
+
+    @MainActor
+    private func calorieEntry(_ vm: TimerViewModel, id: UUID, timing: WorkoutActivityTiming) -> WorkoutLogEntry {
+        WorkoutLogEntry(id: id, completedAt: Date(timeIntervalSince1970: timing.end!), workoutType: .treadmill,
+            notes: "", healthExport: vm.newHealthExport(start: Date(timeIntervalSince1970: timing.start),
+                end: Date(timeIntervalSince1970: timing.end!), timing: timing,
+                activeDuration: timing.activeDuration, id: id, expectsWatchEnergy: true))
+    }
+
+    func testEnergyManifestExcludesPausesBoundaryCrossingsAndDeduplicatesRestarts() throws {
+        let store = calorieStore()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let id = UUID(), timing = calorieTimeline()
+        var report = calorieReport(id: id, timing: timing)
+        let valid = report.samples
+        report.samples += [
+            .init(id: UUID(), start: timing.start + 110, end: timing.start + 150, kilocalories: 10),
+            .init(id: UUID(), start: timing.start + 90, end: timing.start + 110, kilocalories: 3),
+            .init(id: UUID(), start: timing.start + 190, end: timing.start + 210, kilocalories: 3)
+        ]
+        try store.save(report)
+        let restart = WorkoutEnergyReport(id: UUID(), workoutID: id, start: timing.start,
+            end: timing.end, samples: valid, finalized: true)
+        try store.save(restart)
+        XCTAssertEqual(try store.samples(for: id, timing: timing), valid)
+        XCTAssertEqual(try store.samples(for: id, timing: timing)?.reduce(0) { $0 + $1.kilocalories }, 29)
+        let decoded = try WorkoutEnergyStore(directory: store.directory).reports(for: id)
+        XCTAssertEqual(decoded.first?.start, timing.start, "Fractional Health dates must survive persistence")
+        XCTAssertEqual(decoded.count, 2)
+    }
+
+    func testEnergyManifestWaitsForEverySensorSessionAndRejectsOverlap() throws {
+        let store = calorieStore()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let id = UUID(), timing = calorieTimeline()
+        let report = calorieReport(id: id, timing: timing)
+        try store.save(report)
+        var next = WorkoutEnergyReport(id: UUID(), workoutID: id, start: timing.start,
+            end: timing.end, samples: [], finalized: false)
+        try store.save(next)
+        XCTAssertNil(try store.samples(for: id, timing: timing))
+        next.samples = [.init(id: UUID(), start: timing.start + 20, end: timing.start + 30, kilocalories: 5)]
+        next.finalized = true
+        try store.save(next)
+        XCTAssertThrowsError(try store.samples(for: id, timing: timing))
+    }
+
+    func testSealedEnergyManifestCannotBeDowngradedByDelayedPackets() throws {
+        let store = calorieStore()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let id = UUID(), timing = calorieTimeline()
+        let final = calorieReport(id: id, timing: timing)
+        try store.save(final)
+        var delayed = final
+        delayed.finalized = false
+        delayed.samples = []
+        try store.save(delayed)
+        XCTAssertEqual(try store.reports(for: id), [final])
+        delayed.finalized = true
+        try store.save(delayed)
+        XCTAssertEqual(try store.reports(for: id), [final])
+        var invalid = calorieReport(id: UUID(), timing: timing)
+        invalid.samples.append(invalid.samples[0])
+        XCTAssertThrowsError(try store.save(invalid))
+    }
+
+    func testEnergyExportUsesOriginalHealthObjectsAndWaitsForAllUUIDs() throws {
+        let start = Date(timeIntervalSince1970: 1_790_000_000.125)
+        let original = HKQuantitySample(type: HKQuantityType(.activeEnergyBurned),
+            quantity: HKQuantity(unit: .kilocalorie(), doubleValue: 12.25), start: start, end: start + 30)
+        let manifest = [WorkoutEnergySample(id: original.uuid, start: start.timeIntervalSince1970,
+            end: (start + 30).timeIntervalSince1970, kilocalories: 12.25)]
+        let resolved = try HealthWorkoutEnergySamples.verified([original], against: manifest)
+        XCTAssertTrue(resolved[0] === original, "Do not recreate already-saved Watch energy samples")
+        XCTAssertThrowsError(try HealthWorkoutEnergySamples.verified([], against: manifest))
+        let wrong = [WorkoutEnergySample(id: original.uuid, start: start.timeIntervalSince1970,
+            end: (start + 30).timeIntervalSince1970, kilocalories: 100)]
+        XCTAssertThrowsError(try HealthWorkoutEnergySamples.verified([original], against: wrong))
+    }
+
+    @MainActor
+    func testCaloriesSurviveRelaunchAndWaitForWatchThenHealthSync() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let vm = model(client, energyStore: store), id = UUID(), timing = calorieTimeline()
+        var report = calorieReport(id: id, timing: timing, finalized: false)
+        XCTAssertTrue(vm.receiveWatchEnergy(report))
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        XCTAssertTrue(vm.persistWorkoutLogEntries())
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertTrue(client.calls.isEmpty)
+        XCTAssertEqual(vm.pendingHealthExports, 1)
+        let restored = model(client, energyStore: store)
+        client.energyReady = false
+        report.finalized = true
+        XCTAssertTrue(restored.receiveWatchEnergy(report))
+        await restored.healthExportTask?.value
+        XCTAssertTrue(client.objects.isEmpty)
+        XCTAssertEqual(restored.workoutLogEntries.first?.healthExport?.energyContent, .awaitingWatch)
+        XCTAssertNil(restored.workoutLogEntries.first?.healthExport?.activeEnergyKilocalories)
+        client.energyReady = true
+        restored.retryHealthExports()
+        await restored.healthExportTask?.value
+        XCTAssertEqual(client.objects.count, 1)
+        XCTAssertEqual(client.calories[id], 29)
+        XCTAssertEqual(restored.workoutLogEntries.first?.healthExport?.state, .saved)
+        XCTAssertTrue(restored.healthEnergyStatus(for: id)?.contains("29 kcal") == true)
+        restored.retryHealthExports()
+        await restored.healthExportTask?.value
+        XCTAssertEqual(client.objects.count, 1)
+    }
+
+    @MainActor
+    func testEnergyPermissionDeniedDoesNotBlockWorkoutAndSavedWorkoutsAreNotBackfilled() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        client.energyAuthorization = .sharingDenied
+        let vm = model(client, energyStore: store), id = UUID(), timing = calorieTimeline()
+        XCTAssertTrue(vm.receiveWatchEnergy(calorieReport(id: id, timing: timing)))
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        let saved = try XCTUnwrap(vm.workoutLogEntries.first?.healthExport)
+        XCTAssertEqual(saved.state, .saved)
+        XCTAssertEqual(saved.energyContent, .permissionNotGranted)
+        XCTAssertNil(saved.activeEnergyKilocalories)
+        client.energyAuthorization = .sharingAuthorized
+        XCTAssertTrue(vm.receiveWatchEnergy(calorieReport(id: id, timing: timing)))
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport, saved)
+        XCTAssertEqual(client.calls.count, 1)
+    }
+
+    @MainActor
+    func testPreparedCaloriesCannotChangeOnRetryOrPermissionRevocation() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        client.failSave = true
+        let vm = model(client, energyStore: store), id = UUID(), timing = calorieTimeline()
+        let report = calorieReport(id: id, timing: timing)
+        XCTAssertTrue(vm.receiveWatchEnergy(report))
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        client.failSave = false
+        client.energyAuthorization = .sharingDenied
+        XCTAssertTrue(vm.receiveWatchEnergy(calorieReport(id: id, timing: timing)))
+        vm.saveHealthWorkoutWithoutCalories(id)
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.energyContent, .included)
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.activeEnergyKilocalories, 29)
+        XCTAssertTrue(client.objects.isEmpty)
+        XCTAssertEqual(try store.reports(for: id), [report])
+        client.energyAuthorization = .sharingAuthorized
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(client.calories[id], 29)
+        XCTAssertEqual(client.objects.count, 1)
+    }
+
+    @MainActor
+    func testExplicitSaveWithoutCaloriesAndLegacyExportDoNotWaitForWatch() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let vm = model(client, energyStore: store), id = UUID(), timing = calorieTimeline()
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        vm.saveHealthWorkoutWithoutCalories(id)
+        await vm.healthExportTask?.value
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.energyContent, .skipped)
+        XCTAssertEqual(client.objects.count, 1)
+        XCTAssertTrue(vm.receiveWatchEnergy(calorieReport(id: id, timing: timing)))
+        XCTAssertEqual(try store.reports(for: id), [])
+        let old = entry()
+        let roundTrip = try JSONDecoder().decode(WorkoutLogEntry.self, from: JSONEncoder().encode(old))
+        XCTAssertNil(roundTrip.healthExport?.energyContent)
+        vm.workoutLogEntries.append(old)
+        vm.retryHealthExports()
+        await vm.healthExportTask?.value
+        XCTAssertEqual(client.objects.count, 2)
+        XCTAssertNil(vm.healthEnergyStatus(for: old.id))
+    }
+
+    @MainActor
+    func testEnergyAcknowledgementRequiresDurableWriteAndDeletedWorkoutStaysDeleted() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data("not a directory".utf8).write(to: directory)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vm = model(FakeHealthExportClient(), energyStore: WorkoutEnergyStore(directory: directory))
+        let id = UUID(), timing = calorieTimeline()
+        let report = calorieReport(id: id, timing: timing)
+        XCTAssertFalse(vm.receiveWatchEnergy(report))
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        vm.deleteWorkoutLogEntry(id: id)
+        XCTAssertTrue(vm.receiveWatchEnergy(report))
+        XCTAssertTrue(vm.workoutLogEntries.isEmpty)
+    }
+
+    @MainActor
+    func testStandaloneEnergyReportMayArriveBeforeOrAfterWorkoutRecord() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let vm = model(client, energyStore: store)
+        let timing = calorieTimeline()
+        for reportFirst in [true, false] {
+            let id = UUID()
+            let report = calorieReport(id: id, timing: timing)
+            var record = CompletedWatchWorkout(id: id,
+                startedAt: Date(timeIntervalSince1970: timing.start),
+                completedAt: Date(timeIntervalSince1970: timing.end!), workoutTypeRaw: "Treadmill",
+                warmupSeconds: 100, highIntensitySeconds: 100, recoverySeconds: 0, cooldownSeconds: 0,
+                cooldownSkipped: true, samples: [], spans: [], activityTiming: timing)
+            record.expectsWatchEnergy = true
+            if reportFirst { XCTAssertTrue(vm.receiveWatchEnergy(report)) }
+            XCTAssertTrue(vm.importWatchWorkout(record))
+            XCTAssertTrue(vm.canAcknowledgeWatchWorkout(id))
+            await vm.healthExportTask?.value
+            if !reportFirst {
+                XCTAssertNil(client.objects[id])
+                XCTAssertTrue(vm.receiveWatchEnergy(report))
+            }
+            await vm.healthExportTask?.value
+            XCTAssertEqual(client.calories[id], 29)
+            XCTAssertEqual(vm.workoutLogEntries.first(where: { $0.id == id })?.healthExport?.state, .saved)
+            HeartRateSeriesStore.delete(for: id)
+        }
+        XCTAssertEqual(client.objects.count, 2)
+    }
+}
+
+extension HealthWorkoutExportTests {
+    func testMalformedNewCalorieFieldsPreserveExistingHealthIntent() throws {
+        var original = try XCTUnwrap(entry().healthExport)
+        original.state = .saved
+        original.healthID = UUID()
+        original.heartRateContent = .included
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+        json["energyContent"] = ["unexpected": true]
+        json["activeEnergyKilocalories"] = "invalid"
+        let repaired = try JSONDecoder().decode(HealthWorkoutExport.self,
+            from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(repaired.state, .saved)
+        XCTAssertEqual(repaired.healthID, original.healthID)
+        XCTAssertEqual(repaired.startTimestamp, original.startTimestamp)
+        XCTAssertEqual(repaired.heartRateContent, .included)
+        XCTAssertEqual(repaired.energyContent, .invalid)
+        XCTAssertNil(repaired.activeEnergyKilocalories)
+    }
+
+    @MainActor
+    func testFreshHeartRateAnnouncesCalorieExpectationBeforeQueuedReportArrives() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let vm = model(client, energyStore: store)
+        vm.startTimer()
+        let id = try XCTUnwrap(vm.activeWorkoutID), sessionID = UUID(), now = Date()
+        var message = WatchHeartRateSample(bpm: 150, measuredAt: now, workoutID: id.uuidString).message
+        message[WatchMessageKey.energySessionID] = sessionID.uuidString
+        message[WatchMessageKey.energySessionStart] = now.timeIntervalSince1970
+        XCTAssertTrue(vm.ingestWatchHeartRate(message, now: now))
+        XCTAssertEqual(try store.reports(for: id).map(\.id), [sessionID])
+        XCTAssertTrue(vm.ingestWatchHeartRate(message, now: now))
+        XCTAssertEqual(try store.reports(for: id).count, 1)
+        vm.finishAndSaveWorkout(for: id, now: now + 10)
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.energyContent, .awaitingWatch)
+        await vm.healthExportTask?.value
+        vm.reset()
+    }
+}
+
+extension HealthWorkoutExportTests {
+    @MainActor
+    func testSaveWithoutCaloriesWhileHealthPreflightIsSuspendedKeepsNewChoice() async throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let vm = model(client, energyStore: store), id = UUID(), timing = calorieTimeline()
+        XCTAssertTrue(vm.receiveWatchEnergy(calorieReport(id: id, timing: timing)))
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        let started = expectation(description: "Health calorie lookup started")
+        client.holdPreparation = true
+        client.onPreparation = { started.fulfill() }
+        vm.retryHealthExports()
+        await fulfillment(of: [started], timeout: 3)
+        vm.saveHealthWorkoutWithoutCalories(id)
+        client.holdPreparation = false
+        client.preparationContinuation?.resume()
+        await vm.healthExportTask?.value
+        await vm.healthExportTask?.value // The explicit choice schedules a new drain.
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.state, .saved)
+        XCTAssertEqual(vm.workoutLogEntries.first?.healthExport?.energyContent, .skipped)
+        XCTAssertNil(client.calories[id])
+        XCTAssertEqual(client.objects.count, 1)
+    }
+}
+
+extension HealthWorkoutExportTests {
+    @MainActor
+    func testWorkoutJSONContainsOriginalCalorieManifestWithoutHealthQueries() throws {
+        let store = calorieStore(), client = FakeHealthExportClient()
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let vm = model(client, energyStore: store), id = UUID(), timing = calorieTimeline()
+        let report = calorieReport(id: id, timing: timing)
+        XCTAssertTrue(vm.receiveWatchEnergy(report))
+        vm.workoutLogEntries = [calorieEntry(vm, id: id, timing: timing)]
+        let file = try XCTUnwrap(vm.workoutExport(for: id, series: nil))
+        let data = try WorkoutExport(entry: file.entry, series: file.series, energyReports: file.energyReports).jsonData()
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let reports = try XCTUnwrap(json["energyReports"] as? [[String: Any]])
+        XCTAssertEqual(reports.first?["id"] as? String, report.id.uuidString)
+        let samples = try XCTUnwrap(reports.first?["samples"] as? [[String: Any]])
+        XCTAssertEqual(samples.first?["kilocalories"] as? Double, 12.25)
+        XCTAssertEqual(samples.first?["id"] as? String, report.samples[0].id.uuidString)
+        XCTAssertTrue(client.calls.isEmpty)
     }
 }

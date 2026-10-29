@@ -43,6 +43,8 @@ struct WatchWorkoutPlan: Codable, Equatable {
     var intervalHapticsEnabled: Bool
     /// The phone's default workout type (`WorkoutType.rawValue`) for logging.
     var workoutTypeRaw: String?
+    var bonusRoundEnabled: Bool? = nil
+    var bonusRecoveryDuration: Double? = nil
 
     var totalDuration: TimeInterval { steps.reduce(0) { $0 + $1.duration } }
     var phases: [WorkoutPhase] { steps.map(\.phase) }
@@ -202,6 +204,8 @@ struct CompletedWatchWorkout: Codable, Equatable, Identifiable {
     let spans: [Span]
     var endedEarly: Bool? = nil
     var activityTiming: WorkoutActivityTiming? = nil
+    var expectsWatchEnergy: Bool? = nil
+    var bonusRounds: Int? = nil
 
     var totalSeconds: TimeInterval {
         warmupSeconds + highIntensitySeconds + recoverySeconds + cooldownSeconds
@@ -229,7 +233,7 @@ struct CompletedWatchWorkout: Codable, Equatable, Identifiable {
 
 struct WatchWorkoutEngine: Codable, Equatable {
     let id: UUID
-    let plan: WatchWorkoutPlan
+    private(set) var plan: WatchWorkoutPlan
     let startDate: Date
 
     private(set) var currentIndex: Int
@@ -250,6 +254,9 @@ struct WatchWorkoutEngine: Codable, Equatable {
     private var openSpanStart: TimeInterval
     private(set) var endedEarly: Bool? = nil
     private(set) var activityTiming: WorkoutActivityTiming? = nil
+    private(set) var bonusInsertionIndex: Int? = nil
+    private(set) var originalWorkDuration: Double? = nil
+    private var bonusWorkElapsed: Double? = nil
 
     /// Kept sample cadence, matching the phone's recorder (one per 2 s).
     static let sampleBucketSeconds: Double = 2
@@ -287,6 +294,37 @@ struct WatchWorkoutEngine: Codable, Equatable {
     }
 
     // MARK: Commands
+
+    var canAddBonusRound: Bool {
+        plan.bonusRoundEnabled == true && !isComplete && originalWorkDuration == nil
+            && phase == .highIntensity && currentIndex == plan.steps.lastIndex(where: { $0.phase == .highIntensity })
+    }
+    var canUndoBonusRound: Bool {
+        !isComplete && bonusInsertionIndex.map { currentIndex < $0 } == true
+    }
+
+    mutating func addBonusRound(now: Date) {
+        reconcile(now: now)
+        guard canAddBonusRound else { return }
+        let recovery = plan.steps.first(where: { $0.phase == .rest })?.duration ?? plan.bonusRecoveryDuration ?? 180
+        guard recovery.isFinite, recovery > 0 else { return }
+        originalWorkDuration = plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
+        let index = currentIndex + 1, work = currentStep.duration
+        bonusInsertionIndex = index
+        bonusWorkElapsed = 0
+        plan.steps.insert(contentsOf: [.init(phase: .rest, duration: recovery), .init(phase: .highIntensity, duration: work)], at: index)
+        plan.totalIntervals += 1
+    }
+
+    mutating func undoBonusRound(now: Date) {
+        reconcile(now: now)
+        guard canUndoBonusRound, let index = bonusInsertionIndex, plan.steps.indices.contains(index + 1) else { return }
+        plan.steps.removeSubrange(index...(index + 1))
+        plan.totalIntervals -= 1
+        bonusInsertionIndex = nil
+        originalWorkDuration = nil
+        bonusWorkElapsed = nil
+    }
 
     /// Advances through every boundary that has passed by `now`. Returns the
     /// number of boundaries crossed (0 when nothing changed). Safe to call
@@ -340,7 +378,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         closeSpan(at: now)
         activityTiming?.finish(at: now)
         cooldownSkipped = elapsed(for: .cooldown) < plan.steps.filter { $0.phase == .cooldown }.reduce(0) { $0 + $1.duration }
-        endedEarly = elapsed(for: .highIntensity) + 0.01 < plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
+        endedEarly = elapsed(for: .highIntensity) - (bonusWorkElapsed ?? 0) + 0.01 < requiredWorkDuration
         isRunning = false
         isComplete = true
         completionDate = now
@@ -368,7 +406,8 @@ struct WatchWorkoutEngine: Codable, Equatable {
             recoverySeconds: elapsed(for: .rest),
             cooldownSeconds: elapsed(for: .cooldown),
             cooldownSkipped: cooldownSkipped,
-            samples: samples, spans: spans, endedEarly: endedEarly, activityTiming: activityTiming
+            samples: samples, spans: spans, endedEarly: endedEarly, activityTiming: activityTiming,
+            bonusRounds: originalWorkDuration == nil ? 0 : (spans.contains { $0.kind == "work" && $0.workNumber == plan.totalIntervals } ? 1 : 0)
         )
     }
 
@@ -380,7 +419,7 @@ struct WatchWorkoutEngine: Codable, Equatable {
         let next = currentIndex + 1
         guard next < plan.steps.count else {
             activityTiming?.finish(at: time)
-            endedEarly = elapsed(for: .highIntensity) + 0.01 < plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
+            endedEarly = elapsed(for: .highIntensity) - (bonusWorkElapsed ?? 0) + 0.01 < requiredWorkDuration
             isRunning = false
             isComplete = true
             completionDate = time
@@ -402,7 +441,14 @@ struct WatchWorkoutEngine: Codable, Equatable {
         guard let start = segmentStart else { return }
         activityTiming?.pause(at: time)
         elapsedByPhase[phase.rawValue, default: 0] += max(0, time.timeIntervalSince(start))
+        if bonusInsertionIndex.map({ currentIndex == $0 + 1 }) == true {
+            bonusWorkElapsed = (bonusWorkElapsed ?? 0) + max(0, time.timeIntervalSince(start))
+        }
         segmentStart = nil
+    }
+
+    private var requiredWorkDuration: Double {
+        originalWorkDuration ?? plan.steps.filter { $0.phase == .highIntensity }.reduce(0) { $0 + $1.duration }
     }
 
     private mutating func closeSpan(at time: Date) {

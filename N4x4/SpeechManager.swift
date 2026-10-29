@@ -10,14 +10,77 @@
 
 import AVFoundation
 
+struct SpeechVoiceOption: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let language: String
+    let quality: AVSpeechSynthesisVoiceQuality
+
+    var label: String {
+        let locale = Locale.current.localizedString(forIdentifier: language) ?? language
+        let qualityName: String
+        switch quality {
+        case .premium: qualityName = "Premium"
+        case .enhanced: qualityName = "Enhanced"
+        default: qualityName = "Standard"
+        }
+        return "\(name) · \(locale) · \(qualityName)"
+    }
+
+    static func isEligible(_ voice: AVSpeechSynthesisVoice) -> Bool {
+        voice.identifier.hasPrefix("com.apple.")
+            && voice.language.replacingOccurrences(of: "_", with: "-").split(separator: "-").first?.lowercased() == "en"
+            && !voice.voiceTraits.contains(.isPersonalVoice)
+    }
+
+    static func installed() -> [Self] {
+        AVSpeechSynthesisVoice.speechVoices().filter(isEligible).map {
+            Self(id: $0.identifier, name: $0.name, language: $0.language, quality: $0.quality)
+        }.sorted {
+            if $0.name != $1.name { return $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            if $0.language != $1.language { return $0.language < $1.language }
+            if $0.quality != $1.quality { return $0.quality.rawValue > $1.quality.rawValue }
+            return $0.id < $1.id
+        }
+    }
+
+}
+
+/// Only the current utterance may restore the audio session. In particular, a
+/// cancelled preview's late callback must not tear down a new workout cue.
+struct SpeechPlaybackState {
+    private var current: ObjectIdentifier?
+    private(set) var isPreview = false
+    mutating func begin(_ utterance: AnyObject, preview: Bool) {
+        current = ObjectIdentifier(utterance)
+        isPreview = preview
+    }
+    mutating func finish(_ utterance: AnyObject) -> Bool {
+        finish(token: ObjectIdentifier(utterance))
+    }
+    mutating func finish(token: ObjectIdentifier) -> Bool {
+        guard current == token else { return false }
+        current = nil
+        isPreview = false
+        return true
+    }
+    mutating func consumePreviewStop() -> ObjectIdentifier? {
+        guard isPreview else { return nil }
+        isPreview = false
+        return current
+    }
+}
+
 // @unchecked Sendable: the required `shared` singleton forces Sendability, but
 // AVSpeechSynthesizer isn't Sendable. All access happens on the main thread
-// (speak/stop are called from the main-actor view model, and the delegate
-// callbacks are delivered on the main queue), so this is safe in practice.
+// (speak/stop run on the main thread, and delegate callbacks are dispatched
+// onto the main queue), so this is safe in practice.
 final class SpeechManager: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     static let shared = SpeechManager()
 
     private let synthesizer = AVSpeechSynthesizer()
+    private var playback = SpeechPlaybackState()
+    static let voicePreferenceKey = "speechVoiceIdentifier"
 
     /// Loops inaudible silence during a workout so iOS never suspends the app
     /// while the phone is locked. Created lazily on first workout start.
@@ -41,6 +104,7 @@ final class SpeechManager: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sen
 
     /// Call when a workout starts or resumes. Idempotent.
     func beginWorkoutAudio() {
+        stopPreview()
         guard !workoutAudioActive else { return }
         workoutAudioActive = true
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
@@ -102,9 +166,35 @@ final class SpeechManager: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sen
     /// Speak a string. Cancels any in-flight speech first.
     /// Ducks background audio (e.g. music) for the duration of the utterance.
     func speak(_ text: String) {
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
+        startSpeech(text, identifier: UserDefaults.standard.string(forKey: Self.voicePreferenceKey) ?? "", preview: false)
+    }
+
+    @discardableResult
+    func previewVoice(identifier: String) -> Bool {
+        guard !workoutAudioActive, !synthesizer.isSpeaking || playback.isPreview else { return false }
+        startSpeech("High intensity starting now. You've got this, Viking. Keep a steady pace.", identifier: identifier, preview: true)
+        return true
+    }
+
+    func stopPreview() {
+        guard let token = playback.consumePreviewStop() else { return }
+        if !synthesizer.stopSpeaking(at: .immediate), playback.finish(token: token) {
+            // No cancellation callback is promised when nothing is speaking.
+            restoreAudioSession()
         }
+    }
+
+    static func voice(identifier: String) -> AVSpeechSynthesisVoice? {
+        if !identifier.isEmpty, let voice = AVSpeechSynthesisVoice(identifier: identifier), SpeechVoiceOption.isEligible(voice) {
+            return voice
+        }
+        return AVSpeechSynthesisVoice(language: "en-US")
+    }
+
+    private func startSpeech(_ text: String, identifier: String, preview: Bool) {
+        let utterance = AVSpeechUtterance(string: text)
+        playback.begin(utterance, preview: preview)
+        synthesizer.stopSpeaking(at: .immediate)
 
         // Duck other audio (music lowers ~30%) while we speak.
         // .voicePrompt mode (iOS 12+) signals a short spoken cue to the system,
@@ -116,18 +206,16 @@ final class SpeechManager: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sen
         )
         try? AVAudioSession.sharedInstance().setActive(true)
 
-        let utterance = AVSpeechUtterance(string: text)
         utterance.rate = 0.52           // slightly slower than default for workout clarity
         utterance.pitchMultiplier = 1.0
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.voice = Self.voice(identifier: identifier)
         synthesizer.speak(utterance)
     }
 
     /// Stop any in-flight speech immediately (e.g. on pause or reset).
     func stopSpeaking() {
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-        }
+        _ = playback.consumePreviewStop()
+        synthesizer.stopSpeaking(at: .immediate)
     }
 
     // MARK: - AVSpeechSynthesizerDelegate
@@ -135,12 +223,18 @@ final class SpeechManager: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sen
     /// Restore the audio session once speech finishes so music returns to full volume.
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
                             didFinish utterance: AVSpeechUtterance) {
-        restoreAudioSession()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.playback.finish(utterance) else { return }
+            self.restoreAudioSession()
+        }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
                             didCancel utterance: AVSpeechUtterance) {
-        restoreAudioSession()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.playback.finish(utterance) else { return }
+            self.restoreAudioSession()
+        }
     }
 
     private func restoreAudioSession() {

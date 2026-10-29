@@ -30,12 +30,17 @@ struct N4x4WatchApp: App {
                         demo.apply(to: sessionManager, workoutManager)
                         return
                     }
-                    sessionManager.onHeartRateRefreshRequested = { [weak workoutManager] in
-                        workoutManager?.resendLatestHeartRate()
+                    let sensor = workoutManager
+                    let connection = sessionManager
+                    sessionManager.onHeartRateRefreshRequested = { [weak sensor] in
+                        sensor?.resendLatestHeartRate()
                     }
-                    workoutManager.onReading = { [weak sessionManager] sample in
-                        sessionManager?.evaluateZoneHaptic(bpm: sample.bpm)
-                        sessionManager?.recordHeartRate(sample.bpm, now: sample.measuredAt)
+                    sessionManager.onEnergyAcknowledgement = { [weak sensor] in
+                        sensor?.acknowledgeEnergy($0)
+                    }
+                    workoutManager.onReading = { [weak connection] sample in
+                        connection?.evaluateZoneHaptic(bpm: sample.bpm)
+                        connection?.recordHeartRate(sample.bpm, now: sample.measuredAt)
                     }
                     sessionManager.activate()
                     workoutManager.discardAbandonedSession()
@@ -198,6 +203,11 @@ struct WatchDemoState {
             s.intervalEndTime = Date().addingTimeInterval(151)
             s.reportedTimeRemaining = 151
             let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-demoBonus") {
+                s.bonusRoundEnabled = true
+                s.currentIntervalIndex = 7
+                s.highIntensityCount = 4
+            }
             if let index = arguments.firstIndex(of: "-demoHeartRate"), index + 1 < arguments.count,
                let bpm = Double(arguments[index + 1]), bpm.isFinite, (0...300).contains(bpm) {
                 workout.heartRate = bpm

@@ -196,6 +196,16 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
     /// Missing on older records, which retain their original streak eligibility.
     let endedEarly: Bool?
     var healthExport: HealthWorkoutExport?
+    var customTitle: String?
+    var bonusRounds: Int?
+    var displayTitle: String {
+        if let title = customTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
+        return Self.defaultTitle(for: workoutType, bonus: (bonusRounds ?? 0) > 0)
+    }
+    static func defaultTitle(for type: WorkoutType, bonus: Bool = false) -> String {
+        let name = bonus ? "Norwegian 4×4 + bonus" : "Norwegian 4×4"
+        return type == .norwegian4x4 ? name : "\(name) — \(type.rawValue)"
+    }
     var countsTowardStreak: Bool { endedEarly != true }
 
     init(
@@ -208,7 +218,8 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         intervalPerformances: [IntervalPerformance]? = nil,
         hrSummary: HRSessionSummary? = nil,
         endedEarly: Bool? = nil,
-        healthExport: HealthWorkoutExport? = nil
+        healthExport: HealthWorkoutExport? = nil,
+        customTitle: String? = nil, bonusRounds: Int? = nil
     ) {
         self.id = id
         self.completedAt = completedAt
@@ -220,6 +231,8 @@ struct WorkoutLogEntry: Identifiable, Codable, Equatable {
         self.hrSummary = hrSummary
         self.endedEarly = endedEarly
         self.healthExport = healthExport
+        self.customTitle = customTitle
+        self.bonusRounds = bonusRounds
     }
 
     /// Average of the logged primary values for this entry, ignoring blanks.
@@ -480,6 +493,57 @@ enum VO2TargetTier: String, CaseIterable {
 }
 
 class TimerViewModel: ObservableObject {
+    @AppStorage("bonusRoundEnabled") var bonusRoundEnabled = false {
+        didSet { objectWillChange.send(); bonusSettingsRevision += 1 }
+    }
+    @Published private var bonusSettingsRevision = 0
+    @Published private(set) var bonusInsertionIndex: Int?
+    private var originalWorkDuration: Double?
+    private var bonusWorkElapsed: Double = 0
+    var sessionRecoveryDuration: Double?
+
+    var canAddBonusRound: Bool {
+        bonusRoundEnabled && workoutStartDate != nil && workoutCompletionDate == nil && originalWorkDuration == nil
+            && currentIntervalType == .highIntensity
+            && currentIntervalIndex == intervals.lastIndex(where: { $0.type == .highIntensity })
+    }
+    var canUndoBonusRound: Bool {
+        workoutCompletionDate == nil && bonusInsertionIndex.map { currentIntervalIndex < $0 } == true
+    }
+    var performedBonusRounds: Int {
+        guard bonusInsertionIndex != nil else { return 0 }
+        return completedSeries?.spans.contains(where: { $0.kind == "work" && $0.workNumber == sessionIntervalCount }) == true ? 1 : 0
+    }
+
+    func addBonusRound(for expectedID: UUID? = nil, now: Date = Date()) {
+        if let expectedID, expectedID != activeWorkoutID { return }
+        if isRunning { reconcileTimerState(now: now, playAlarm: false) }
+        guard canAddBonusRound else { return }
+        let recovery = intervals.first(where: { $0.type == .rest })?.duration ?? sessionRecoveryDuration ?? 180
+        guard recovery.isFinite, recovery > 0 else { return }
+        originalWorkDuration = intervals.filter { $0.type == .highIntensity }.reduce(0) { $0 + $1.duration }
+        let work = intervals[currentIntervalIndex].duration, index = currentIntervalIndex + 1
+        bonusInsertionIndex = index
+        bonusWorkElapsed = 0
+        intervals.insert(contentsOf: [Interval(name: "Recovery", duration: recovery, type: .rest),
+                                      Interval(name: "Bonus Round", duration: work, type: .highIntensity)], at: index)
+        saveSessionCheckpoint(now: now, force: true)
+        if isRunning { scheduleNextIntervalNotification() }
+        updateLiveActivity(isRunning: isRunning)
+    }
+
+    func undoBonusRound(for expectedID: UUID? = nil, now: Date = Date()) {
+        if let expectedID, expectedID != activeWorkoutID { return }
+        if isRunning { reconcileTimerState(now: now, playAlarm: false) }
+        guard canUndoBonusRound, let index = bonusInsertionIndex, intervals.indices.contains(index + 1) else { return }
+        intervals.removeSubrange(index...(index + 1))
+        bonusInsertionIndex = nil
+        originalWorkDuration = nil
+        bonusWorkElapsed = 0
+        saveSessionCheckpoint(now: now, force: true)
+        if isRunning { scheduleNextIntervalNotification() }
+        updateLiveActivity(isRunning: isRunning)
+    }
     static let minimumSupportedAge = 13
     static let maximumSupportedAge = 100
     private static let missedWorkoutFollowUpIdentifierPrefix = "workoutReminderFollowup_"
@@ -546,6 +610,27 @@ class TimerViewModel: ObservableObject {
     }
     @AppStorage("alarmEnabled") var alarmEnabled: Bool = true
     @AppStorage("audioModeRaw") private var audioModeRaw: String = AudioMode.voice.rawValue
+    @AppStorage("speechVoiceIdentifier") var speechVoiceIdentifier = "" {
+        didSet { SpeechManager.shared.stopPreview(); objectWillChange.send() }
+    }
+    @Published private(set) var speechVoiceOptions: [SpeechVoiceOption] = []
+
+    var selectedSpeechVoiceUnavailable: Bool {
+        !speechVoiceIdentifier.isEmpty && !speechVoiceOptions.contains { $0.id == speechVoiceIdentifier }
+    }
+
+    func refreshSpeechVoiceOptions(options: [SpeechVoiceOption]? = nil) {
+        speechVoiceOptions = options ?? SpeechVoiceOption.installed()
+        // Keep a missing identifier: its voice can be downloaded again. Speech
+        // falls back to the unchanged default until the asset is available.
+    }
+
+    func previewSpeechVoice() {
+        guard workoutStartDate == nil, !isRunning else { return }
+        SpeechManager.shared.previewVoice(identifier: speechVoiceIdentifier)
+    }
+
+    func stopSpeechVoicePreview() { SpeechManager.shared.stopPreview() }
     @AppStorage("halfwayVoicePromptsEnabled") var halfwayVoicePromptsEnabled: Bool = true
     @AppStorage("tenSecondVoicePromptsEnabled") var tenSecondVoicePromptsEnabled: Bool = true
     @AppStorage("confirmSkipCooldown") var confirmSkipCooldown: Bool = true
@@ -946,6 +1031,9 @@ class TimerViewModel: ObservableObject {
     @Published var workoutNotesDraft: String = "" {
         didSet { saveReviewEditsIfNeeded() }
     }
+    @Published var workoutTitleDraft = "" {
+        didSet { saveReviewEditsIfNeeded() }
+    }
 
     // Performance logging draft (post-workout summary, Phase 2). Values are in
     // the user's DISPLAY units; converted to canonical only at save time.
@@ -1238,6 +1326,7 @@ class TimerViewModel: ObservableObject {
     @Published var notificationPermissionState: PermissionState = .unknown
     @Published var healthKitPermissionState: PermissionState = .unknown
     @Published var heartRateWritePermissionState: PermissionState = .unknown
+    @Published var energyWritePermissionState: PermissionState = .unknown
 
     var workoutReminderMode: WorkoutReminderMode {
         get { WorkoutReminderMode(rawValue: workoutReminderModeRaw) ?? .weeklyWeekday }
@@ -1450,7 +1539,11 @@ class TimerViewModel: ObservableObject {
 
     let healthStore = HKHealthStore()
     let healthExportClient: any HealthWorkoutExportClient
+    let energyStore: WorkoutEnergyStore
     var healthExportTask: Task<Void, Never>?
+    var energyObserver: HKObserverQuery?
+    var energySyncNeedsRetry = false
+    deinit { if let energyObserver { healthStore.stop(energyObserver) } }
     var restoredHealthExport: HealthWorkoutExport?
     @Published var birthdayReadingAvailable = false
     private var isSchedulingWorkoutReminder = false
@@ -1475,7 +1568,7 @@ class TimerViewModel: ObservableObject {
     @Published var elapsedRecoveryTime: TimeInterval = 0
     @Published var elapsedCooldownTime: TimeInterval = 0
 
-    var intervals: [Interval] = []
+    @Published var intervals: [Interval] = []
     var timer: AnyCancellable?
     var player: AVAudioPlayer?
     /// Lazily created for the long interval-change buzz; kept so repeated
@@ -1575,7 +1668,7 @@ class TimerViewModel: ObservableObject {
         )
     }
 
-    private func addElapsed(_ seconds: TimeInterval, for type: IntervalType) {
+    private func addElapsed(_ seconds: TimeInterval, for type: IntervalType, at index: Int? = nil) {
         let clamped = max(0, seconds)
         guard clamped > 0 else { return }
         switch type {
@@ -1583,6 +1676,9 @@ class TimerViewModel: ObservableObject {
             elapsedWarmupTime += clamped
         case .highIntensity:
             elapsedHighIntensityTime += clamped
+            if bonusInsertionIndex.map({ (index ?? currentIntervalIndex) == $0 + 1 }) == true {
+                bonusWorkElapsed += clamped
+            }
         case .rest:
             elapsedRecoveryTime += clamped
         case .cooldown:
@@ -1591,6 +1687,7 @@ class TimerViewModel: ObservableObject {
     }
 
     private func resetElapsedTracking() {
+        bonusWorkElapsed = 0
         elapsedWarmupTime = 0
         elapsedHighIntensityTime = 0
         elapsedRecoveryTime = 0
@@ -1601,8 +1698,10 @@ class TimerViewModel: ObservableObject {
          liveActivityProvider: any WorkoutLiveActivityProvider = SystemWorkoutLiveActivityProvider(),
          checkpointURL: URL = TimerViewModel.defaultCheckpointURL,
          healthExportClient: any HealthWorkoutExportClient = SystemHealthWorkoutExportClient(),
+         energyStore: WorkoutEnergyStore = .shared,
          seriesSaver: @escaping (HeartRateSeries, UUID) -> Bool = { HeartRateSeriesStore.save($0, for: $1) }) {
         self.healthExportClient = healthExportClient
+        self.energyStore = energyStore
         self.checkpointURL = checkpointURL
         self.seriesSaver = seriesSaver
         self.intervalNotificationCenter = intervalNotificationCenter
@@ -1691,6 +1790,9 @@ class TimerViewModel: ObservableObject {
             $completedWorkoutEntryID.map { _ in () }.eraseToAnyPublisher(),
             $activeWorkoutID.map { _ in () }.eraseToAnyPublisher(),
             $hasPendingWorkoutSave.map { _ in () }.eraseToAnyPublisher(),
+            $intervals.map { _ in () }.eraseToAnyPublisher(),
+            $bonusInsertionIndex.map { _ in () }.eraseToAnyPublisher(),
+            $bonusSettingsRevision.map { _ in () }.eraseToAnyPublisher(),
         ]
         watchBroadcastCancellable = Publishers.MergeMany(watchTriggers)
             .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
@@ -1759,6 +1861,9 @@ class TimerViewModel: ObservableObject {
     }
 
     func setupIntervals() {
+        bonusInsertionIndex = nil
+        originalWorkDuration = nil
+        sessionRecoveryDuration = restDuration
         intervals.removeAll()
         highIntensityCount = 0
         restCount = 0
@@ -1928,7 +2033,7 @@ class TimerViewModel: ObservableObject {
         var advanced = false
 
         // Consume remainder of the interval we were in before advancing.
-        addElapsed(timeRemaining, for: intervals[cursor].type)
+        addElapsed(timeRemaining, for: intervals[cursor].type, at: cursor)
 
         while now >= intervalEndCursor {
             advanced = true
@@ -1946,11 +2051,11 @@ class TimerViewModel: ObservableObject {
 
             if now >= intervalEndCursor {
                 // This whole interval elapsed while app/timer was not reconciling.
-                addElapsed(intervalDuration, for: intervals[cursor].type)
+                addElapsed(intervalDuration, for: intervals[cursor].type, at: cursor)
             } else {
                 // We are partway through this interval.
                 let remaining = max(0, intervalEndCursor.timeIntervalSince(now))
-                addElapsed(intervalDuration - remaining, for: intervals[cursor].type)
+                addElapsed(intervalDuration - remaining, for: intervals[cursor].type, at: cursor)
             }
         }
 
@@ -1999,7 +2104,7 @@ class TimerViewModel: ObservableObject {
         clearHeartRateState()
         workoutCompletionDate = completionTime
         showWorkoutRecovery = false
-        sessionEndedEarly = elapsedHighIntensityTime + 0.01 < intervals.filter { $0.type == .highIntensity }.reduce(0) { $0 + $1.duration }
+        sessionEndedEarly = elapsedHighIntensityTime - bonusWorkElapsed + 0.01 < (originalWorkDuration ?? intervals.filter { $0.type == .highIntensity }.reduce(0) { $0 + $1.duration })
         speakWorkoutComplete()
         // Safe while the completion phrase is speaking: teardown defers to
         // the speech-finished callback.
@@ -2011,6 +2116,7 @@ class TimerViewModel: ObservableObject {
         isRestoringOrResetting = true
         selectedWorkoutType = sessionWorkoutType ?? resolvedDefaultWorkoutType
         workoutNotesDraft = ""
+        workoutTitleDraft = ""
         performanceDraft = []
         performanceNotesDraft = []
         performanceSetAll = nil
@@ -2139,6 +2245,7 @@ class TimerViewModel: ObservableObject {
         completedWorkoutEntryID = nil
         restoredHealthExport = nil
         workoutNotesDraft = ""
+        workoutTitleDraft = ""
         performanceDraft = []
         performanceNotesDraft = []
         performanceSetAll = nil
@@ -2342,7 +2449,11 @@ class TimerViewModel: ObservableObject {
             healthExport: workoutLogEntries.first(where: { $0.id == entryID })?.healthExport
                 ?? restoredHealthExport
                 ?? newHealthExport(start: workoutStartDate ?? completionDate, end: completionDate,
-                                   timing: activityTiming, activeDuration: currentSessionBreakdown.totalDuration)
+                                   timing: activityTiming, activeDuration: currentSessionBreakdown.totalDuration, id: entryID,
+                                   workoutType: selectedWorkoutType,
+                                   title: WorkoutLogEntry.defaultTitle(for: selectedWorkoutType, bonus: performedBonusRounds > 0)),
+            customTitle: workoutTitleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : workoutTitleDraft,
+            bonusRounds: performedBonusRounds
         )
         if let index = workoutLogEntries.firstIndex(where: { $0.id == entryID }) {
             workoutLogEntries[index] = entry
@@ -2570,7 +2681,8 @@ class TimerViewModel: ObservableObject {
                 intervalPerformances: field("intervalPerformances", as: [IntervalPerformance].self),
                 hrSummary: field("hrSummary", as: HRSessionSummary.self),
                 endedEarly: field("endedEarly", as: Bool.self),
-                healthExport: field("healthExport", as: HealthWorkoutExport.self)
+                healthExport: field("healthExport", as: HealthWorkoutExport.self),
+                customTitle: field("customTitle", as: String.self), bonusRounds: field("bonusRounds", as: Int.self)
             )
         }.filter { !isDiscardedPhoneWorkout($0.id) }.sorted { $0.completedAt > $1.completedAt }
         // Never replace unreadable storage until its original bytes are safe.
@@ -2771,12 +2883,14 @@ class TimerViewModel: ObservableObject {
 
     func resetSettingsToDefaults() {
         numberOfIntervals = 4
+        bonusRoundEnabled = false
         warmupDuration = 5 * 60
         highIntensityDuration = 4 * 60
         restDuration = 3 * 60
         cooldownEnabled = true
         cooldownDuration = 5 * 60
         alarmEnabled = true
+        speechVoiceIdentifier = ""
         halfwayVoicePromptsEnabled = true
         tenSecondVoicePromptsEnabled = true
         confirmSkipCooldown = true
@@ -2898,6 +3012,13 @@ class TimerViewModel: ObservableObject {
                 lastWatchHeartRateRejection = "Reading belongs to another workout"
             }
             return false
+        }
+        if let rawWorkout = sample.workoutID, let id = UUID(uuidString: rawWorkout),
+           let rawSession = message[WatchMessageKey.energySessionID] as? String,
+           let sessionID = UUID(uuidString: rawSession),
+           let start = message[WatchMessageKey.energySessionStart] as? Double,
+           (try? energyStore.reports(for: id).contains(where: { $0.id == sessionID })) == false {
+            receiveWatchEnergy(WorkoutEnergyReport(id: sessionID, workoutID: id, start: start, end: start))
         }
         if watchHeartRateInbox.hasAccepted(sample) { return true }
         guard watchHeartRateInbox.accept(message, now: now) != nil else {
@@ -3438,6 +3559,7 @@ class TimerViewModel: ObservableObject {
             healthAuthorizationGranted = false
             healthKitPermissionState = .unavailable
             heartRateWritePermissionState = .unavailable
+            energyWritePermissionState = .unavailable
             completion?()
             return
         }
@@ -3452,11 +3574,11 @@ class TimerViewModel: ObservableObject {
         // read-only characteristic, cached as month/day so nothing on the home
         // screen has to touch HealthKit. Optional on purpose — a user who never
         // entered a birthday just doesn't get that half of the feature.
-        var readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType()]
+        var readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned)]
         if let dobType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
             readTypes.insert(dobType)
         }
-        let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate)]
+        let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
             if let error = error {
@@ -3499,6 +3621,7 @@ class TimerViewModel: ObservableObject {
         guard healthExportClient.isAvailable else {
             healthKitPermissionState = .unavailable
             heartRateWritePermissionState = .unavailable
+            energyWritePermissionState = .unavailable
             healthAuthorizationGranted = false
             return
         }
@@ -3507,6 +3630,12 @@ class TimerViewModel: ObservableObject {
         case .sharingDenied: heartRateWritePermissionState = .denied
         case .notDetermined: heartRateWritePermissionState = .notDetermined
         @unknown default: heartRateWritePermissionState = .unknown
+        }
+        switch healthExportClient.energyAuthorization {
+        case .sharingAuthorized: energyWritePermissionState = .granted
+        case .sharingDenied: energyWritePermissionState = .denied
+        case .notDetermined: energyWritePermissionState = .notDetermined
+        @unknown default: energyWritePermissionState = .unknown
         }
         switch healthExportClient.authorization {
         case .sharingAuthorized:
@@ -3663,6 +3792,7 @@ class TimerViewModel: ObservableObject {
         lines.append("User opted out in-app: \(healthKitUserOptedOut ? "yes" : "no")")
         lines.append("Workout permission: \(healthKitPermissionState.diagnosticLabel)")
         lines.append("Heart Rate write permission: \(heartRateWritePermissionState.diagnosticLabel)")
+        lines.append("Active Energy write permission: \(energyWritePermissionState.diagnosticLabel)")
         lines.append("VO₂ max readings found: \(vo2DataPoints.count)")
         if let fetched = lastVO2FetchDate {
             lines.append("Last checked: \(formatter.string(from: fetched))")
@@ -3757,6 +3887,10 @@ private struct PhoneWorkoutCheckpoint: Codable {
     let completedSeries: HeartRateSeries?
     let completedEntry: WorkoutLogEntry?
     var activityTiming: WorkoutActivityTiming? = nil
+    var bonusInsertionIndex: Int? = nil
+    var originalWorkDuration: Double? = nil
+    var sessionRecoveryDuration: Double? = nil
+    var bonusWorkElapsed: Double? = nil
 }
 
 extension TimerViewModel {
@@ -3825,7 +3959,9 @@ extension TimerViewModel {
             breakdown: currentSessionBreakdown, workoutType: sessionWorkoutType ?? selectedWorkoutType,
             recorder: hrRecorder, completedSeries: completedSeries,
             completedEntry: completedWorkoutEntryID.flatMap { id in workoutLogEntries.first { $0.id == id } },
-            activityTiming: activityTiming?.checkpoint(at: lastProgressDate ?? start)
+            activityTiming: activityTiming?.checkpoint(at: lastProgressDate ?? start),
+            bonusInsertionIndex: bonusInsertionIndex, originalWorkDuration: originalWorkDuration,
+            sessionRecoveryDuration: sessionRecoveryDuration, bonusWorkElapsed: bonusWorkElapsed
         )
         do {
             if let unreadableCheckpointData {
@@ -3875,6 +4011,7 @@ extension TimerViewModel {
                        && stored.sessionBreakdown == entry.sessionBreakdown && stored.modality == entry.modality
                        && stored.intervalPerformances == entry.intervalPerformances && stored.hrSummary == entry.hrSummary
                        && stored.endedEarly == entry.endedEarly
+                       && stored.customTitle == entry.customTitle && stored.bonusRounds == entry.bonusRounds
                }),
                snapshot.completedSeries == nil || HeartRateSeriesStore.load(for: entry.id) == snapshot.completedSeries {
                 // A crash after committing History but before removing the checkpoint.
@@ -3895,6 +4032,10 @@ extension TimerViewModel {
             sessionWorkoutType = snapshot.workoutType
             selectedWorkoutType = snapshot.workoutType
             intervals = snapshot.intervals
+            bonusInsertionIndex = snapshot.bonusInsertionIndex
+            originalWorkDuration = snapshot.originalWorkDuration
+            sessionRecoveryDuration = snapshot.sessionRecoveryDuration
+            bonusWorkElapsed = snapshot.bonusWorkElapsed ?? 0
             currentIntervalIndex = snapshot.currentIndex
             timeRemaining = snapshot.remaining
             elapsedWarmupTime = snapshot.breakdown.warmupDuration
@@ -3916,6 +4057,7 @@ extension TimerViewModel {
                 completedSeriesNeedsSave = completedSeries != nil
                 selectedWorkoutType = entry.workoutType
                 workoutNotesDraft = entry.notes
+                workoutTitleDraft = entry.customTitle ?? ""
                 sessionEndedEarly = entry.endedEarly == true
                 performanceDraft = (1...max(1, sessionIntervalCount)).map { number in
                     entry.intervalPerformances?.first { $0.intervalNumber == number }?.primary
@@ -3956,6 +4098,7 @@ extension TimerViewModel {
     }
 
     private func rememberDiscardedPhoneWorkout(_ id: UUID) {
+        energyStore.delete(for: id)
         var ids = Set(UserDefaults.standard.stringArray(forKey: "discardedPhoneWorkoutIDs") ?? [])
         ids.insert(id.uuidString)
         UserDefaults.standard.set(Array(ids), forKey: "discardedPhoneWorkoutIDs")
@@ -3969,6 +4112,10 @@ extension TimerViewModel {
     /// a just-saved workout or affecting a newer session.
     func handleWorkoutCommand(_ command: String, workoutID: UUID) {
         switch command {
+        case WatchMessageKey.cmdAddBonus:
+            addBonusRound(for: workoutID)
+        case WatchMessageKey.cmdUndoBonus:
+            undoBonusRound(for: workoutID)
         case WatchMessageKey.cmdFinish:
             guard workoutID == activeWorkoutID else { return }
             finishAndSaveWorkout()
