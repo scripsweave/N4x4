@@ -1,6 +1,19 @@
 # N4x4 — Session Handoff
 
-> **5.12 release blocked by Apple agreement (2026-10-29):** Release source/tag
+> **5.13 release preparation (2026-10-29):** Agreement accepted; 5.12 candidate
+> Cloud 52 uploaded but failed two UI checks. The compact-Duo scrolling check
+> and isolated launch capture setup are corrected; five focused Duo checks pass.
+> All six shipping configurations are 5.13. Same authorized feature set.
+> Read [the 5.13 handoff](SESSION-HANDOFF-2026-10-29-RELEASE-5.13.md) for current
+> release state. No review submission yet; 5.11 remains live.
+
+> **5.12 Cloud build 52 started (2026-10-29):** Apple accepted the agreement
+> and build-start request at 13:33 CET. Run `1e782ef8-3f97-4b0e-b1d3-a10901958f82`
+> targets release source/tag `0655ac6` / `v5.12`. Verify all four actions/tests
+> before submitting. Local full regression: 285 unit + 26 UI tests pass.
+> [Release handoff](SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md).
+
+> **Earlier 5.12 agreement blocker (resolved):** Release source/tag
 > `0655ac6` / `v5.12` is pushed to main. Release build passes and App Store draft,
 > notes, 17 media placements and COMPLETE review video are verified. Xcode says
 > the Account Holder must accept the updated Developer Program License Agreement

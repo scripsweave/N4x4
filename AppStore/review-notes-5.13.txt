@@ -1,0 +1,24 @@
+N4x4 is an interval-training timer with spoken workout coaching and live heart-rate feedback. No account or login is required.
+
+New in 5.13:
+1. FIT export: complete a workout or open one in History, tap Share > Export Activity (FIT). Save through the native share sheet and manually upload to a compatible service. No Strava login or native account sync is included. JSON export remains available. Legacy workouts without reliable start/end timing retain JSON export.
+2. Workout names: edit the workout name in the saved summary or History. New Health exports use the chosen activity and protocol name; already-saved Health workouts are not replaced or renamed.
+3. Optional bonus round: enable Settings > Intervals & Durations > Show Bonus Round Button (off by default). During the last work interval, tap +1 Bonus Round to add recovery and one work interval before cooldown. Undo is available until the added recovery starts. Phone and Watch support this option.
+4. Voice picker: Settings > Audio, select Voice Prompts, then Voice. Choose an installed Apple English voice and use Preview Voice between workouts. The existing default is unchanged. Additional Enhanced/Premium Apple voices are installed through iPhone Accessibility settings. No Personal Voice permission is requested.
+5. Watch calories: Settings > Health & Devices > Review Health Access requests Workouts, Heart Rate and Active Energy access. New Watch-recorded workouts can attach original Apple Watch Active Energy samples to the single phone-saved Health workout, without creating duplicate energy samples. Health and Watch synchronization can delay the save; History displays the pending state and offers Save Without Calories. Phone-only sessions do not invent calories. Existing Health workouts are not backfilled. Physical iPhone/Watch hardware is required for live HR and energy.
+
+Background Bluetooth (Guideline 2.5.4):
+1. Wear a standard Bluetooth Low Energy heart-rate monitor, or enable Broadcast Heart Rate on a compatible Garmin/WHOOP device.
+2. Open Settings > Health & Devices > Heart Rate Monitor. Start discovery and select the monitor. Discovery is user initiated; launching the app or opening settings does not scan or request Bluetooth permission.
+3. Tap START. Current BPM appears in the workout view. Return to the iPhone Home Screen, then reopen N4x4: the monitor continues delivering readings during the workout. This uses Core Bluetooth's Heart Rate Service and HR Measurement characteristic.
+
+Background audio (Guideline 2.5.4):
+1. Select Voice Prompts under Settings > Audio > Audio Cues. Enable Halfway Prompts and 10-Second Warnings, with audible media volume.
+2. Set short intervals under Settings > Intervals & Durations.
+3. Tap START, hear the phase announcement, then return to the iPhone Home Screen while the workout continues. Halfway, ten-second and interval coaching remains audible in the background or under screen lock.
+4. Pause/finish ends workout background audio. Silent mode does not provide spoken cues.
+
+The required background modes support these workout features, not advertisements, downloads or unrelated work.
+
+Physical-device evidence (same original recordings used for approved version 5.10):
+N4x4-physical-device-review.mp4: 00:00–01:00 demonstrates Garmin Bluetooth pairing, live HR and workout start; 01:00–01:40 demonstrates a running workout on the iPhone Home Screen with the spoken halfway warm-up cue near 01:31. The original recordings are joined without abridgment and are not Simulator recordings. This video demonstrates existing Bluetooth/background audio, not the new calorie feature.

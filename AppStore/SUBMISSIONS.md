@@ -1,5 +1,12 @@
 # App Store submissions
 
+**5.13 release preparation (2026-10-29):** Fresh candidate after 5.12 Cloud 52
+failed its required UI action. Compact-Duo scrolling and isolated launch capture
+setup are corrected; five focused Duo checks and generic-device Release builds
+pass. Same authorized feature set. The editable App Store draft is renamed to
+5.13 with existing media/review evidence retained. See the
+[5.13 handoff](../docs/SESSION-HANDOFF-2026-10-29-RELEASE-5.13.md).
+
 **5.12 preparation (2026-10-29):** Source/tag `0655ac6` / `v5.12` is on main;
 Release builds and the full regression (285 unit + 26 UI tests) pass. App Store draft, release/review notes, all 17 inherited
 media placements and COMPLETE private review video are verified. **Cloud is

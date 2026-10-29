@@ -7,6 +7,19 @@
 
 import XCTest
 
+extension XCTestCase {
+    var reviewLaunchArguments: [String] {
+        ["-hasCompletedOnboarding", "YES",
+         "-hasSeenHRSourcesAnnouncement", "YES",
+         "-hasSeenWatchUpgradePrompt", "YES",
+         "-healthKitEnabled", "NO", "-healthKitUserOptedOut", "YES",
+         "-workoutRemindersEnabled", "NO", "-notificationsEnabled", "NO",
+         "-audioModeRaw", "Silent", "-hapticsEnabled", "NO",
+         "-shownMilestonesData", "\"[1,5,10,25,50,100]\"",
+         "-hasRequestedAppReview", "YES"]
+    }
+}
+
 final class N4x4UITests: XCTestCase {
 
     override func setUpWithError() throws {
@@ -50,17 +63,6 @@ final class N4x4UITests: XCTestCase {
                 XCUIApplication().launch()
             }
         }
-    }
-
-    private var reviewLaunchArguments: [String] {
-        ["-hasCompletedOnboarding", "YES",
-         "-hasSeenHRSourcesAnnouncement", "YES",
-         "-hasSeenWatchUpgradePrompt", "YES",
-         "-healthKitEnabled", "NO", "-healthKitUserOptedOut", "YES",
-         "-workoutRemindersEnabled", "NO", "-notificationsEnabled", "NO",
-         "-audioModeRaw", "Silent", "-hapticsEnabled", "NO",
-         "-shownMilestonesData", "\"[1,5,10,25,50,100]\"",
-         "-hasRequestedAppReview", "YES"]
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication,
@@ -597,7 +599,9 @@ extension N4x4UITests {
         let link = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Health & Devices")).firstMatch
         reveal(link, in: app)
         link.tap()
-        XCTAssertTrue(app.staticTexts["Last confirmed save"].waitForExistence(timeout: 5))
+        let confirmed = app.staticTexts["Last confirmed save"]
+        reveal(confirmed, in: app, scrollContainer: app.collectionViews.firstMatch)
+        XCTAssertTrue(confirmed.waitForExistence(timeout: 5))
         let retry = app.buttons["Retry Pending Saves"]
         reveal(retry, in: app)
         XCTAssertFalse(retry.isEnabled)

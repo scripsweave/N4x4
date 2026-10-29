@@ -17,12 +17,16 @@ final class N4x4UITestsLaunchTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    override func tearDownWithError() throws {
+        XCUIApplication().terminate()
+    }
+
     func testLaunch() throws {
         let app = XCUIApplication()
+        // Keep these captures independent of previous workouts and permission flows.
+        app.launchArguments = reviewLaunchArguments + ["-workoutLogEntriesData", "\"[]\""]
         app.launch()
-
-        // Insert steps here to perform after app launch but before taking a screenshot,
-        // such as logging into a test account or navigating somewhere in the app
+        XCTAssertTrue(app.buttons["START"].waitForExistence(timeout: 15))
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Launch Screen"

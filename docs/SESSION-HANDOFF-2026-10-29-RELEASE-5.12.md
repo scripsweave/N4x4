@@ -1,5 +1,16 @@
 # N4x4 5.12 release
 
+**Superseded release candidate:** Cloud 52 uploaded a valid binary, but its
+required test action failed. The Health saved-status UI assertion did not
+scroll on compact Duo; reproduced locally. The launch screenshot suite also
+timed out once in Apple's accessibility snapshot machinery. The Health check
+now reveals the row first, and launch captures use the shared isolated UI test
+settings, verify Home is ready and terminate between configurations. All five
+focused Duo checks pass: `/tmp/N4x4-5.12-duo-fixes.xcresult` (TEST SUCCEEDED).
+No app behavior changed for those corrections. The fresh release is **5.13**
+to avoid reusing the uploaded 5.12 number. See the 5.13 handoff for current state.
+No 5.12 review submission was made; the GitHub release remains a draft.
+
 User authorized a new App Store release on 29 October 2026. App Store Connect
 confirmed 5.11 is READY_FOR_DISTRIBUTION before preparing this version. No
 pending review needs replacing. Release includes all local calorie, FIT,
@@ -35,6 +46,14 @@ to be retained. User replies remain drafts, not sent.
   the old review video as evidence of the new calorie feature.
 
 ## Submission
+
+**Current state:** The user confirmed agreement acceptance again and Apple
+accepted a build-start request at 12:33:58 UTC / 13:33 CET. Cloud **52**, run
+`1e782ef8-3f97-4b0e-b1d3-a10901958f82`, is pending on the exact release source
+`0655ac6a0f21d8a23c06de1b4d6cc39b233965a1`. Wait for all four required actions,
+tests and uploaded build validation before submitting. No submission yet.
+
+### Earlier agreement blocker (resolved)
 
 **Blocked by the updated Apple Developer Program License Agreement.** Xcode's
 Cloud Notices popover explicitly says the Account Holder for Jan van Rensburg
@@ -83,7 +102,7 @@ manual start are enabled exactly as before; no manual tag condition remains.
   (directory 700, file 600; excluded from git). It demonstrates existing
   Bluetooth and Home Screen audio, not the new calorie feature.
 
-## Resume after agreement acceptance
+## Continue Cloud validation and submission
 
 1. Do not change/re-push main: it already contains the release source. Query
    Cloud first in case acceptance starts a queued run. Default workflow:
