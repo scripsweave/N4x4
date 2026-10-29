@@ -1,5 +1,17 @@
 # App Store submissions
 
+**Latest submission (2026-10-29):** `AppStore/submit.sh 5.14 54 --submit`
+verified **WAITING_FOR_REVIEW** and **AFTER_APPROVAL** at 15:26 CET;
+independent verification and read-only check confirmed it at 15:27 CET.
+Cloud **54** passed all four actions and **309/309 test records** for
+`54682f4671acab643d40ea319fe16856052c2a07` / `v5.14`.
+All 17 screenshot/header placements, existing listing and COMPLETE private
+physical-device review video are retained. **5.11 remains live until approval.**
+See the [5.14 handoff](../docs/SESSION-HANDOFF-2026-10-29-RELEASE-5.14.md).
+Candidates 5.12/52 and 5.13/53 were never submitted; their failed UI checks were
+corrected and passed in Cloud 54. Earlier preparation records below are historical.
+
+
 **5.14 preparation (2026-10-29):** The 5.13 candidate passed 308/309 test records
 but its first UI launch was interrupted by a leftover unit-test notification
 popup. Test setup now clears that popup before launch; a fresh Duo reproduced

@@ -1,12 +1,17 @@
 # N4x4 — Session Handoff
 
-> **5.14 release preparation (2026-10-29):** 5.13 Cloud 53 passed 308/309 test
-> records; its first UI launch was interrupted by a leftover unit-test
-> notification permission popup. The UI fixture now clears this before launch,
-> reproduced on fresh Duo. Idle-launch audio activation is deferred to playback.
-> 285 unit + seven focused UI checks pass, plus 285 unit + five UI checks on a
-> brand-new Duo simulator. Version 5.14 Release build passes. Release remains authorized; no new
-> confirmation needed. [Current handoff](SESSION-HANDOFF-2026-10-29-RELEASE-5.14.md).
+> **5.14 submitted (2026-10-29):** Version **5.14 (54)** is WAITING_FOR_REVIEW
+> with AFTER_APPROVAL, independently verified at 15:27 CET. Cloud **54** passed
+> all four required actions and **309/309 test records** for source/tag
+> `54682f4` / `v5.14`. Includes calories, FIT, names, optional bonus round and
+> voice picker, plus deferred startup audio activation and isolated UI fixtures.
+> All 17 media placements and COMPLETE review video are retained. **5.11 stays
+> live until Apple approves.** [Release handoff](SESSION-HANDOFF-2026-10-29-RELEASE-5.14.md).
+> Post-submission docs: `chore/5.14-submission-handoff`; avoid another main push.
+
+> **Earlier candidates (superseded):** 5.12/52 and 5.13/53 were never submitted.
+> Their UI checks were corrected and passed in Cloud 54. Their records below
+> describe preparation history; the submitted release above is authoritative.
 
 > **5.13 Cloud 53 running (2026-10-29):** Source/tag `bd6b128` / `v5.13` is on
 > main. Cloud run `77e97d16-2c17-41c5-a6df-8fcb5736a1b9` started automatically.
