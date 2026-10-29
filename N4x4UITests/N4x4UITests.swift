@@ -8,6 +8,23 @@
 import XCTest
 
 extension XCTestCase {
+    func prepareNotificationAlertForUITests() {
+        // Unit tests exercise reminder toggles in the app host. On a fresh
+        // Cloud simulator their system alert can outlive that host process.
+        // Clear this test-only alert before launch, and handle a delayed one.
+        addUIInterruptionMonitor(withDescription: "Unit-test notification permission") { alert in
+            guard alert.label.localizedCaseInsensitiveContains("Send You Notifications"),
+                  alert.buttons["Allow"].exists else { return false }
+            alert.buttons["Allow"].tap()
+            return true
+        }
+        let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts
+            .matching(NSPredicate(format: "label CONTAINS[c] %@", "Send You Notifications")).firstMatch
+        if alert.waitForExistence(timeout: 5), alert.buttons["Allow"].exists {
+            alert.buttons["Allow"].tap()
+        }
+    }
+
     var reviewLaunchArguments: [String] {
         ["-hasCompletedOnboarding", "YES",
          "-hasSeenHRSourcesAnnouncement", "YES",
@@ -27,6 +44,7 @@ final class N4x4UITests: XCTestCase {
 
         // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
+        prepareNotificationAlertForUITests()
         XCUIDevice.shared.orientation = .portrait
 
         // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.

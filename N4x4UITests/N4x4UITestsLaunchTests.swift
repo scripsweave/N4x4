@@ -15,6 +15,7 @@ final class N4x4UITestsLaunchTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        prepareNotificationAlertForUITests()
     }
 
     override func tearDownWithError() throws {

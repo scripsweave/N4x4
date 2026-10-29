@@ -1,6 +1,17 @@
 # N4x4 — Session Handoff
 
-> **5.13 release preparation (2026-10-29):** Agreement accepted; 5.12 candidate
+> **5.14 release preparation (2026-10-29):** 5.13 Cloud 53 passed 308/309 test
+> records; its first UI launch was interrupted by a leftover unit-test
+> notification permission popup. The UI fixture now clears this before launch,
+> reproduced on fresh Duo. Idle-launch audio activation is deferred to playback.
+> 285 unit + seven focused UI checks pass, plus 285 unit + five UI checks on a
+> brand-new Duo simulator. Version 5.14 Release build passes. Release remains authorized; no new
+> confirmation needed. [Current handoff](SESSION-HANDOFF-2026-10-29-RELEASE-5.14.md).
+
+> **5.13 Cloud 53 running (2026-10-29):** Source/tag `bd6b128` / `v5.13` is on
+> main. Cloud run `77e97d16-2c17-41c5-a6df-8fcb5736a1b9` started automatically.
+> All four actions must pass before submitting 5.13 (53). Release authorized.
+> Agreement accepted; 5.12 candidate
 > Cloud 52 uploaded but failed two UI checks. The compact-Duo scrolling check
 > and isolated launch capture setup are corrected; five focused Duo checks pass.
 > All six shipping configurations are 5.13. Same authorized feature set.

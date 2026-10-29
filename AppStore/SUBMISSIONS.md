@@ -1,5 +1,12 @@
 # App Store submissions
 
+**5.14 preparation (2026-10-29):** The 5.13 candidate passed 308/309 test records
+but its first UI launch was interrupted by a leftover unit-test notification
+popup. Test setup now clears that popup before launch; a fresh Duo reproduced
+it and passed 285 unit + five UI checks. Seven focused UI checks also pass.
+Idle-launch audio activation is deferred until playback. All three Release
+bundles build as 5.14. See the [current handoff](../docs/SESSION-HANDOFF-2026-10-29-RELEASE-5.14.md).
+
 **5.13 release preparation (2026-10-29):** Fresh candidate after 5.12 Cloud 52
 failed its required UI action. Compact-Duo scrolling and isolated launch capture
 setup are corrected; five focused Duo checks and generic-device Release builds

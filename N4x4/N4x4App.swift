@@ -25,13 +25,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         let center = UNUserNotificationCenter.current()
         center.delegate = self
 
-        // Set up the audio session
+        // Configure playback without activating audio during app launch.
+        // SpeechManager activates it when a workout or voice preview begins.
         let audioSession = AVAudioSession.sharedInstance()
         do {
             // Set the category to .ambient or .playback with .mixWithOthers option
             // try audioSession.setCategory(.ambient, options: [.mixWithOthers])
             try audioSession.setCategory(.playback, options: [.mixWithOthers])
-            try audioSession.setActive(true)
         } catch {
             print("Failed to set audio session category: \(error.localizedDescription)")
         }

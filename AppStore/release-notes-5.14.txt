@@ -1,0 +1,9 @@
+More ways to record, share and personalize your Norwegian 4x4 workouts:
+
+• Apple Watch active calories can now be included in new Apple Health workouts when the required Health access is enabled.
+• Export saved workouts as FIT activity files for manual upload to Strava and other compatible services.
+• Give saved workouts your own names, with clearer activity-specific names and types for new Health exports.
+• Add one bonus round during your final work interval. Enable Show Bonus Round Button under Settings > Intervals & Durations; it stays hidden by default.
+• Choose and preview installed Apple English voices under Settings > Audio. Your current voice remains the default.
+
+• Improved startup: audio activates when you start a workout or preview a voice.
