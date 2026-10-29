@@ -17,9 +17,14 @@ to be retained. User replies remain drafts, not sent.
 
 ## Local verification
 
-- Final voice follow-up: 285 unit tests and two focused UI tests passed.
-  Previous complete regression: 280 unit tests and 24 UI tests passed.
-  Result paths and visual checks are in the linked feature handoffs.
+- Final full 5.12 regression: **285 unit tests + 26 UI tests passed**, launch
+  performance benchmark excluded. `/tmp/N4x4-5.12-full.xcresult`, log
+  `/tmp/N4x4-5.12-full.log` (`TEST SUCCEEDED`, exit 0), completed 29 October
+  at 12:20 CET. Tests cover the integrated calorie/FIT/bonus/voice changes and
+  existing autosave/recovery, accessibility, History and export flows. Xcode's
+  optional post-test simulator diagnostics reported missing `simctl`; tests
+  and result-bundle generation succeeded. Feature-specific visual checks and
+  earlier targeted runs are in the linked handoffs.
 - All three generic-device Release bundles build and report 5.12:
   `/tmp/N4x4-5.12-release-build.log` (`BUILD SUCCEEDED`).
 - Release tooling: six tests / 21 assertions passed. Project plist lint,
@@ -38,6 +43,23 @@ The API returns HTTP 500 for otherwise valid build-start requests. No new build
 run or uploaded 5.12 binary exists yet; do not claim a submitted/released update.
 The user has been asked to accept at https://developer.apple.com/account/.
 No agreement was accepted by the agent.
+
+Follow-up after the user's first “done”: the native Xcode Start Build action
+still returned **The PLA must be signed before builds can be created**. Safari
+was signed in, but the Developer Account page still offered Review agreement
+and showed only the previous agreement accepted on August 26. The exact pending
+agreement `LC644S5URF` was opened at
+`https://developer.apple.com/account/agree/LC644S5URF/terms`, with Agree available.
+The user was asked to review and click Agree there; the agent did not click it.
+At 12:21 CET, Safari still showed the pending agreement and Agree button, and
+only the August 26 acceptance in the history. The full local regression passed
+while waiting. **No Cloud run, 5.12 upload or review submission exists yet.**
+
+The earlier manual-tag workflow trial had cleared the automatic/manual branch
+conditions because the API replaces the condition set. All original conditions
+and all four actions are now restored and compared against the pre-change
+snapshot (`/tmp/n4x4-5.12-restored-workflow.json`). Main auto-start and all-branch
+manual start are enabled exactly as before; no manual tag condition remains.
 
 - Release source: `0655ac6a0f21d8a23c06de1b4d6cc39b233965a1`, pushed to main
   and `feature/workout-calories`. Annotated tag `v5.12` points to that source.

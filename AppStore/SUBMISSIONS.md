@@ -1,13 +1,19 @@
 # App Store submissions
 
 **5.12 preparation (2026-10-29):** Source/tag `0655ac6` / `v5.12` is on main;
-Release builds pass. App Store draft, release/review notes, all 17 inherited
+Release builds and the full regression (285 unit + 26 UI tests) pass. App Store draft, release/review notes, all 17 inherited
 media placements and COMPLETE private review video are verified. **Cloud is
 blocked by the updated Developer Program License Agreement**, which Xcode says
 the Account Holder must accept. No new binary or review submission yet. User
 was asked to accept at developer.apple.com/account; release authorization is
 already given. See the [5.12 handoff](../docs/SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md)
 for exact identifiers and continuation steps. 5.11 is live.
+
+After the user's first “done”, Apple still reported the agreement as pending.
+The exact [agreement page](https://developer.apple.com/account/agree/LC644S5URF/terms)
+is open in Safari with Agree available; no agreement was accepted by the agent.
+All original Cloud workflow conditions and actions have been restored and
+verified after the earlier manual-tag trial.
 
 N4x4 has a repeatable API-based submission command. It promotes a specific
 build already uploaded by Xcode Cloud; Safari and Apple ID sessions are not
@@ -65,6 +71,14 @@ it for the same submitted build is a no-op. It never cancels a review or
 replaces a different submitted build. If a network interruption leaves a
 partially prepared review draft, inspect/finish that draft in App Store
 Connect before retrying; do not cancel it blindly.
+
+**Cloud workflow API updates:** When changing start conditions, include the
+complete saved set of automatic and manual conditions in the PATCH payload.
+Apple replaces the condition set: sending only `manualTagStartCondition` cleared
+the existing main/manual-branch conditions during 5.12 preparation. They were
+restored from the pre-change snapshot and verified together with all actions.
+A null-only PATCH did not restore the missing fields. Keep the original
+snapshot and compare every condition after any workflow mutation.
 
 The export-compliance answer follows N4x4's current implementation: it does
 not implement non-exempt encryption. Revisit the lane's

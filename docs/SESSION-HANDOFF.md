@@ -6,6 +6,9 @@
 > the Account Holder must accept the updated Developer Program License Agreement
 > before Cloud can run. User has been asked; no 5.12 build/submission exists yet.
 > 5.11 is live. Release authorization persists once the agreement is accepted.
+> Follow-up: 285 unit + 26 UI tests pass. After the first “done”, Apple still
+> showed the exact agreement `LC644S5URF` pending; Safari is open to its Agree
+> page. All original Cloud workflow conditions/actions are restored and verified.
 > Read [`SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md`](SESSION-HANDOFF-2026-10-29-RELEASE-5.12.md)
 > for release verification and current submission status.
 
