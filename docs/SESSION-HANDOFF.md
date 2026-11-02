@@ -1,5 +1,14 @@
 # N4x4 — Session Handoff
 
+> **5.15 release (2026-11-02): Watch HR reliability + diagnostics.** Pushed
+> to main for Xcode Cloud; see `AppStore/SUBMISSIONS.md` for submission
+> status. Shipped without physical Watch checks. The iPhone now requests Heart Rate
+> read. Watch startup can no longer stall silently, a silent sensor shows NO HR
+> with Retry, and Copy Diagnostics includes the Watch's own sensor status.
+> 294/294 unit tests pass. Device checks are still owed. See
+> [the handoff](SESSION-HANDOFF-2026-11-01-WATCH-HR-DIAGNOSTICS.md) and the
+> unsent [user reply](USER-REPLY-WATCH-HR.md).
+
 > **5.14 submitted (2026-10-29):** Version **5.14 (54)** is WAITING_FOR_REVIEW
 > with AFTER_APPROVAL, independently verified at 15:27 CET. Cloud **54** passed
 > all four required actions and **309/309 test records** for source/tag

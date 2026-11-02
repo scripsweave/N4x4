@@ -606,6 +606,51 @@ extension HealthWorkoutExportTests {
     }
 
     @MainActor
+    func testWatchSensorDiagnosticsAreLatestOnlyAndExplainASilentSensor() {
+        let vm = model(FakeHealthExportClient())
+        let now = Date()
+        XCTAssertTrue(vm.healthDiagnosticsSummary().contains("Watch sensor status: not received"))
+        let silent = WatchSensorDiagnostics(state: .running, appVersion: "5.15 (55)", systemVersion: "26.1",
+                                            mode: "Phone-led", sessionStartedAt: now - 40, reportedAt: now - 9)
+        let older = WatchSensorDiagnostics(state: .idle, appVersion: "5.15 (55)", systemVersion: "26.1",
+                                           mode: "Phone-led", reportedAt: now - 20)
+        // A diagnostics-only context is neither a packet nor a rejection.
+        let context: [String: Any] = [WatchMessageKey.messageType: WatchMessageKey.watchDiagnostics,
+                                      WatchMessageKey.watchDiagnostics: silent.dictionary]
+        XCTAssertTrue(vm.ingestWatchDiagnostics(context, now: now))
+        XCTAssertFalse(vm.ingestWatchHeartRate(context, now: now))
+        XCTAssertNil(vm.lastWatchHeartRateReceivedAt)
+        XCTAssertEqual(vm.watchHeartRateRejectedCount, 0)
+        XCTAssertFalse(vm.ingestWatchDiagnostics([WatchMessageKey.watchDiagnostics: older.dictionary], now: now))
+        XCTAssertEqual(vm.watchSensorDiagnostics?.state, .running)
+        XCTAssertTrue(vm.watchHeartRateExpected)
+
+        let summary = vm.healthDiagnosticsSummary()
+        XCTAssertTrue(summary.contains("Watch app: 5.15 (55) · 26.1"))
+        XCTAssertTrue(summary.contains("Watch sensor session: running (Phone-led)"))
+        XCTAssertTrue(summary.contains("Watch sensor readings that session: 0 (0 too old to use)"))
+        XCTAssertTrue(summary.contains("Heart Rate read access"))
+        XCTAssertTrue(summary.contains("Phone workout active: no"))
+    }
+
+    @MainActor
+    func testIdlePhoneDoesNotExpectWatchHeartRate() {
+        let vm = model(FakeHealthExportClient())
+        XCTAssertFalse(vm.watchHeartRateExpected)
+        vm.startTimer()
+        defer { vm.reset() }
+        XCTAssertTrue(vm.watchHeartRateExpected)
+    }
+
+    func testHealthReadRequestIncludesHeartRateForTheWatchSensor() throws {
+        let vo2 = try XCTUnwrap(HKObjectType.quantityType(forIdentifier: .vo2Max))
+        let types = TimerViewModel.healthKitReadTypes(vo2Type: vo2)
+        XCTAssertTrue(types.contains(HKQuantityType(.heartRate)))
+        XCTAssertTrue(types.contains(HKQuantityType(.activeEnergyBurned)))
+        XCTAssertTrue(types.contains(vo2))
+    }
+
+    @MainActor
     func testDelayedWatchReadingRecordsMeasurementTimeInsteadOfArrivalTime() throws {
         let vm = model(FakeHealthExportClient())
         let start = Date().addingTimeInterval(-10)

@@ -29,7 +29,9 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     func refreshHeartRate() {
         refreshWatchState()
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
-        timerViewModel?.ingestWatchHeartRate(WCSession.default.receivedApplicationContext, isCachedContext: true)
+        let context = WCSession.default.receivedApplicationContext
+        timerViewModel?.ingestWatchDiagnostics(context)
+        timerViewModel?.ingestWatchHeartRate(context, isCachedContext: true)
         guard WCSession.default.isReachable else { return }
         WCSession.default.sendMessage(
             [WatchMessageKey.messageType: WatchMessageKey.cmdRequestHeartRate],
@@ -173,12 +175,17 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        DispatchQueue.main.async { [weak self] in self?.handle(message) }
+        DispatchQueue.main.async { [weak self] in
+            self?.timerViewModel?.ingestWatchDiagnostics(message)
+            self?.handle(message)
+        }
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        // The Watch uses context only for latest HR, never for queued commands.
+        // The Watch uses context only for latest HR and its sensor diagnostics,
+        // never for queued commands.
         DispatchQueue.main.async { [weak self] in
+            self?.timerViewModel?.ingestWatchDiagnostics(applicationContext)
             self?.timerViewModel?.ingestWatchHeartRate(applicationContext)
         }
     }
@@ -188,6 +195,7 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
                  replyHandler: @escaping ([String: Any]) -> Void) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { replyHandler([:]); return }
+            self.timerViewModel?.ingestWatchDiagnostics(message)
             if message[WatchMessageKey.messageType] as? String == WatchMessageKey.heartRate {
                 let accepted = self.timerViewModel?.ingestWatchHeartRate(message) ?? false
                 let timestamp = message[WatchMessageKey.hrTimestamp] as? Double

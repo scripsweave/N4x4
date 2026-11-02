@@ -90,7 +90,7 @@ struct WatchTroubleshootingView: View {
         case .noWatchPaired, .appNotInstalled: return "applewatch.slash"
         case .notReachable:                    return "applewatch"
         case .connected:
-            return "heart.slash"
+            return viewModel.watchHeartRateExpected || watchSensorSilent ? "heart.slash" : "applewatch"
         }
     }
 
@@ -100,7 +100,8 @@ struct WatchTroubleshootingView: View {
         case .noWatchPaired:   return .secondary
         case .appNotInstalled: return .orange
         case .notReachable:    return .orange
-        case .connected:       return .orange
+        case .connected:
+            return viewModel.watchHeartRateExpected || watchSensorSilent ? .orange : .secondary
         }
     }
 
@@ -111,6 +112,8 @@ struct WatchTroubleshootingView: View {
         case .appNotInstalled: return "Watch app not installed"
         case .notReachable:    return "Watch app not reachable"
         case .connected:
+            if watchSensorSilent { return "No heart rate from the Watch sensor" }
+            if !viewModel.watchHeartRateExpected { return "Watch connected" }
             return viewModel.lastWatchHeartRateMeasuredAt == nil ? "Waiting for Watch heart rate" : "Watch heart rate interrupted"
         }
     }
@@ -125,8 +128,19 @@ struct WatchTroubleshootingView: View {
         case .notReachable:
             return "Open N4x4 on your wrist to connect."
         case .connected:
+            if watchSensorSilent {
+                return "N4x4’s Watch workout is running, but the Watch sensor hasn’t produced readings. This is usually Heart Rate read access in Health, or a loose band."
+            }
+            if !viewModel.watchHeartRateExpected {
+                return "Heart rate streams from your Watch while a workout is running."
+            }
             return "The Watch app is reachable, but fresh heart-rate readings aren’t arriving. Reachability alone doesn’t confirm the heart-rate connection."
         }
+    }
+
+    /// The Watch itself reports a running session with no sensor readings.
+    private var watchSensorSilent: Bool {
+        viewModel.watchSensorDiagnostics?.isSensorSilent(at: Date()) == true
     }
 
     private var steps: [String] {
@@ -160,10 +174,11 @@ struct WatchTroubleshootingView: View {
             }
             return [
                 "On your Watch, open N4x4 and allow Health access if prompted.",
+                "On this iPhone: Settings → Privacy & Security → Health → N4x4, and under read access turn on Heart Rate.",
                 "On the Watch: Settings → Privacy & Security → Health → N4x4, and turn on Heart Rate.",
                 "On this iPhone: open the Watch app → Privacy → confirm Health access for N4x4.",
                 "Keep the Watch snug on your wrist — a loose band blocks the optical sensor.",
-                "If the Watch reports a heart-rate error, reopen N4x4 on the Watch to retry without discarding your workout.",
+                "If the Watch shows NO HEART RATE, scroll down on the Watch and tap Retry Heart Rate. Your workout continues.",
             ]
         }
     }

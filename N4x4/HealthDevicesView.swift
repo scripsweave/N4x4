@@ -79,7 +79,7 @@ struct HealthDevicesView: View {
                     .disabled(!viewModel.healthSavingEnabled || !viewModel.healthAuthorizationGranted)
             }
             Button("Review Health Access") { viewModel.requestHealthKitAuthorizationIfNeeded() }
-            Text("To change an existing permission, open Settings → Privacy & Security → Health → N4x4. Allow Workouts, Heart Rate and Active Energy under write access, and Active Energy under read access. Read permissions cannot be confirmed by the app.")
+            Text("To change an existing permission, open Settings → Privacy & Security → Health → N4x4. Allow Workouts, Heart Rate and Active Energy under write access, and Heart Rate and Active Energy under read access. Apple Watch heart rate needs Heart Rate read access. Read permissions cannot be confirmed by the app.")
                 .font(.footnote).foregroundStyle(.secondary)
         } header: {
             Label("Apple Health", systemImage: "heart.text.square")
@@ -182,7 +182,13 @@ struct HealthDevicesView: View {
         case .noWatchPaired: return "No Watch paired"
         case .appNotInstalled: return "N4x4 is not installed on your Watch"
         case .notReachable: return "App installed · not currently reachable"
-        case .connected: return "Watch app reachable · waiting for heart rate"
+        case .connected:
+            if viewModel.watchSensorDiagnostics?.isSensorSilent(at: Date()) == true {
+                return "Watch sensor sent no heart rate · check Heart Rate read access"
+            }
+            return viewModel.watchHeartRateExpected
+                ? "Watch app reachable · waiting for heart rate"
+                : "Watch app reachable · heart rate streams during a workout"
         }
     }
 

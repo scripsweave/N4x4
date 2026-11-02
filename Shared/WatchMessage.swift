@@ -73,4 +73,9 @@ enum WatchMessageKey {
     static let energySessionID      = "energySessionID"
     static let energySessionStart   = "energySessionStart"
     static let energyFinalized      = "energyFinalized"
+
+    // ── Sensor diagnostics: Watch → Phone (latest-only) ──────
+    // A message type of its own, and also nested under `watchDiagnostics` in
+    // the Watch's application context next to any fresh HR fallback.
+    static let watchDiagnostics     = "watch_diagnostics"
 }

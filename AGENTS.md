@@ -299,6 +299,21 @@ To verify:
   requires `sessionStarted && !workoutComplete`, and waits for an old session's
   `.ended` before starting a new workout ID. Never use intervalDuration as an
   activity flag: idle phone state includes the next interval's duration.
+  Startup has no guaranteed callback, so `WatchSessionPreparation` tokens it:
+  after 15 s a stall shows an error + Retry Heart Rate, and a retry supersedes
+  the stalled attempt. A superseded recovery callback must do nothing (a late
+  result could name the live session). Retry on a running-but-silent session
+  uses `lifecycle.restart()` (stop, then the same workout ID again).
+- **Watch reports its own sensor state (post-5.14).** `WatchSensorDiagnostics`
+  (no BPM) goes to the phone as a `watch_diagnostics` message and nested in
+  the Watch's application context. That context is ONE latest-only dict: a
+  still-fresh HR fallback plus diagnostics, else a diagnostics-typed dict —
+  never an HR-typed dict without a sample (the phone would count rejections).
+  Copy Diagnostics prints it; a running session with no usable reading for
+  30 s is "sensor silent" (usually Heart Rate read access or fit).
+- **Heart Rate read is requested on the iPhone too.** The Watch's live builder
+  needs it, and the small on-wrist prompt was the only place it was asked;
+  users who allowed everything on the iPhone still had Watch HR off.
 - **Delivery is acknowledged and bounded.** Only the newest pending HR sample
   is retained, with two-second acknowledgement timeout and one retry per sample.
   Late callbacks cannot affect a new attempt. The phone acknowledges fresh
@@ -317,7 +332,8 @@ To verify:
 - **Workout layout adapts to available width.** Compact screens place the cue
   inside the ring; wider screens show it below and keep the target visible.
   Keep controls within their safe area. DEBUG `-demoHeartRate 0` exercises
-  the waiting state alongside `-demoState workout`.
+  the waiting state alongside `-demoState workout`; `-demoSensorSilent` shows
+  the NO HR cue and the controls-page guidance.
 
 ## Standalone Watch workouts (4.18+)
 

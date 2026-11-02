@@ -1096,6 +1096,8 @@ class TimerViewModel: ObservableObject {
     private(set) var watchHeartRateAcceptedCount = 0
     private(set) var watchHeartRateRejectedCount = 0
     private(set) var lastWatchHeartRateRejection: String?
+    /// The Watch's latest report on its own sensor pipeline (no BPM).
+    @Published private(set) var watchSensorDiagnostics: WatchSensorDiagnostics?
 
     // MARK: - Phone workout session (AirPods HR, iOS 26+)
 
@@ -2994,6 +2996,26 @@ class TimerViewModel: ObservableObject {
                                targetLo: d.lo, targetHi: d.hi, at: offset)
     }
 
+    /// Latest-only: live messages and application context can arrive out of
+    /// order. A report dated well in the future (clock moved back) is replaced.
+    @discardableResult
+    func ingestWatchDiagnostics(_ payload: [String: Any], now: Date = Date()) -> Bool {
+        guard let report = WatchSensorDiagnostics(payload: payload) else { return false }
+        if let current = watchSensorDiagnostics, report.reportedAt <= current.reportedAt,
+           current.reportedAt.timeIntervalSince(now) <= 2 { return false }
+        watchSensorDiagnostics = report
+        return true
+    }
+
+    /// A phone-led workout is running, or the Watch recently reported a
+    /// running sensor session (e.g. a Watch-led workout). Outside those the
+    /// Watch doesn't stream, so "waiting for heart rate" would mislead.
+    var watchHeartRateExpected: Bool {
+        if workoutStartDate != nil && workoutCompletionDate == nil { return true }
+        guard let report = watchSensorDiagnostics, report.state == .running else { return false }
+        return Date().timeIntervalSince(report.reportedAt) < 600
+    }
+
     @discardableResult
     func ingestWatchHeartRate(_ message: [String: Any], now: Date = Date(), isCachedContext: Bool = false) -> Bool {
         guard message[WatchMessageKey.messageType] as? String == WatchMessageKey.heartRate else { return false }
@@ -3553,6 +3575,22 @@ class TimerViewModel: ObservableObject {
 
     // MARK: - HealthKit
 
+    /// Heart Rate read is what lets the Watch app see its own live sensor
+    /// readings. It used to be requested only by the Watch's small on-wrist
+    /// prompt, so allowing everything on the iPhone still left Watch HR off.
+    static func healthKitReadTypes(vo2Type: HKObjectType) -> Set<HKObjectType> {
+        // Date of birth drives the birthday easter egg (BirthdayActivation.swift):
+        // read-only characteristic, cached as month/day so nothing on the home
+        // screen has to touch HealthKit. Optional on purpose — a user who never
+        // entered a birthday just doesn't get that half of the feature.
+        var readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType(),
+                                            HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)]
+        if let dobType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
+            readTypes.insert(dobType)
+        }
+        return readTypes
+    }
+
     func requestHealthKitAuthorizationIfNeeded(completion: (() -> Void)? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else {
             healthKitEnabled = false
@@ -3570,14 +3608,7 @@ class TimerViewModel: ObservableObject {
             return
         }
 
-        // Date of birth drives the birthday easter egg (BirthdayActivation.swift):
-        // read-only characteristic, cached as month/day so nothing on the home
-        // screen has to touch HealthKit. Optional on purpose — a user who never
-        // entered a birthday just doesn't get that half of the feature.
-        var readTypes: Set<HKObjectType> = [vo2Type, HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned)]
-        if let dobType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) {
-            readTypes.insert(dobType)
-        }
+        let readTypes = Self.healthKitReadTypes(vo2Type: vo2Type)
         let writeTypes: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
 
         healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { success, error in
@@ -3787,6 +3818,8 @@ class TimerViewModel: ObservableObject {
         if let date = lastWatchHeartRateMeasuredAt {
             lines.append("Last accepted Watch HR measurement: \(max(0, Int(Date().timeIntervalSince(date)))) seconds ago")
         }
+        lines.append("Phone workout active: \(workoutStartDate != nil && workoutCompletionDate == nil ? "yes" : "no")")
+        lines.append(contentsOf: watchSensorDiagnosticLines(now: Date()))
         lines.append("Bluetooth: \(bleHeartRateManager.diagnosticStatus)")
         lines.append("AirPods heart rate enabled: \(appleSensorHREnabled ? "yes" : "no")")
         lines.append("User opted out in-app: \(healthKitUserOptedOut ? "yes" : "no")")
@@ -3803,6 +3836,40 @@ class TimerViewModel: ObservableObject {
             lines.append("Last error: \(error)")
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// What the Watch said about its own sensor session, so a report can tell
+    /// a silent sensor from a delivery problem. Older Watch builds send nothing.
+    func watchSensorDiagnosticLines(now: Date) -> [String] {
+        guard let d = watchSensorDiagnostics else {
+            return ["Watch sensor status: not received (open N4x4 on the Watch; requires the latest Watch app)"]
+        }
+        func ago(_ date: Date) -> String { "\(max(0, Int(now.timeIntervalSince(date)))) seconds ago" }
+        let stateLabel: String
+        switch d.state {
+        case .idle: stateLabel = "idle"
+        case .preparing: stateLabel = "starting up"
+        case .running: stateLabel = "running"
+        case .stopping: stateLabel = "stopping"
+        case .failed: stateLabel = "stopped with an error"
+        }
+        var lines = ["Watch app: \(d.appVersion) · \(d.systemVersion)",
+                     "Watch status reported: \(ago(d.reportedAt))",
+                     "Watch sensor session: \(stateLabel) (\(d.mode))"]
+        if let started = d.sessionStartedAt {
+            lines.append("Watch session started: \(ago(started))")
+        }
+        lines.append("Watch sensor readings that session: \(d.sensorReadings) (\(d.staleReadings) too old to use)")
+        lines.append("Last usable Watch sensor reading: \(d.lastSensorReadingAt.map(ago) ?? "none")")
+        lines.append("iPhone confirmations seen by Watch: \(d.phoneAcknowledgements)")
+        lines.append("Watch error: \(d.lastError ?? "none")")
+        // Judged at report time: a silent session stops sending reports.
+        if d.isSensorSilent(at: d.reportedAt) {
+            lines.append(d.sensorReadings == 0
+                ? "Watch hint: the sensor session ran without any heart-rate readings. Check Health › N4x4 › Heart Rate read access and Watch fit."
+                : "Watch hint: the sensor stopped producing usable readings. Check Watch fit, Low Power Mode and other workout apps.")
+        }
+        return lines
     }
 
     func reminderWeekdayTitle(_ weekday: Int) -> String {

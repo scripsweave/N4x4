@@ -199,6 +199,16 @@ struct WatchWorkoutSessionLifecycle {
         return reconcile()
     }
 
+    /// Explicit user retry of a session that is running but silent: end it,
+    /// then start the same workout again once `.ended` arrives. A deliberate
+    /// stop never latches the workout as failed.
+    mutating func restart() -> Action? {
+        failedID = nil
+        guard prepared, let activeID, activeID == desiredID, !stopping else { return reconcile() }
+        stopping = true
+        return .stop(token: token)
+    }
+
     private mutating func reconcile() -> Action? {
         guard prepared else { return nil }
         if let activeID {
@@ -210,6 +220,128 @@ struct WatchWorkoutSessionLifecycle {
         token += 1
         activeID = desiredID
         return .start(workoutID: desiredID, token: token)
+    }
+}
+
+/// Authorization and abandoned-session cleanup have no guaranteed callback.
+/// Without an escape, one missing callback disabled the sensor for the rest of
+/// the process with no error and a Retry that did nothing. A stalled attempt
+/// may be superseded; its token makes late callbacks harmless. Monotonic clock.
+struct WatchSessionPreparation {
+    static let stallTimeout: TimeInterval = 15
+    private(set) var token = 0
+    private var startedAt: TimeInterval?
+
+    var isPreparing: Bool { startedAt != nil }
+
+    /// nil while a recent attempt is still within its timeout.
+    mutating func begin(now: TimeInterval) -> Int? {
+        if let startedAt, now >= startedAt, now - startedAt < Self.stallTimeout { return nil }
+        token += 1
+        startedAt = now
+        return token
+    }
+
+    func isStalled(token: Int, now: TimeInterval) -> Bool {
+        guard token == self.token, let startedAt else { return false }
+        return now < startedAt || now - startedAt >= Self.stallTimeout
+    }
+
+    /// True only for the current attempt; a superseded attempt's callback is ignored.
+    mutating func end(token: Int) -> Bool {
+        guard token == self.token, startedAt != nil else { return false }
+        startedAt = nil
+        return true
+    }
+}
+
+/// The Watch's view of its own heart-rate pipeline, reported to the phone so
+/// Copy Diagnostics can tell a silent sensor (permission, fit, session) from
+/// a lost connection. Never carries BPM values.
+struct WatchSensorDiagnostics: Equatable {
+    enum SessionState: String {
+        case idle, preparing, running, stopping, failed
+    }
+
+    /// A running session with no usable reading for this long is "silent".
+    static let silentAfter: TimeInterval = 30
+
+    var state: SessionState
+    var appVersion: String
+    var systemVersion: String
+    var mode: String
+    var sessionStartedAt: Date?
+    /// Sensor readings delivered by HealthKit this session.
+    var sensorReadings: Int
+    /// Readings that were already older than `WatchHeartRateSample.maximumAge`
+    /// when HealthKit delivered them, so were neither shown nor sent.
+    var staleReadings: Int
+    var lastSensorReadingAt: Date?
+    var phoneAcknowledgements: Int
+    var lastError: String?
+    var reportedAt: Date
+
+    /// Seconds the running session has gone without a usable reading.
+    func quietDuration(at now: Date) -> TimeInterval? {
+        guard state == .running, let since = lastSensorReadingAt ?? sessionStartedAt else { return nil }
+        return max(0, now.timeIntervalSince(since))
+    }
+
+    func isSensorSilent(at now: Date) -> Bool {
+        (quietDuration(at: now) ?? 0) >= Self.silentAfter
+    }
+
+    var dictionary: [String: Any] {
+        var d: [String: Any] = [
+            "state": state.rawValue, "appVersion": appVersion, "systemVersion": systemVersion,
+            "mode": mode, "sensorReadings": sensorReadings, "staleReadings": staleReadings,
+            "phoneAcknowledgements": phoneAcknowledgements,
+            "reportedAt": reportedAt.timeIntervalSince1970
+        ]
+        if let sessionStartedAt { d["sessionStartedAt"] = sessionStartedAt.timeIntervalSince1970 }
+        if let lastSensorReadingAt { d["lastSensorReadingAt"] = lastSensorReadingAt.timeIntervalSince1970 }
+        if let lastError { d["lastError"] = String(lastError.prefix(300)) }
+        return d
+    }
+
+    init(state: SessionState, appVersion: String, systemVersion: String, mode: String,
+         sessionStartedAt: Date? = nil, sensorReadings: Int = 0, staleReadings: Int = 0,
+         lastSensorReadingAt: Date? = nil, phoneAcknowledgements: Int = 0,
+         lastError: String? = nil, reportedAt: Date) {
+        self.state = state
+        self.appVersion = appVersion
+        self.systemVersion = systemVersion
+        self.mode = mode
+        self.sessionStartedAt = sessionStartedAt
+        self.sensorReadings = sensorReadings
+        self.staleReadings = staleReadings
+        self.lastSensorReadingAt = lastSensorReadingAt
+        self.phoneAcknowledgements = phoneAcknowledgements
+        self.lastError = lastError
+        self.reportedAt = reportedAt
+    }
+
+    /// Reads the nested diagnostics from any Watch message or context.
+    init?(payload: [String: Any]) {
+        guard let d = payload[WatchMessageKey.watchDiagnostics] as? [String: Any],
+              let state = (d["state"] as? String).flatMap(SessionState.init(rawValue:)),
+              let reported = (d["reportedAt"] as? NSNumber)?.doubleValue, reported.isFinite else { return nil }
+        func date(_ key: String) -> Date? {
+            guard let value = (d[key] as? NSNumber)?.doubleValue, value.isFinite else { return nil }
+            return Date(timeIntervalSince1970: value)
+        }
+        func count(_ key: String) -> Int { max(0, (d[key] as? NSNumber)?.intValue ?? 0) }
+        self.init(state: state,
+                  appVersion: d["appVersion"] as? String ?? "?",
+                  systemVersion: d["systemVersion"] as? String ?? "?",
+                  mode: d["mode"] as? String ?? "?",
+                  sessionStartedAt: date("sessionStartedAt"),
+                  sensorReadings: count("sensorReadings"),
+                  staleReadings: count("staleReadings"),
+                  lastSensorReadingAt: date("lastSensorReadingAt"),
+                  phoneAcknowledgements: count("phoneAcknowledgements"),
+                  lastError: d["lastError"] as? String,
+                  reportedAt: Date(timeIntervalSince1970: reported))
     }
 }
 

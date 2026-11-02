@@ -17,7 +17,8 @@ struct N4x4WatchApp: App {
     @StateObject private var sessionManager = WatchSessionManager()
     @StateObject private var workoutManager = WorkoutManager()
     /// DEBUG-only layout/screenshot mode
-    /// (`-demoState home|offline|workout|paused|controls|complete|local|localComplete`).
+    /// (`-demoState home|offline|workout|paused|controls|complete|local|localComplete`,
+    /// plus `-demoSensorSilent` for the no-heart-rate guidance).
     private let demo = WatchDemoState.fromLaunchArguments()
 
     var body: some Scene {
@@ -41,6 +42,9 @@ struct N4x4WatchApp: App {
                     workoutManager.onReading = { [weak connection] sample in
                         connection?.evaluateZoneHaptic(bpm: sample.bpm)
                         connection?.recordHeartRate(sample.bpm, now: sample.measuredAt)
+                    }
+                    workoutManager.describeMode = { [weak connection] in
+                        connection?.mode == .local ? "Watch-led" : "Phone-led"
                     }
                     sessionManager.activate()
                     workoutManager.discardAbandonedSession()
@@ -214,6 +218,7 @@ struct WatchDemoState {
             } else {
                 workout.heartRate = 148
             }
+            if arguments.contains("-demoSensorSilent") { workout.injectDemoSensorSilent() }
         case .complete:
             s.sessionStarted = true
             s.workoutComplete = true

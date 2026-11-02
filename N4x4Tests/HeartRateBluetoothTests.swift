@@ -242,6 +242,73 @@ final class WatchSessionReliabilityTests: XCTestCase {
         XCTAssertNil(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A"))
     }
 
+    func testRetryRestartsASilentSessionForTheSameWorkoutWithoutLatchingFailure() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        _ = lifecycle.preparationFinished()
+        XCTAssertEqual(lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A"), .start(workoutID: "A", token: 1))
+        XCTAssertEqual(lifecycle.restart(), .stop(token: 1))
+        XCTAssertNil(lifecycle.restart(), "A second tap while stopping does nothing")
+        XCTAssertEqual(lifecycle.ended(token: 1), .start(workoutID: "A", token: 2))
+    }
+
+    func testRestartWithoutARunningSessionBehavesLikeRetry() {
+        var lifecycle = WatchWorkoutSessionLifecycle()
+        XCTAssertNil(lifecycle.restart(), "Never starts before startup cleanup")
+        _ = lifecycle.preparationFinished()
+        XCTAssertNil(lifecycle.restart(), "Never starts without a workout")
+        _ = lifecycle.desire(sessionStarted: true, complete: false, workoutID: "A")
+        XCTAssertNil(lifecycle.ended(token: 1, failed: true))
+        XCTAssertEqual(lifecycle.restart(), .start(workoutID: "A", token: 2))
+    }
+
+    func testStalledPreparationCanBeSupersededAndIgnoresTheOldCallback() {
+        var preparation = WatchSessionPreparation()
+        let first = try! XCTUnwrap(preparation.begin(now: 100))
+        XCTAssertNil(preparation.begin(now: 105), "A retry inside the timeout keeps the running attempt")
+        XCTAssertFalse(preparation.isStalled(token: first, now: 114))
+        XCTAssertTrue(preparation.isStalled(token: first, now: 115))
+        let second = try! XCTUnwrap(preparation.begin(now: 116))
+        XCTAssertFalse(preparation.end(token: first), "The superseded callback is ignored")
+        XCTAssertTrue(preparation.isPreparing)
+        XCTAssertTrue(preparation.end(token: second))
+        XCTAssertFalse(preparation.isPreparing)
+        XCTAssertFalse(preparation.end(token: second))
+    }
+
+    func testPreparationLateCallbackStillCompletesAnUnsupersededAttempt() {
+        var preparation = WatchSessionPreparation()
+        let token = try! XCTUnwrap(preparation.begin(now: 0))
+        XCTAssertTrue(preparation.isStalled(token: token, now: 60))
+        XCTAssertTrue(preparation.end(token: token))
+        XCTAssertNotNil(preparation.begin(now: 30), "A backwards clock never blocks a new attempt")
+    }
+
+    func testWatchDiagnosticsRoundTripAndSilenceDetection() throws {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var d = WatchSensorDiagnostics(state: .running, appVersion: "5.15 (55)", systemVersion: "26.1",
+                                       mode: "Phone-led", sessionStartedAt: start, sensorReadings: 0,
+                                       reportedAt: start + 31)
+        let decoded = try XCTUnwrap(WatchSensorDiagnostics(payload: [WatchMessageKey.watchDiagnostics: d.dictionary]))
+        XCTAssertEqual(decoded, d)
+        XCTAssertFalse(d.isSensorSilent(at: start + 29))
+        XCTAssertTrue(d.isSensorSilent(at: start + 30))
+        d.lastSensorReadingAt = start + 20
+        XCTAssertFalse(d.isSensorSilent(at: start + 49))
+        XCTAssertTrue(d.isSensorSilent(at: start + 50))
+        d.state = .idle
+        XCTAssertFalse(d.isSensorSilent(at: start + 500), "Only a running session can be silent")
+    }
+
+    func testWatchDiagnosticsRejectMalformedPayloadsAndTruncateErrors() throws {
+        XCTAssertNil(WatchSensorDiagnostics(payload: [:]))
+        XCTAssertNil(WatchSensorDiagnostics(payload: [WatchMessageKey.watchDiagnostics: ["state": "running"]]))
+        XCTAssertNil(WatchSensorDiagnostics(payload: [WatchMessageKey.watchDiagnostics: ["state": "bogus", "reportedAt": 1.0]]))
+        let d = WatchSensorDiagnostics(state: .failed, appVersion: "1", systemVersion: "1", mode: "Watch-led",
+                                       lastError: String(repeating: "x", count: 1_000), reportedAt: Date())
+        let decoded = try XCTUnwrap(WatchSensorDiagnostics(payload: [WatchMessageKey.watchDiagnostics: d.dictionary]))
+        XCTAssertEqual(decoded.lastError?.count, 300)
+    }
+
     func testLateStateContextCannotReopenFinishedWorkout() {
         var inbox = WatchStateInbox()
         XCTAssertTrue(inbox.accept([WatchMessageKey.stateRevision: 10]))

@@ -309,7 +309,13 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     /// Home START. Phone in reach → the phone leads. Otherwise run here.
     func startWorkout(now: Date = Date()) {
-        if mode == .mirror, isReachable {
+        // Ask WCSession directly: the published flag only refreshes on
+        // delegate callbacks and workout ticks, and a stale `false` silently
+        // turned a phone-led start into a Watch-only workout.
+        let reachable = WCSession.isSupported() && WCSession.default.activationState == .activated
+            && WCSession.default.isReachable
+        if reachable != isReachable { isReachable = reachable }
+        if mode == .mirror, reachable {
             sendCommand(WatchMessageKey.cmdStartPause)
         } else {
             startLocalWorkout(now: now)

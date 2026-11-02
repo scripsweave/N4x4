@@ -208,6 +208,13 @@ struct WatchTimerView: View {
             }
             .foregroundStyle(cue.color)
             .animation(.easeInOut(duration: 0.3), value: status)
+        } else if state.isRunning, hr <= 0, workoutManager.hasHeartRateIssue {
+            // Guidance and Retry live on the controls page below.
+            Text(compact ? "NO HR ↓" : "NO HEART RATE ↓")
+                .font(.system(size: compact ? 9 : 10, weight: .heavy))
+                .foregroundStyle(WatchPalette.amber)
+                .tracking(0.5)
+                .accessibilityLabel("No heart rate. Scroll down for help.")
         } else if hasTarget {
             Text(compact ? "ZONE \(state.hrLow)–\(state.hrHigh)" : (state.isRunning ? "WAITING FOR HR" : ""))
                 .font(.system(size: compact ? 9 : 10, weight: .semibold))
@@ -278,7 +285,16 @@ struct WatchTimerView: View {
                         .font(.footnote)
                         .foregroundStyle(WatchPalette.amber)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("Retry Heart Rate") { workoutManager.refreshOnForeground() }
+                    Button("Retry Heart Rate") { workoutManager.retryHeartRate() }
+                        .buttonStyle(WatchControlButtonStyle())
+                } else if workoutManager.sensorSilent {
+                    // Running session, nothing from the sensor: almost always
+                    // Heart Rate read access, or a loose fit.
+                    Text("No heart rate from the sensor. Allow N4x4 to read Heart Rate in Health, and check your Watch is snug.")
+                        .font(.footnote)
+                        .foregroundStyle(WatchPalette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Retry Heart Rate") { workoutManager.retryHeartRate() }
                         .buttonStyle(WatchControlButtonStyle())
                 } else if sessionManager.mode == .mirror, workoutManager.heartRate > 0 {
                     let recentlyConfirmed = workoutManager.lastPhoneAcknowledgement.map {

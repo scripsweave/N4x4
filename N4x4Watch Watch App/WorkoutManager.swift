@@ -17,17 +17,47 @@ final class WorkoutManager: NSObject, ObservableObject {
     private var builder: HKLiveWorkoutBuilder?
     private var isStopping = false
     private var lifecycle = WatchWorkoutSessionLifecycle()
-    private var isPreparing = false
+    private var preparation = WatchSessionPreparation()
+    private var preparationStallWork: DispatchWorkItem?
     private var recoveringSession: HKWorkoutSession?
     private var sessionToken = 0
     private var workoutID: String?
     private var expiryWork: DispatchWorkItem?
+    private var silenceWork: DispatchWorkItem?
     private var energyReportID: UUID?
+    private var energyReportStart: Double?
     private var queryingEnergy: Set<UUID> = []
+    /// Open calorie reports already announced this launch. Once delivered,
+    /// re-sending on every five-second phone HR request was pure traffic.
+    private var announcedEnergyReports: Set<UUID> = []
+    // Diagnostics for the phone (no BPM). Kept after a session ends so the
+    // phone can still see what the last session did.
+    private var sessionStartedAt: Date?
+    private var sensorReadings = 0
+    private var staleReadings = 0
+    private var lastSensorReadingAt: Date?
+    private var phoneAcknowledgements = 0
+    private var lastDiagnosticsPublish: TimeInterval = -.infinity
+    /// Newest HR fallback written to application context (see writeContext).
+    private var contextHeartRate: [String: Any]?
     var onReading: ((WatchHeartRateSample) -> Void)?
+    /// "Phone-led" / "Watch-led", supplied by the root for diagnostics.
+    var describeMode: (() -> String)?
     @Published private(set) var latestReading: WatchHeartRateSample?
     @Published private(set) var lastPhoneAcknowledgement: Date?
     @Published private(set) var lastSessionError: String?
+    /// The session is running but the sensor has produced no usable reading
+    /// for `WatchSensorDiagnostics.silentAfter` seconds.
+    @Published private(set) var sensorSilent = false
+    var hasHeartRateIssue: Bool { lastSessionError != nil || sensorSilent }
+
+    #if DEBUG
+    /// Layout checks for the silent-sensor guidance (`-demoSensorSilent`).
+    func injectDemoSensorSilent() {
+        heartRate = 0
+        sensorSilent = true
+    }
+    #endif
 
     private lazy var heartRateDelivery = WatchHeartRateDelivery(
         activated: { WCSession.isSupported() && WCSession.default.activationState == .activated },
@@ -43,11 +73,14 @@ final class WorkoutManager: NSObject, ObservableObject {
             })
         },
         saveContext: { [weak self] message in
-            do { try WCSession.default.updateApplicationContext(self?.addingEnergySession(to: message) ?? message) }
-            catch { print("[WorkoutManager] HR context failed: \(error.localizedDescription)") }
+            guard let self else { return }
+            self.writeContext(heartRate: self.addingEnergySession(to: message))
         },
         retryLater: { retry in DispatchQueue.main.asyncAfter(deadline: .now() + 2) { retry() } },
-        acknowledged: { [weak self] _ in self?.lastPhoneAcknowledgement = Date() }
+        acknowledged: { [weak self] _ in
+            self?.lastPhoneAcknowledgement = Date()
+            self?.phoneAcknowledgements += 1
+        }
     )
 
     @Published var heartRate: Double = 0
@@ -78,31 +111,41 @@ final class WorkoutManager: NSObject, ObservableObject {
     /// from the watch, so end and discard it. Call once at app launch, before
     /// any session starts.
     func discardAbandonedSession() {
-        guard !lifecycle.prepared, !isPreparing else { return }
-        isPreparing = true
+        guard !lifecycle.prepared,
+              let token = preparation.begin(now: ProcessInfo.processInfo.systemUptime) else { return }
+        // A superseded attempt's recovered session is still discarded by the
+        // delegate when it ends; it just no longer gates this attempt.
+        recoveringSession = nil
+        schedulePreparationStallCheck(token: token)
+        publishDiagnostics(force: true)
         requestAuthorization { [weak self] _ in
-            guard let self else { return }
+            guard let self, self.preparation.token == token, self.preparation.isPreparing else { return }
             guard self.healthStore.authorizationStatus(for: .workoutType()) == .sharingAuthorized else {
-                self.isPreparing = false
+                _ = self.preparation.end(token: token)
                 self.lastSessionError = "Allow N4x4 to access Workouts in Health settings on your Watch."
+                self.publishDiagnostics(force: true)
                 return
             }
-            self.recoverAbandonedSession()
+            self.recoverAbandonedSession(token: token)
         }
     }
 
-    private func recoverAbandonedSession() {
+    private func recoverAbandonedSession(token: Int) {
         healthStore.recoverActiveWorkoutSession { [weak self] recovered, error in
             DispatchQueue.main.async {
                 guard let self else { return }
+                // A superseded attempt does nothing: the newer attempt runs its
+                // own recovery, and a late result could name a live session.
+                guard self.preparation.token == token, self.preparation.isPreparing else { return }
                 if let error {
-                    self.isPreparing = false
+                    _ = self.preparation.end(token: token)
                     self.lastSessionError = "Couldn’t check the previous Watch workout: \(error.localizedDescription)"
+                    self.publishDiagnostics(force: true)
                     return
                 }
-                guard let recovered else { self.finishPreparation(); return }
+                guard let recovered else { self.finishPreparation(token: token); return }
                 recovered.associatedWorkoutBuilder().discardWorkout()
-                guard recovered.state != .ended else { self.finishPreparation(); return }
+                guard recovered.state != .ended else { self.finishPreparation(token: token); return }
                 self.recoveringSession = recovered
                 recovered.delegate = self
                 recovered.end()
@@ -111,12 +154,31 @@ final class WorkoutManager: NSObject, ObservableObject {
         }
     }
 
-    private func finishPreparation() {
+    private func finishPreparation(token: Int) {
+        guard preparation.end(token: token) else { return }
+        preparationStallWork?.cancel()
+        preparationStallWork = nil
         recoveringSession = nil
-        isPreparing = false
         lastSessionError = nil
         recoverEnergyReports()
         perform(lifecycle.preparationFinished())
+        publishDiagnostics(force: true)
+    }
+
+    /// Surfaces a stalled startup with an error, which also shows Retry Heart
+    /// Rate. The attempt itself stays valid: a late callback still completes it.
+    private func schedulePreparationStallCheck(token: Int) {
+        preparationStallWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  self.preparation.isStalled(token: token, now: ProcessInfo.processInfo.systemUptime) else { return }
+            self.lastSessionError = self.recoveringSession == nil
+                ? "Still waiting for Health access. Check your Watch for a Health request, then tap Retry Heart Rate."
+                : "The previous Watch workout is still closing. Tap Retry Heart Rate."
+            self.publishDiagnostics(force: true)
+        }
+        preparationStallWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + WatchSessionPreparation.stallTimeout + 0.1, execute: work)
     }
 
     func updateWorkout(sessionStarted: Bool, complete: Bool, workoutID: String?) {
@@ -131,6 +193,16 @@ final class WorkoutManager: NSObject, ObservableObject {
         resendLatestHeartRate()
     }
 
+    /// Retry Heart Rate: re-runs a stalled startup, restarts a failed session,
+    /// and restarts a running session whose sensor has gone silent.
+    func retryHeartRate() {
+        if sensorSilent, session != nil, !isStopping {
+            sensorSilent = false
+            perform(lifecycle.restart())
+        }
+        refreshOnForeground()
+    }
+
     private func perform(_ action: WatchWorkoutSessionLifecycle.Action?) {
         switch action {
         case let .start(id, token): startWorkout(workoutID: id, token: token)
@@ -142,6 +214,13 @@ final class WorkoutManager: NSObject, ObservableObject {
     private func startWorkout(workoutID: String, token: Int) {
         sessionToken = token
         energyReportID = nil
+        energyReportStart = nil
+        sessionStartedAt = Date()
+        sensorReadings = 0
+        staleReadings = 0
+        lastSensorReadingAt = nil
+        phoneAcknowledgements = 0
+        sensorSilent = false
         self.workoutID = workoutID == "legacy" ? nil : workoutID
         let config = HKWorkoutConfiguration()
         config.activityType = .highIntensityIntervalTraining
@@ -169,6 +248,7 @@ final class WorkoutManager: NSObject, ObservableObject {
                 do {
                     try WorkoutEnergyStore.shared.save(report)
                     energyReportID = report.id
+                    energyReportStart = report.start
                     flushEnergyReports()
                 } catch { print("[WorkoutManager] Couldn’t checkpoint calories: \(error)") }
             }
@@ -185,12 +265,15 @@ final class WorkoutManager: NSObject, ObservableObject {
                 }
             }
             isSessionActive = true
+            scheduleSilenceCheck()
+            publishDiagnostics(force: true)
         } catch {
             lastSessionError = "Couldn’t start Watch heart rate: \(error.localizedDescription)"
             session = nil
             builder = nil
             isSessionActive = false
             perform(lifecycle.ended(token: token, failed: true))
+            publishDiagnostics(force: true)
         }
     }
 
@@ -200,6 +283,7 @@ final class WorkoutManager: NSObject, ObservableObject {
         checkpointEnergy(at: Date())
         clearReading()
         session.end()
+        publishDiagnostics(force: true)
         // isSessionActive flips to false via the delegate callback.
     }
 
@@ -207,17 +291,104 @@ final class WorkoutManager: NSObject, ObservableObject {
 
     func resendLatestHeartRate() {
         recoverEnergyReports()
+        // The phone asks every five seconds while it expects HR and has none;
+        // answer with the Watch's own view so the gap can be diagnosed.
+        publishDiagnostics()
         guard isSessionActive, !isStopping else { return }
         heartRateDelivery.resendLatest()
     }
 
+    /// Cached at session start: this runs for every HR send, and reading the
+    /// report back from disk each time was needless main-thread I/O.
     private func addingEnergySession(to message: [String: Any]) -> [String: Any] {
-        guard let id = energyReportID, let workoutID, let workout = UUID(uuidString: workoutID),
-              let report = try? WorkoutEnergyStore.shared.reports(for: workout).first(where: { $0.id == id }) else { return message }
+        guard let id = energyReportID, let start = energyReportStart else { return message }
         var message = message
         message[WatchMessageKey.energySessionID] = id.uuidString
-        message[WatchMessageKey.energySessionStart] = report.start
+        message[WatchMessageKey.energySessionStart] = start
         return message
+    }
+
+    // MARK: - Diagnostics (no BPM)
+
+    private static let appVersion: String = {
+        let info = Bundle.main.infoDictionary
+        return "\(info?["CFBundleShortVersionString"] as? String ?? "?") (\(info?["CFBundleVersion"] as? String ?? "?"))"
+    }()
+
+    private var diagnosticsState: WatchSensorDiagnostics.SessionState {
+        if preparation.isPreparing { return .preparing }
+        if session != nil { return isStopping ? .stopping : .running }
+        return lastSessionError == nil ? .idle : .failed
+    }
+
+    private func currentDiagnostics(now: Date = Date()) -> WatchSensorDiagnostics {
+        WatchSensorDiagnostics(state: diagnosticsState,
+                               appVersion: Self.appVersion,
+                               systemVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+                               mode: describeMode?() ?? "?",
+                               sessionStartedAt: sessionStartedAt,
+                               sensorReadings: sensorReadings,
+                               staleReadings: staleReadings,
+                               lastSensorReadingAt: lastSensorReadingAt,
+                               phoneAcknowledgements: phoneAcknowledgements,
+                               lastError: lastSessionError,
+                               reportedAt: now)
+    }
+
+    /// State changes publish immediately; counters at most every ten seconds.
+    /// Live message when reachable, and always the latest-only context so the
+    /// phone still learns it after the Watch app has gone quiet.
+    private func publishDiagnostics(force: Bool = false) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard force || now - lastDiagnosticsPublish >= 10 else { return }
+        lastDiagnosticsPublish = now
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage([WatchMessageKey.messageType: WatchMessageKey.watchDiagnostics,
+                                           WatchMessageKey.watchDiagnostics: currentDiagnostics().dictionary],
+                                          replyHandler: nil, errorHandler: nil)
+        }
+        writeContext(heartRate: nil)
+    }
+
+    /// The application context is one latest-only dictionary: the newest HR
+    /// fallback while still fresh, plus the current diagnostics. Writing
+    /// diagnostics alone must not wipe an undelivered fresh reading.
+    private func writeContext(heartRate message: [String: Any]?) {
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
+        if let message { contextHeartRate = message }
+        var context: [String: Any]
+        if let hr = contextHeartRate, WatchHeartRateSample(message: hr)?.isFresh(at: Date()) == true {
+            context = hr
+        } else {
+            contextHeartRate = nil
+            context = [WatchMessageKey.messageType: WatchMessageKey.watchDiagnostics]
+        }
+        context[WatchMessageKey.watchDiagnostics] = currentDiagnostics().dictionary
+        do { try WCSession.default.updateApplicationContext(context) }
+        catch { print("[WorkoutManager] Context update failed: \(error.localizedDescription)") }
+    }
+
+    /// Re-armed by every usable reading; fires once the running session has
+    /// been quiet for `silentAfter`, which shows guidance and Retry.
+    private func scheduleSilenceCheck() {
+        silenceWork?.cancel()
+        silenceWork = nil
+        guard session != nil, !isStopping, let since = lastSensorReadingAt ?? sessionStartedAt else { return }
+        let delay = max(0, WatchSensorDiagnostics.silentAfter - Date().timeIntervalSince(since))
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.session != nil, !self.isStopping else { return }
+            if self.currentDiagnostics().isSensorSilent(at: Date()) {
+                if !self.sensorSilent {
+                    self.sensorSilent = true
+                    self.publishDiagnostics(force: true)
+                }
+            } else {
+                self.scheduleSilenceCheck()
+            }
+        }
+        silenceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay + 0.1, execute: work)
     }
 
     private func checkpointEnergy(at date: Date) {
@@ -301,11 +472,13 @@ final class WorkoutManager: NSObject, ObservableObject {
                 } catch { print("[WorkoutManager] Couldn’t queue calories: \(error)") }
                 continue
             }
-            guard !transfers.contains(where: {
+            guard !announcedEnergyReports.contains(report.id), !transfers.contains(where: {
                 $0.userInfo[WatchMessageKey.messageType] as? String == WatchMessageKey.energyReport
                     && $0.userInfo[WatchMessageKey.energySessionID] as? String == report.id.uuidString
                     && $0.userInfo[WatchMessageKey.energyFinalized] as? Bool == report.finalized
             }), let data = try? JSONEncoder().encode(report) else { continue }
+            // transferUserInfo is guaranteed; one announcement per launch is enough.
+            announcedEnergyReports.insert(report.id)
             let message: [String: Any] = [WatchMessageKey.messageType: WatchMessageKey.energyReport,
                                          WatchMessageKey.energySessionID: report.id.uuidString,
                                          WatchMessageKey.workoutID: report.workoutID.uuidString,
@@ -341,8 +514,20 @@ final class WorkoutManager: NSObject, ObservableObject {
     }
 
     private func receive(_ sample: WatchHeartRateSample) {
-        guard sample.isFresh(at: Date()),
-              latestReading.map({ sample.measuredAt > $0.measuredAt || !$0.isFresh(at: Date()) }) ?? true else { return }
+        sensorReadings += 1
+        guard sample.isFresh(at: Date()) else {
+            // Dropping is the freshness rule; counting it tells a sensor that
+            // delivers late batches apart from one that delivers nothing.
+            staleReadings += 1
+            publishDiagnostics(force: staleReadings == 1)
+            return
+        }
+        guard latestReading.map({ sample.measuredAt > $0.measuredAt || !$0.isFresh(at: Date()) }) ?? true else { return }
+        let changed = lastSensorReadingAt == nil || sensorSilent
+        lastSensorReadingAt = sample.measuredAt
+        sensorSilent = false
+        publishDiagnostics(force: changed)
+        scheduleSilenceCheck()
         latestReading = sample
         heartRate = sample.bpm
         onReading?(sample)
@@ -371,7 +556,7 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                 workoutSession.associatedWorkoutBuilder().discardWorkout()
             }
             if workoutSession === self.recoveringSession {
-                if toState == .ended { self.finishPreparation() }
+                if toState == .ended { self.finishPreparation(token: self.preparation.token) }
                 return
             }
             guard workoutSession === self.session else { return }
@@ -383,9 +568,13 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
                     self.lastSessionError = "The Watch heart-rate session ended. Tap Retry Heart Rate to reconnect."
                 }
                 self.clearReading()
+                self.silenceWork?.cancel()
+                self.sensorSilent = false
                 self.builder = nil
                 self.session = nil
+                self.isStopping = false
                 self.perform(self.lifecycle.ended(token: self.sessionToken))
+                self.publishDiagnostics(force: true)
             }
         }
     }
@@ -397,18 +586,23 @@ extension WorkoutManager: HKWorkoutSessionDelegate {
             workoutSession.associatedWorkoutBuilder().discardWorkout()
             if workoutSession === self.recoveringSession {
                 self.recoveringSession = nil
-                self.isPreparing = false
+                _ = self.preparation.end(token: self.preparation.token)
                 self.lastSessionError = "Couldn’t close the previous Watch workout: \(error.localizedDescription)"
+                self.publishDiagnostics(force: true)
                 return
             }
             guard workoutSession === self.session else { return }
             self.finishEnergy(at: Date())
             self.isSessionActive = false
             self.clearReading()
+            self.silenceWork?.cancel()
+            self.sensorSilent = false
             self.builder = nil
             self.session = nil
+            self.isStopping = false
             self.lastSessionError = "Watch heart rate stopped: \(error.localizedDescription)"
             self.perform(self.lifecycle.ended(token: self.sessionToken, failed: true))
+            self.publishDiagnostics(force: true)
         }
     }
 }

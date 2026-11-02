@@ -1,0 +1,7 @@
+More reliable Apple Watch heart rate:
+
+• N4x4 now asks for Heart Rate access on your iPhone as well as your Watch. If Watch heart rate has been missing, open Settings > Health & Devices and tap Review Health Access.
+• If the Watch sensor stays silent during a workout, the Watch shows NO HR with what to check, and Retry Heart Rate restarts the sensor without ending your workout.
+• The Watch recovers from a heart-rate startup that never finishes instead of waiting silently.
+• Copy Diagnostics now includes the Watch's own heart-rate status, so support requests can pinpoint the problem.
+• Starting a workout on the Watch checks the live iPhone connection, avoiding an unintended Watch-only workout.

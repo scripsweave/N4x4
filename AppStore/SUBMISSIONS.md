@@ -1,5 +1,11 @@
 # App Store submissions
 
+**5.15 preparation (2026-11-02):** Watch heart-rate reliability and
+diagnostics ([handoff](../docs/SESSION-HANDOFF-2026-11-01-WATCH-HR-DIAGNOSTICS.md)).
+5.14 (54) was confirmed READY_FOR_DISTRIBUTION before the bump. 294 unit tests,
+generic-device Release build (all bundles 5.15) and release tooling pass
+locally. No physical Watch check was possible; release authorized regardless.
+
 **Latest submission (2026-10-29):** `AppStore/submit.sh 5.14 54 --submit`
 verified **WAITING_FOR_REVIEW** and **AFTER_APPROVAL** at 15:26 CET;
 independent verification and read-only check confirmed it at 15:27 CET.
