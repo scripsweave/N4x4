@@ -5,7 +5,8 @@ rate", watch-started workouts, repeated Health prompts, Heart Rate read access
 found switched off. Their screenshots and email are private and untracked under
 `tmp/` (not gitignored — never `git add -A` there).
 
-Released as **5.15** on 2 November 2026 at the user's request, without the
+Submitted as **5.15 (55)** on 2 November 2026 (WAITING_FOR_REVIEW, automatic
+release after approval; details in `AppStore/SUBMISSIONS.md`) at the user's request, without the
 physical-device checks below (no Watch available while traveling). 5.14 was
 live (READY_FOR_DISTRIBUTION) before the bump. Release notes:
 `AppStore/release-notes-5.15.txt`; review notes: `AppStore/review-notes-5.15.txt`.

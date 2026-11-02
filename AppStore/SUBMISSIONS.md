@@ -1,5 +1,17 @@
 # App Store submissions
 
+**Latest submission (2026-11-02):** `AppStore/submit.sh 5.15 55 --submit`
+verified **WAITING_FOR_REVIEW** and **AFTER_APPROVAL** at 03:42 CET;
+independent verification confirmed it at 02:42:42 UTC. Cloud **55** (run
+`adb5da6b-138b-48e8-a613-77943feffb4e`) passed all four actions and
+**318/318 test records** for `62e885a78f8f485ee735bb0a2105da0bf7746d87` /
+`v5.15`. The new version record (`b484dbbb-1aad-495d-a0ed-3140993911c5`) copied
+review contact/notes from 5.14 but **not the review video**: it was re-uploaded
+from the durable private copy (attachment `feb30910-6499-4a1a-b088-949f3c5be8f6`,
+COMPLETE, MD5 matches). Review notes were set from `review-notes-5.15.txt`
+before submission. Listing and all 17 media placements unchanged. **5.14
+remains live until approval.** Shipped without a physical Watch check.
+
 **5.15 preparation (2026-11-02):** Watch heart-rate reliability and
 diagnostics ([handoff](../docs/SESSION-HANDOFF-2026-11-01-WATCH-HR-DIAGNOSTICS.md)).
 5.14 (54) was confirmed READY_FOR_DISTRIBUTION before the bump. 294 unit tests,

@@ -1,8 +1,9 @@
 # N4x4 — Session Handoff
 
-> **5.15 release (2026-11-02): Watch HR reliability + diagnostics.** Pushed
-> to main for Xcode Cloud; see `AppStore/SUBMISSIONS.md` for submission
-> status. Shipped without physical Watch checks. The iPhone now requests Heart Rate
+> **5.15 submitted (2026-11-02): Watch HR reliability + diagnostics.**
+> Version **5.15 (55)** is WAITING_FOR_REVIEW / AFTER_APPROVAL. Cloud 55 passed
+> all four actions and 318/318 tests for `62e885a` / `v5.15`. 5.14 stays live
+> until approval. Shipped without physical Watch checks. The iPhone now requests Heart Rate
 > read. Watch startup can no longer stall silently, a silent sensor shows NO HR
 > with Retry, and Copy Diagnostics includes the Watch's own sensor status.
 > 294/294 unit tests pass. Device checks are still owed. See
