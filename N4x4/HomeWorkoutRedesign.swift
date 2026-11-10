@@ -56,12 +56,12 @@ private func rdTime(_ t: TimeInterval) -> String {
 
 /// Single accent colour per interval phase: blue warm-up, amber high-intensity
 /// (matching the background/brand orange), green recovery, teal cool-down.
-private func intervalColor(_ type: IntervalType?) -> Color {
+private func intervalColor(_ type: IntervalType?, appearance: AppAppearance) -> Color {
     switch type {
-    case .warmup:        return Palette.electricBlue
-    case .highIntensity: return Palette.amber
-    case .rest:          return Palette.recovery
-    case .cooldown:      return Color(red: 0.20, green: 0.75, blue: 0.85)
+    case .warmup:        return appearance.accent
+    case .highIntensity: return appearance.workAccent
+    case .rest:          return appearance.recoveryAccent
+    case .cooldown:      return appearance.cooldownAccent
     case .none:          return Palette.textSecondary
     }
 }
@@ -98,6 +98,7 @@ struct PulsingHeart: View {
 /// coloured by phase. With `showProgress`, a live marker shows how far through
 /// the whole session the user is (and how much is left).
 struct IntervalTimelineBar: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
     var showProgress: Bool = true
 
@@ -146,7 +147,7 @@ struct IntervalTimelineBar: View {
                     HStack(spacing: spacing) {
                         ForEach(Array(viewModel.intervals.enumerated()), id: \.offset) { idx, interval in
                             Capsule()
-                                .fill(intervalColor(interval.type))
+                                .fill(intervalColor(interval.type, appearance: appearance))
                                 .frame(width: usable * CGFloat(interval.duration / total), height: 8)
                                 .opacity(segmentOpacity(idx))
                         }
@@ -188,6 +189,7 @@ struct IntervalTimelineBar: View {
 /// translucent glass material and stays visible on every screen. Home/Workout
 /// swap inside the Home tab; History and Settings are full screens (not sheets).
 struct RedesignRootView: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
 
     @State private var selectedTab = 0
@@ -215,7 +217,7 @@ struct RedesignRootView: View {
                             Button { workoutMinimized = false } label: {
                                 Label("Workout in progress · Tap to return", systemImage: "stopwatch.fill")
                                     .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(Palette.electricBlue)
+                                    .foregroundStyle(appearance.accent)
                                     .padding(.vertical, 12)
                                     .padding(.horizontal, 16)
                                     .background(.ultraThinMaterial, in: Capsule())
@@ -227,7 +229,7 @@ struct RedesignRootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Palette.background.ignoresSafeArea())
+            .background(appearance.background.ignoresSafeArea())
             .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
 
@@ -243,7 +245,7 @@ struct RedesignRootView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(3)
         }
-        .tint(Palette.electricBlue)
+        .tint(appearance.accent)
         .workoutRecovery(viewModel: viewModel)
         .preferredColorScheme(.dark)
         .onChange(of: isSessionActive) { _, active in
@@ -349,6 +351,7 @@ private struct TrainingPanes<Primary: View, Secondary: View>: View {
 // MARK: - Home screen (idle)
 
 struct HomeScreen: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
     @Binding var showWatchHelp: Bool
     /// Dismisses the "connect your Watch" banner for this app session; it
@@ -554,7 +557,7 @@ struct HomeScreen: View {
             .accessibilityElement(children: .combine)
         }
         .padding(20)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24))
+        .background(appearance.surface, in: RoundedRectangle(cornerRadius: 24))
         .overlay(RoundedRectangle(cornerRadius: 24).stroke(Palette.hairline))
     }
 
@@ -563,7 +566,7 @@ struct HomeScreen: View {
         let phases = viewModel.intervals.filter { $0.type == type }
         if let first = phases.first {
             HStack(spacing: 10) {
-                Circle().fill(intervalColor(type)).frame(width: 10, height: 10)
+                Circle().fill(intervalColor(type, appearance: appearance)).frame(width: 10, height: 10)
                     .accessibilityHidden(true)
                 Text(title).foregroundStyle(Palette.textPrimary)
                 Spacer(minLength: 8)
@@ -583,7 +586,7 @@ struct HomeScreen: View {
                 HStack(spacing: 6) {
                     Image(systemName: viewModel.currentStreak > 0 ? "flame.fill" : "flame")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(viewModel.currentStreak > 0 ? Palette.amber : Palette.textTertiary)
+                        .foregroundStyle(viewModel.currentStreak > 0 ? appearance.workAccent : Palette.textTertiary)
                     Text("\(viewModel.currentStreak)")
                         .font(.system(size: 24, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.textPrimary)
@@ -608,7 +611,7 @@ struct HomeScreen: View {
                 HStack(spacing: 12) {
                     Image(systemName: "applewatch.slash")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Palette.electricBlue)
+                        .foregroundStyle(appearance.accent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Connect your Apple Watch")
                             .font(.system(size: 14, weight: .semibold))
@@ -636,8 +639,8 @@ struct HomeScreen: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.surface))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.electricBlue.opacity(0.35), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(appearance.surface))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(appearance.accent.opacity(0.35), lineWidth: 1))
     }
 
     /// Short "N intervals · ~M min total" line shown under the plan.
@@ -752,6 +755,7 @@ struct MetalRing<Center: View>: View {
 
 /// Home "Start" affordance — the shared chrome ring with the brand gradient glow.
 struct StartRingButton: View {
+    @Environment(\.appAppearance) private var appearance
     let title: String
     var side: CGFloat = 340
     let action: () -> Void
@@ -760,10 +764,10 @@ struct StartRingButton: View {
         Button(action: action) {
             MetalRing(side: side,
                       progress: 1,
-                      glow: AnyShapeStyle(Palette.brandGlow),
-                      glowColor: Palette.amber,
-                      reflectLeft: Palette.amber,
-                      reflectRight: Palette.electricBlue) {
+                      glow: AnyShapeStyle(appearance.brandGlow),
+                      glowColor: appearance.workAccent,
+                      reflectLeft: appearance.workAccent,
+                      reflectRight: appearance.accent) {
                 Text(title)
                     .font(.system(size: side * 0.115, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
@@ -779,6 +783,7 @@ struct StartRingButton: View {
 // MARK: - VO2 max history card
 
 struct VO2HistoryCard: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
 
     /// Explicit time windows selected via buttons (rescale the chart's x-axis).
@@ -837,7 +842,7 @@ struct VO2HistoryCard: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(appearance.surface))
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
@@ -867,7 +872,7 @@ struct VO2HistoryCard: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text("\(Int(latest.rounded()))")
                         .font(.system(size: 34, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Palette.electricBlue)
+                        .foregroundStyle(appearance.accent)
                     Text("VO₂ MAX")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Palette.textSecondary)
@@ -891,7 +896,7 @@ struct VO2HistoryCard: View {
                         .foregroundStyle(range == r ? Color.black : Palette.textSecondary)
                         .padding(.horizontal, 11)
                         .padding(.vertical, 6)
-                        .background(range == r ? Palette.electricBlue : Palette.surfaceRaised, in: Capsule())
+                        .background(range == r ? appearance.accent : appearance.surfaceRaised, in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -910,12 +915,12 @@ struct VO2HistoryCard: View {
                 AreaMark(x: .value("Date", p.date), y: .value("VO₂", p.value))
                     .interpolationMethod(.catmullRom)
                     .foregroundStyle(
-                        LinearGradient(colors: [Palette.electricBlue.opacity(0.35), .clear],
+                        LinearGradient(colors: [appearance.accent.opacity(0.35), .clear],
                                        startPoint: .top, endPoint: .bottom)
                     )
                 LineMark(x: .value("Date", p.date), y: .value("VO₂", p.value))
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(Palette.electricBlue)
+                    .foregroundStyle(appearance.accent)
                     .lineStyle(StrokeStyle(lineWidth: 2.5))
             }
             if let target = viewModel.vo2MaxTarget {
@@ -1008,6 +1013,7 @@ struct VO2HistoryCard: View {
 // MARK: - Workout screen (active)
 
 struct WorkoutScreen: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
     @Binding var showWatchHelp: Bool
     var onMinimize: () -> Void = {}
@@ -1124,11 +1130,11 @@ struct WorkoutScreen: View {
                         .foregroundStyle(Palette.textPrimary)
                 }
                 Spacer(minLength: 0)
-                Circle().fill(intervalColor(next.type)).frame(width: 10, height: 10)
+                Circle().fill(intervalColor(next.type, appearance: appearance)).frame(width: 10, height: 10)
                     .accessibilityHidden(true)
             }
             .padding(18)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 20))
+            .background(appearance.surface, in: RoundedRectangle(cornerRadius: 20))
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("up-next-interval")
         }
@@ -1190,7 +1196,7 @@ struct WorkoutScreen: View {
                     .foregroundStyle(Palette.textPrimary)
                 Text(roundText)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(Palette.electricBlue)
+                    .foregroundStyle(appearance.accent)
                     .tracking(0.5)
             }
             HStack(spacing: 8) {
@@ -1200,7 +1206,7 @@ struct WorkoutScreen: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Palette.textSecondary)
                         .frame(width: 44, height: 44)
-                        .background(Circle().fill(Palette.surfaceRaised))
+                        .background(Circle().fill(appearance.surfaceRaised))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Minimize workout")
@@ -1210,10 +1216,10 @@ struct WorkoutScreen: View {
                 } label: {
                     Text("FINISH")
                         .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(Palette.electricBlue)
+                        .foregroundStyle(appearance.accent)
                         .padding(.horizontal, 16)
                         .frame(minHeight: 44)
-                        .overlay(Capsule().stroke(Palette.electricBlue.opacity(0.6), lineWidth: 1.5))
+                        .overlay(Capsule().stroke(appearance.accent.opacity(0.6), lineWidth: 1.5))
                 }
                 .buttonStyle(.plain)
             }
@@ -1252,7 +1258,7 @@ struct WorkoutScreen: View {
                 Label(viewModel.canUndoBonusRound ? "Undo Bonus Round" : "+1 Bonus Round",
                       systemImage: viewModel.canUndoBonusRound ? "arrow.uturn.backward" : "plus.circle")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Palette.electricBlue)
+                    .foregroundStyle(appearance.accent)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -1308,13 +1314,14 @@ struct WorkoutScreen: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
         .frame(minHeight: 48)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.surface))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(appearance.surface))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
 }
 
 /// Countdown ring for the active workout: gradient arc + glowing progress dot.
 struct WorkoutRing: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
 
     /// Fraction of the current interval remaining (1 → full, 0 → done).
@@ -1334,7 +1341,7 @@ struct WorkoutRing: View {
         }
     }
 
-    private var phaseColor: Color { intervalColor(viewModel.currentIntervalType) }
+    private var phaseColor: Color { intervalColor(viewModel.currentIntervalType, appearance: appearance) }
 
     var side: CGFloat = 320
 
@@ -1377,6 +1384,7 @@ struct WorkoutRing: View {
 /// phase target pulses; a live arrow marks the current heart rate when a Watch
 /// is streaming it.
 struct HRZoneBar: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
     var landscape = false
     var compact = false
@@ -1470,7 +1478,7 @@ struct HRZoneBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(appearance.surface))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
         .onAppear {
             guard !reduceMotion else { return }
@@ -1680,6 +1688,7 @@ struct HRZoneBar: View {
 /// last-8-weeks strip, stat tiles, an aligned month calendar, and a styled
 /// performance-trend chart — all in the app's dark design language.
 struct RedesignHistoryView: View {
+    @Environment(\.appAppearance) private var appearance
     @ObservedObject var viewModel: TimerViewModel
     var embedded: Bool = false
     @Environment(\.dismiss) private var dismiss
@@ -1712,11 +1721,11 @@ struct RedesignHistoryView: View {
                 ContentUnavailableView("Your sessions", systemImage: "chart.xyaxis.line",
                                        description: Text("Select a workout to see its heart rate and intervals."))
                     .foregroundStyle(Palette.textSecondary)
-                    .background(Palette.background)
+                    .background(appearance.background)
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .tint(Palette.electricBlue)
+        .tint(appearance.accent)
         .preferredColorScheme(.dark)
         .onChange(of: viewModel.workoutLogEntries.map(\.id)) { _, ids in
             if let selectedWorkoutID, !ids.contains(selectedWorkoutID) { clearSelection() }
@@ -1742,7 +1751,7 @@ struct RedesignHistoryView: View {
                 }
                 if horizontalSizeClass == .regular {
                     HStack(spacing: 8) {
-                        Image(systemName: "flame.fill").foregroundStyle(Palette.amber)
+                        Image(systemName: "flame.fill").foregroundStyle(appearance.workAccent)
                         Text("\(viewModel.currentStreak) week streak").font(.headline)
                         Spacer(minLength: 8)
                         Text("Best \(viewModel.longestStreak)")
@@ -1751,7 +1760,7 @@ struct RedesignHistoryView: View {
                     }
                     .foregroundStyle(Palette.textPrimary)
                     .padding(14)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+                    .background(appearance.surface, in: RoundedRectangle(cornerRadius: 16))
                     .accessibilityElement(children: .combine)
                     DisclosureGroup("Calendar and trends", isExpanded: $showHistoryOverview) {
                         VStack(spacing: 16) {
@@ -1776,7 +1785,7 @@ struct RedesignHistoryView: View {
             .padding(.bottom, 24)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Palette.background.ignoresSafeArea())
+        .background(appearance.background.ignoresSafeArea())
         .preferredColorScheme(.dark)
     }
 
@@ -1792,7 +1801,7 @@ struct RedesignHistoryView: View {
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(Palette.textSecondary)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Palette.surfaceRaised))
+                        .background(Circle().fill(appearance.surfaceRaised))
                 }
                 .buttonStyle(.plain)
             }
@@ -1826,7 +1835,7 @@ struct RedesignHistoryView: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(Palette.textSecondary)
                             if workout.endedEarly == true {
-                                Text("Ended early").font(.caption).foregroundStyle(Palette.amber)
+                                Text("Ended early").font(.caption).foregroundStyle(appearance.workAccent)
                             }
                             if let breakdown = workout.sessionBreakdown {
                                 Text(formatMinutes(breakdown.totalDuration))
@@ -1842,9 +1851,9 @@ struct RedesignHistoryView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 16).fill(
-                        selectedWorkoutID == workout.id ? Palette.electricBlue.opacity(0.16) : Palette.surface))
+                        selectedWorkoutID == workout.id ? appearance.accent.opacity(0.16) : appearance.surface))
                     .overlay(RoundedRectangle(cornerRadius: 16).stroke(
-                        selectedWorkoutID == workout.id ? Palette.electricBlue.opacity(0.6) : Palette.hairline))
+                        selectedWorkoutID == workout.id ? appearance.accent.opacity(0.6) : Palette.hairline))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1862,7 +1871,7 @@ struct RedesignHistoryView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle()
-                        .fill(Palette.amber)
+                        .fill(appearance.workAccent)
                         .frame(width: 54, height: 54)
                         .blur(radius: 18)
                         .opacity(viewModel.currentStreak > 0 ? 0.7 : 0)
@@ -1870,7 +1879,7 @@ struct RedesignHistoryView: View {
                         .font(.system(size: 40, weight: .bold))
                         .foregroundStyle(
                             viewModel.currentStreak > 0
-                            ? LinearGradient(colors: [Palette.amber, Color(red: 1, green: 0.82, blue: 0.3)],
+                            ? LinearGradient(colors: [appearance.workAccent, Color(red: 1, green: 0.82, blue: 0.3)],
                                              startPoint: .bottom, endPoint: .top)
                             : LinearGradient(colors: [Palette.textTertiary], startPoint: .top, endPoint: .bottom)
                         )
@@ -1888,7 +1897,7 @@ struct RedesignHistoryView: View {
                 VStack(spacing: 3) {
                     Image(systemName: "trophy.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(Palette.amber)
+                        .foregroundStyle(appearance.workAccent)
                     Text("\(viewModel.longestStreak)")
                         .font(.system(size: 20, weight: .heavy, design: .rounded))
                         .foregroundStyle(Palette.textPrimary)
@@ -1899,19 +1908,19 @@ struct RedesignHistoryView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.surfaceRaised))
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(appearance.surfaceRaised))
             }
 
             // Last 8 weeks strip.
             HStack(spacing: 6) {
                 ForEach(Array(last8Weeks.enumerated()), id: \.offset) { _, done in
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(done ? Palette.amber : Palette.surfaceRaised)
+                        .fill(done ? appearance.workAccent : appearance.surfaceRaised)
                         .frame(height: 8)
                         .overlay {
                             if done {
                                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                    .fill(Palette.amber).blur(radius: 4).opacity(0.6)
+                                    .fill(appearance.workAccent).blur(radius: 4).opacity(0.6)
                             }
                         }
                 }
@@ -1923,7 +1932,7 @@ struct RedesignHistoryView: View {
             }
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Palette.surface))
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(appearance.surface))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
 
@@ -1943,8 +1952,8 @@ struct RedesignHistoryView: View {
     private var statTiles: some View {
         HStack(spacing: 10) {
             statTile(value: "\(viewModel.workoutLogEntries.count)", label: "TOTAL", icon: "checkmark.seal.fill", tint: Palette.recovery)
-            statTile(value: "\(thisMonthCount)", label: "THIS MONTH", icon: "calendar", tint: Palette.electricBlue)
-            statTile(value: "\(viewModel.longestStreak)", label: "BEST STREAK", icon: "flame.fill", tint: Palette.amber)
+            statTile(value: "\(thisMonthCount)", label: "THIS MONTH", icon: "calendar", tint: appearance.accent)
+            statTile(value: "\(viewModel.longestStreak)", label: "BEST STREAK", icon: "flame.fill", tint: appearance.workAccent)
         }
     }
 
@@ -1956,7 +1965,7 @@ struct RedesignHistoryView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.surface))
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(appearance.surface))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
 
@@ -1975,7 +1984,7 @@ struct RedesignHistoryView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Palette.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Palette.surfaceRaised))
+                        .background(Circle().fill(appearance.surfaceRaised))
                 }
                 .buttonStyle(.plain)
 
@@ -1989,7 +1998,7 @@ struct RedesignHistoryView: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(isCurrentMonth ? Palette.textTertiary.opacity(0.4) : Palette.textSecondary)
                         .frame(width: 30, height: 30)
-                        .background(Circle().fill(Palette.surfaceRaised))
+                        .background(Circle().fill(appearance.surfaceRaised))
                 }
                 .buttonStyle(.plain)
                 .disabled(isCurrentMonth)
@@ -2011,7 +2020,7 @@ struct RedesignHistoryView: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(appearance.surface))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
     }
 
@@ -2024,10 +2033,10 @@ struct RedesignHistoryView: View {
         } label: {
             ZStack {
                 if workout != nil {
-                    Circle().fill(Palette.amber)
-                    Circle().fill(Palette.amber).blur(radius: 6).opacity(0.5)
+                    Circle().fill(appearance.workAccent)
+                    Circle().fill(appearance.workAccent).blur(radius: 6).opacity(0.5)
                 } else if today {
-                    Circle().stroke(Palette.electricBlue, lineWidth: 2)
+                    Circle().stroke(appearance.accent, lineWidth: 2)
                 }
                 if workout != nil {
                     Image(systemName: "checkmark")
@@ -2036,7 +2045,7 @@ struct RedesignHistoryView: View {
                 } else {
                     Text("\(day)")
                         .font(.system(size: 13, weight: today ? .heavy : .medium))
-                        .foregroundStyle(future ? Palette.textTertiary : (today ? Palette.electricBlue : Palette.textSecondary))
+                        .foregroundStyle(future ? Palette.textTertiary : (today ? appearance.accent : Palette.textSecondary))
                 }
             }
             .frame(height: 34)
@@ -2064,7 +2073,7 @@ struct RedesignHistoryView: View {
                             }
                             .pickerStyle(.menu)
                             .labelsHidden()
-                            .tint(Palette.electricBlue)
+                            .tint(appearance.accent)
                         }
                     }
                     perfChart(points: points, modality: modality)
@@ -2072,7 +2081,7 @@ struct RedesignHistoryView: View {
                         .font(.system(size: 11)).foregroundStyle(Palette.textTertiary)
                 }
                 .padding(16)
-                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Palette.surface))
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(appearance.surface))
                 .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
             }
         }
@@ -2086,11 +2095,11 @@ struct RedesignHistoryView: View {
                 ForEach(points, id: \.date) { p in
                     AreaMark(x: .value("Date", p.date), y: .value("v", p.value))
                         .interpolationMethod(.catmullRom)
-                        .foregroundStyle(LinearGradient(colors: [Palette.electricBlue.opacity(0.35), .clear],
+                        .foregroundStyle(LinearGradient(colors: [appearance.accent.opacity(0.35), .clear],
                                                         startPoint: .top, endPoint: .bottom))
                     LineMark(x: .value("Date", p.date), y: .value("v", p.value))
                         .interpolationMethod(.catmullRom)
-                        .foregroundStyle(Palette.electricBlue)
+                        .foregroundStyle(appearance.accent)
                         .lineStyle(StrokeStyle(lineWidth: 2.5))
                 }
             }

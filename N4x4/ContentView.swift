@@ -55,6 +55,7 @@ final class OnboardingFlowViewModel: ObservableObject {
 }
 
 struct ContentView: View {
+    @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.standard.rawValue
     @StateObject var viewModel = TimerViewModel()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
@@ -73,6 +74,7 @@ struct ContentView: View {
 
     var body: some View {
         root
+            .environment(\.appAppearance, AppAppearance(storedValue: appearanceRaw))
             .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
                 OnboardingView(
                     timerViewModel: viewModel,

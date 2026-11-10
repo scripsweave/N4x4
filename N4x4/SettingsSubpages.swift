@@ -473,9 +473,23 @@ struct VO2GoalSettingsView: View {
 
 struct DisplaySettingsView: View {
     @ObservedObject var viewModel: TimerViewModel
+    @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.standard.rawValue
 
     var body: some View {
         Form {
+            Section {
+                Picker("Appearance", selection: Binding(
+                    get: { AppAppearance(storedValue: appearanceRaw) },
+                    set: { viewModel.appearance = $0 }
+                )) {
+                    ForEach(AppAppearance.allCases) { appearance in
+                        Text(appearance.title).tag(appearance)
+                    }
+                }
+                .accessibilityIdentifier("Appearance")
+            } footer: {
+                Text("Choose Default or warm Fall Colors. Your choice stays on until you change it. Heart-rate zone colors stay the same.")
+            }
             Section(
                 footer: Text("Live Activity shows the interval countdown on the Lock Screen and Dynamic Island during a workout.")
             ) {

@@ -14,6 +14,7 @@ import WatchKit
 @main
 struct N4x4WatchApp: App {
 
+    @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.standard.rawValue
     @StateObject private var sessionManager = WatchSessionManager()
     @StateObject private var workoutManager = WorkoutManager()
     /// DEBUG-only layout/screenshot mode
@@ -24,6 +25,7 @@ struct N4x4WatchApp: App {
     var body: some Scene {
         WindowGroup {
             WatchRootView(demo: demo)
+                .environment(\.appAppearance, AppAppearance(storedValue: appearanceRaw))
                 .environmentObject(sessionManager)
                 .environmentObject(workoutManager)
                 .onAppear {

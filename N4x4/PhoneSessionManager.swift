@@ -47,6 +47,32 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
               WCSession.default.activationState == .activated,
               WCSession.default.isWatchAppInstalled else { return }
 
+        let payload = statePayload(for: vm)
+
+        // Publish the newest context now. An old send's error callback must
+        // never replace a more recent pause/end/reset with its stale payload.
+        do { try WCSession.default.updateApplicationContext(payload) }
+        catch { print("[PhoneSessionManager] State context failed: \(error.localizedDescription)") }
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(payload, replyHandler: nil) { error in
+                print("[PhoneSessionManager] State send failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Mirrors `TimerViewModel.currentWorkoutPhase` for any interval so the
+    /// Watch can draw the whole plan, not just the current phase.
+    private func workoutPhase(for type: IntervalType) -> WorkoutPhase {
+        switch type {
+        case .warmup:        return .warmup
+        case .highIntensity: return .highIntensity
+        case .rest:          return .rest
+        case .cooldown:      return .cooldown
+        }
+    }
+
+    /// Shared by delivery and behavioral payload tests; no connectivity required.
+    func statePayload(for vm: TimerViewModel) -> [String: Any] {
         // intervalEndTime (an absolute Date) is the sync anchor: the Watch
         // derives timeRemaining from it locally, so no per-second messages are
         // needed. Same technique the Dynamic Island uses.
@@ -64,7 +90,8 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
 
         let revision = WatchStateInbox.nextRevision(after: Int64(UserDefaults.standard.integer(forKey: "watchStateRevision")), now: Date())
         UserDefaults.standard.set(revision, forKey: "watchStateRevision")
-        let payload: [String: Any] = [
+        return [
+            AppAppearance.storageKey:              vm.appearance.rawValue,
             WatchMessageKey.stateRevision:          revision,
             WatchMessageKey.messageType:            WatchMessageKey.stateSync,
             WatchMessageKey.isRunning:              vm.isRunning,
@@ -102,26 +129,6 @@ final class PhoneSessionManager: NSObject, WCSessionDelegate {
             WatchMessageKey.bonusRecoveryDuration:  vm.sessionRecoveryDuration ?? vm.restDuration,
         ]
 
-        // Publish the newest context now. An old send's error callback must
-        // never replace a more recent pause/end/reset with its stale payload.
-        do { try WCSession.default.updateApplicationContext(payload) }
-        catch { print("[PhoneSessionManager] State context failed: \(error.localizedDescription)") }
-        if WCSession.default.isReachable {
-            WCSession.default.sendMessage(payload, replyHandler: nil) { error in
-                print("[PhoneSessionManager] State send failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    /// Mirrors `TimerViewModel.currentWorkoutPhase` for any interval so the
-    /// Watch can draw the whole plan, not just the current phase.
-    private func workoutPhase(for type: IntervalType) -> WorkoutPhase {
-        switch type {
-        case .warmup:        return .warmup
-        case .highIntensity: return .highIntensity
-        case .rest:          return .rest
-        case .cooldown:      return .cooldown
-        }
     }
 
     // MARK: - WCSessionDelegate

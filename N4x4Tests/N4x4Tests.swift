@@ -33,6 +33,7 @@ private final class TestIntervalNotificationCenter: IntervalNotificationCenter {
 private final class TestWorkoutActivity: WorkoutLiveActivityHandle {
     let id = UUID().uuidString
     var events: [String] = []
+    var states: [N4x4LiveActivityAttributes.ContentState] = []
     var holdNextUpdate = false
     var onUpdateStarted: (() -> Void)?
     var updateContinuation: CheckedContinuation<Void, Never>?
@@ -45,6 +46,7 @@ private final class TestWorkoutActivity: WorkoutLiveActivityHandle {
                 onUpdateStarted?()
             }
         }
+        states.append(state)
         events.append(state.isRunning ? "running" : "paused")
     }
 
@@ -58,6 +60,7 @@ private final class TestWorkoutActivityProvider: WorkoutLiveActivityProvider {
 
     func request(start: Date, state: N4x4LiveActivityAttributes.ContentState) throws -> any WorkoutLiveActivityHandle {
         let activity = TestWorkoutActivity()
+        activity.states.append(state)
         stored.append(activity)
         return activity
     }
@@ -2114,5 +2117,116 @@ final class SpeechVoiceSettingsTests: XCTestCase {
         state.begin(cue, preview: false)
         XCTAssertFalse(state.finish(preview))
         XCTAssertTrue(state.finish(cue))
+    }
+}
+
+final class AppearanceTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: AppAppearance.storageKey)
+        UserDefaults.standard.set(false, forKey: "healthKitEnabled")
+        UserDefaults.standard.set(true, forKey: "healthKitUserOptedOut")
+        try? FileManager.default.removeItem(at: TimerViewModel.defaultCheckpointURL.deletingLastPathComponent())
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: AppAppearance.storageKey)
+        super.tearDown()
+    }
+
+    @MainActor func testDefaultAndUnknownStoredValueKeepCurrentAppearance() {
+        XCTAssertEqual(TimerViewModel().appearance, .standard)
+        UserDefaults.standard.set("future-theme", forKey: AppAppearance.storageKey)
+        XCTAssertEqual(TimerViewModel().appearance, .standard)
+        XCTAssertEqual(AppAppearance(storedValue: nil), .standard)
+        XCTAssertEqual(AppAppearance(storedValue: "future-theme"), .standard)
+    }
+
+    @MainActor func testSelectFallPersistsAcrossViewModelsAndRestoreDefault() {
+        let vm = TimerViewModel()
+        vm.appearance = .fall
+        XCTAssertEqual(vm.appearance, .fall)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: AppAppearance.storageKey), "fall")
+        XCTAssertEqual(TimerViewModel().appearance, .fall)
+        vm.appearance = .standard
+        XCTAssertEqual(TimerViewModel().appearance, .standard)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: AppAppearance.storageKey), "standard")
+    }
+}
+
+extension AppearanceTests {
+    func testFallPaletteIsDistinctAndDefaultTokensAreUnchanged() {
+        XCTAssertEqual(AppAppearance.standard.accent, Palette.electricBlue)
+        XCTAssertEqual(AppAppearance.standard.workAccent, Palette.amber)
+        XCTAssertEqual(AppAppearance.standard.background, Palette.background)
+        XCTAssertNotEqual(AppAppearance.fall.accent, AppAppearance.standard.accent)
+        XCTAssertNotEqual(AppAppearance.fall.recoveryAccent, AppAppearance.standard.recoveryAccent)
+        XCTAssertNotEqual(AppAppearance.fall.surface, AppAppearance.standard.surface)
+    }
+
+    @MainActor func testWatchPayloadCarriesSelectionAndOldPayloadDefaults() {
+        let vm = TimerViewModel()
+        vm.appearance = .fall
+        let payload = PhoneSessionManager().statePayload(for: vm)
+        XCTAssertEqual(AppAppearance(payload: payload), .fall)
+        XCTAssertEqual(payload[AppAppearance.storageKey] as? String, "fall")
+        XCTAssertEqual(AppAppearance(payload: [:]), .standard)
+        XCTAssertEqual(AppAppearance(payload: [AppAppearance.storageKey: "future"]), .standard)
+        vm.appearance = .standard
+        XCTAssertEqual(AppAppearance(payload: PhoneSessionManager().statePayload(for: vm)), .standard)
+    }
+
+    func testLiveActivityAppearanceRoundTripAndLegacyDefaultsPreserveHRColor() throws {
+        var state = N4x4LiveActivityAttributes.ContentState(
+            intervalName: "Warmup", phase: .warmup, intervalEndTime: Date(),
+            isRunning: true, currentInterval: 1, totalIntervals: 4,
+            hrLow: 110, hrHigh: 130, currentHR: 100)
+        let originalHRColor = state.liveHRColor
+        state.appearanceRaw = "fall"
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(N4x4LiveActivityAttributes.ContentState.self, from: data)
+        XCTAssertEqual(decoded.appearance, .fall)
+        XCTAssertEqual(decoded.phaseColor, AppAppearance.fall.accent)
+        XCTAssertEqual(decoded.liveHRColor, originalHRColor)
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        legacy.removeValue(forKey: "appearanceRaw")
+        let old = try JSONDecoder().decode(N4x4LiveActivityAttributes.ContentState.self,
+                                          from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertEqual(old.appearance, .standard)
+        XCTAssertEqual(old.phaseColor, WorkoutPhase.warmup.color)
+        state.appearanceRaw = "future"
+        XCTAssertEqual(state.appearance, .standard)
+    }
+}
+
+extension AppearanceTests {
+    @MainActor func testSelectionUpdatesExistingLiveActivityWithoutChangingWorkoutAndResetRestoresDefault() async throws {
+        let provider = TestWorkoutActivityProvider()
+        let vm = TimerViewModel(intervalNotificationCenter: TestIntervalNotificationCenter(), liveActivityProvider: provider)
+        vm.audioMode = .silent
+        vm.hapticsEnabled = false
+        vm.liveActivitiesEnabled = true
+        vm.startTimer()
+        let activity = try XCTUnwrap(provider.stored.last)
+        XCTAssertEqual(activity.states.last?.appearance, .standard)
+        vm.stopTimer()
+        await vm.liveActivityTask?.value
+        let workoutID = vm.activeWorkoutID
+        let remaining = vm.timeRemaining
+        vm.appearance = .fall
+        await vm.liveActivityTask?.value
+        XCTAssertEqual(activity.states.last?.appearance, .fall)
+        XCTAssertEqual(activity.states.last?.isRunning, false)
+        XCTAssertEqual(vm.activeWorkoutID, workoutID)
+        XCTAssertEqual(vm.timeRemaining, remaining)
+        XCTAssertEqual(provider.stored.count, 1)
+        vm.appearance = .standard
+        await vm.liveActivityTask?.value
+        XCTAssertEqual(activity.states.last?.appearance, .standard)
+        vm.appearance = .fall
+        vm.resetSettingsToDefaults()
+        XCTAssertEqual(vm.appearance, .standard)
+        vm.reset()
+        await vm.liveActivityTask?.value
     }
 }

@@ -773,6 +773,8 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     private func applyStatePayload(_ p: [String: Any]) {
         guard stateInbox.accept(p) else { return }
+        // Reuse the ordered phone state and retain its choice while offline.
+        UserDefaults.standard.set(AppAppearance(payload: p).rawValue, forKey: AppAppearance.storageKey)
         var state = WatchTimerState(
             isRunning:            p[WatchMessageKey.isRunning]            as? Bool   ?? false,
             intervalEndTime:      Date(timeIntervalSince1970:

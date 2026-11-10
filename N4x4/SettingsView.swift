@@ -342,7 +342,7 @@ struct SettingsView: View {
              AnyView(vo2Row)),
             ("Units", "units metric imperial system measurement km miles",
              AnyView(unitsRow)),
-            ("Display", "display screen awake sleep live activity dynamic island lock",
+            ("Display", "display appearance fall colors autumn default screen awake sleep live activity dynamic island lock",
              AnyView(displayRow)),
             ("Replay Onboarding", "replay onboarding first run guide intro tutorial",
              AnyView(replayOnboardingRow)),

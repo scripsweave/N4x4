@@ -641,6 +641,18 @@ class TimerViewModel: ObservableObject {
         set { audioModeRaw = newValue.rawValue }
     }
 
+    @Published private var appearanceRevision = 0
+    @AppStorage(AppAppearance.storageKey) private var appearanceRaw = AppAppearance.standard.rawValue {
+        didSet {
+            appearanceRevision += 1
+            updateLiveActivity(isRunning: isRunning)
+        }
+    }
+    var appearance: AppAppearance {
+        get { AppAppearance(storedValue: appearanceRaw) }
+        set { appearanceRaw = newValue.rawValue }
+    }
+
     @AppStorage("preventSleep") var preventSleep: Bool = true {
         didSet { updateIdleTimerState() }
     }
@@ -1794,6 +1806,7 @@ class TimerViewModel: ObservableObject {
             $hasPendingWorkoutSave.map { _ in () }.eraseToAnyPublisher(),
             $intervals.map { _ in () }.eraseToAnyPublisher(),
             $bonusInsertionIndex.map { _ in () }.eraseToAnyPublisher(),
+            $appearanceRevision.map { _ in () }.eraseToAnyPublisher(),
             $bonusSettingsRevision.map { _ in () }.eraseToAnyPublisher(),
         ]
         watchBroadcastCancellable = Publishers.MergeMany(watchTriggers)
@@ -2897,6 +2910,7 @@ class TimerViewModel: ObservableObject {
         tenSecondVoicePromptsEnabled = true
         confirmSkipCooldown = true
         confirmSkipOtherIntervals = false
+        appearance = .standard
         preventSleep = true
         hapticsEnabled = true
         liveActivitiesEnabled = true
@@ -3170,7 +3184,7 @@ class TimerViewModel: ObservableObject {
                 isRunning: false,
                 currentInterval: 1,
                 totalIntervals: sessionIntervalCount,
-                hrLow: 0, hrHigh: 0
+                hrLow: 0, hrHigh: 0, appearanceRaw: appearance.rawValue
             )
         }
         let interval = intervals[currentIntervalIndex]
@@ -3209,7 +3223,8 @@ class TimerViewModel: ObservableObject {
             totalIntervals: totalHIT,
             hrLow: hrLow,
             hrHigh: hrHigh,
-            currentHR: currentHeartRate.map { Int($0.rounded()) } ?? 0
+            currentHR: currentHeartRate.map { Int($0.rounded()) } ?? 0,
+            appearanceRaw: appearance.rawValue
         )
     }
 

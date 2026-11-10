@@ -11,6 +11,7 @@
 import SwiftUI
 
 struct WatchTimerView: View {
+    @Environment(\.appAppearance) private var appearance
 
     @EnvironmentObject var sessionManager: WatchSessionManager
     @EnvironmentObject var workoutManager: WorkoutManager
@@ -26,7 +27,7 @@ struct WatchTimerView: View {
     }
 
     private var state: WatchTimerState { sessionManager.timerState }
-    private var phaseColor: Color { state.phase.color }
+    private var phaseColor: Color { state.phase.color(appearance: appearance) }
     private var hasTarget: Bool { state.hrLow > 0 && state.hrHigh > 0 }
     private var hasPlan: Bool { state.hasPlan }
     private var canControl: Bool { sessionManager.canControl }
@@ -71,7 +72,7 @@ struct WatchTimerView: View {
                 HStack(spacing: 4) {
                     Text(headerText)
                         .font(.system(size: compact ? 10 : 12, weight: .heavy))
-                        .foregroundStyle(WatchPalette.electricBlue)
+                        .foregroundStyle(appearance.accent)
                         .tracking(0.8)
                     modeBadge
                 }
@@ -332,7 +333,7 @@ struct WatchTimerView: View {
                     Button(state.canUndoBonusRound ? "UNDO BONUS ROUND" : "+1 BONUS ROUND") {
                         sessionManager.toggleBonusRound()
                     }
-                    .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.electricBlue, outlined: true))
+                    .buttonStyle(WatchControlButtonStyle(tint: appearance.accent, outlined: true))
                     .disabled(!canControl)
                 }
 
@@ -342,7 +343,7 @@ struct WatchTimerView: View {
                 } label: {
                     Text("FINISH")
                 }
-                .buttonStyle(WatchControlButtonStyle(tint: WatchPalette.electricBlue, outlined: true))
+                .buttonStyle(WatchControlButtonStyle(tint: appearance.accent, outlined: true))
             }
             .padding(.leading, 6)
             // Clear the vertical page indicator / scroll bar on the right.

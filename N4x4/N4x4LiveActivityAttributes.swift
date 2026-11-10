@@ -39,6 +39,7 @@ struct N4x4LiveActivityAttributes: ActivityAttributes {
         /// Live heart rate (bpm) from the active source, or 0 when none is
         /// streaming. Defaulted so older encoded states still decode.
         var currentHR: Int = 0
+        var appearanceRaw: String? = nil
     }
 
     // Static — set once when the activity starts, never changes mid-workout.
@@ -51,6 +52,9 @@ extension N4x4LiveActivityAttributes.ContentState {
     func countdownRange(at now: Date = Date()) -> ClosedRange<Date> {
         now...max(now, intervalEndTime)
     }
+
+    var appearance: AppAppearance { AppAppearance(storedValue: appearanceRaw) }
+    var phaseColor: Color { phase.color(appearance: appearance) }
 
     /// Whether a live heart rate is currently streaming.
     var hasLiveHR: Bool { currentHR > 0 }
@@ -104,6 +108,63 @@ enum WorkoutPhase: String, Codable, Hashable {
         case .highIntensity: return "bolt.fill"
         case .rest:          return "heart.fill"
         case .cooldown:      return "wind"
+        }
+    }
+}
+
+// MARK: - Appearance shared by phone, Watch and Live Activity
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case standard
+    case fall
+
+    static let storageKey = "appAppearanceRaw"
+    init(storedValue: String?) { self = Self(rawValue: storedValue ?? "") ?? .standard }
+    var id: String { rawValue }
+    var title: String { self == .fall ? "Fall Colors" : "Default" }
+}
+
+extension EnvironmentValues {
+    @Entry var appAppearance: AppAppearance = .standard
+}
+
+extension AppAppearance {
+    var accent: Color {
+        self == .fall ? Color(red: 0.94, green: 0.61, blue: 0.35) : Color(red: 0.18, green: 0.52, blue: 1.0)
+    }
+    var workAccent: Color {
+        self == .fall ? Color(red: 1.0, green: 0.70, blue: 0.30) : Color(red: 1.0, green: 0.58, blue: 0.0)
+    }
+    var recoveryAccent: Color {
+        self == .fall ? Color(red: 0.85, green: 0.47, blue: 0.34) : Color(red: 0.20, green: 0.78, blue: 0.55)
+    }
+    var cooldownAccent: Color {
+        self == .fall ? Color(red: 0.87, green: 0.65, blue: 0.48) : Color(red: 0.20, green: 0.75, blue: 0.85)
+    }
+    var background: Color {
+        self == .fall ? Color(red: 0.055, green: 0.035, blue: 0.030) : Color(red: 0.04, green: 0.04, blue: 0.05)
+    }
+    var surface: Color {
+        self == .fall ? Color(red: 0.12, green: 0.075, blue: 0.060) : Color(red: 0.09, green: 0.10, blue: 0.12)
+    }
+    var surfaceRaised: Color {
+        self == .fall ? Color(red: 0.18, green: 0.11, blue: 0.085) : Color(red: 0.13, green: 0.14, blue: 0.16)
+    }
+    var brandGlow: AngularGradient {
+        AngularGradient(colors: [accent, workAccent, accent], center: .center,
+                        startAngle: .degrees(90), endAngle: .degrees(450))
+    }
+    init(payload: [String: Any]) { self.init(storedValue: payload[Self.storageKey] as? String) }
+}
+
+extension WorkoutPhase {
+    /// Decorative phase colors; heart-rate status colors remain independent.
+    func color(appearance: AppAppearance) -> Color {
+        switch self {
+        case .warmup: return appearance.accent
+        case .highIntensity: return appearance.workAccent
+        case .rest: return appearance.recoveryAccent
+        case .cooldown: return appearance.cooldownAccent
         }
     }
 }

@@ -11,6 +11,7 @@ import SwiftUI
 // MARK: - Home
 
 struct WatchHomeView: View {
+    @Environment(\.appAppearance) private var appearance
     @EnvironmentObject var sessionManager: WatchSessionManager
 
     private var state: WatchTimerState { sessionManager.timerState }
@@ -26,8 +27,8 @@ struct WatchHomeView: View {
                 Button { sessionManager.startWorkout() } label: {
                     NeonRing(side: side,
                              progress: 1,
-                             glow: AnyShapeStyle(WatchPalette.brandGlow),
-                             glowColor: WatchPalette.amber) {
+                             glow: AnyShapeStyle(appearance.brandGlow),
+                             glowColor: appearance.workAccent) {
                         Text("START")
                             .font(.system(size: side * 0.19, weight: .heavy, design: .rounded))
                             .foregroundStyle(WatchPalette.textPrimary)
@@ -50,7 +51,7 @@ struct WatchHomeView: View {
             if sessionManager.hasReceivedState {
                 Image(systemName: state.streak > 0 ? "flame.fill" : "flame")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(state.streak > 0 ? WatchPalette.amber : WatchPalette.textTertiary)
+                    .foregroundStyle(state.streak > 0 ? appearance.workAccent : WatchPalette.textTertiary)
                 Text("\(state.streak)")
                     .font(.system(size: 17, weight: .heavy, design: .rounded))
                 Text("WEEK STREAK")
@@ -93,7 +94,7 @@ struct WatchHomeView: View {
                     Text("No iPhone · runs on Watch")
                 }
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(WatchPalette.electricBlue)
+                .foregroundStyle(appearance.accent)
             }
         }
         .lineLimit(1)
@@ -109,6 +110,7 @@ struct WatchHomeView: View {
 // MARK: - Complete
 
 struct WatchCompleteView: View {
+    @Environment(\.appAppearance) private var appearance
     @EnvironmentObject var sessionManager: WatchSessionManager
     @State private var showDiscardAlert = false
     @State private var deletingWorkoutID: UUID?
@@ -186,7 +188,7 @@ struct WatchCompleteView: View {
     @ViewBuilder private var localSummary: some View {
         if let record {
             if record.endedEarly == true {
-                Text("Ended early").font(.caption2).foregroundStyle(WatchPalette.amber)
+                Text("Ended early").font(.caption2).foregroundStyle(appearance.workAccent)
             }
             Text(summaryLine(record))
                 .font(.system(size: 12, weight: .semibold))

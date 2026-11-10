@@ -158,6 +158,7 @@ struct WatchPulsingHeart: View {
 /// `currentIndex` it also draws the live progress marker; without one it is
 /// the plan preview shown on Home.
 struct WatchTimelineBar: View {
+    @Environment(\.appAppearance) private var appearance
     var phases: [WorkoutPhase]
     var durations: [Double]
     var currentIndex: Int? = nil
@@ -204,7 +205,7 @@ struct WatchTimelineBar: View {
                 HStack(spacing: spacing) {
                     ForEach(0..<count, id: \.self) { i in
                         Capsule()
-                            .fill(phases[i].color)
+                            .fill(phases[i].color(appearance: appearance))
                             .frame(width: usable * CGFloat(durations[i] / total), height: barHeight)
                             .opacity(opacity(i))
                     }
@@ -232,6 +233,7 @@ struct WatchTimelineBar: View {
 /// a hairline, heavy tracked caps. `outlined` gives the phone's END treatment —
 /// no fill, tinted stroke and text.
 struct WatchControlButtonStyle: ButtonStyle {
+    @Environment(\.appAppearance) private var appearance
     var tint: Color = WatchPalette.textPrimary
     var outlined: Bool = false
 
@@ -244,7 +246,7 @@ struct WatchControlButtonStyle: ButtonStyle {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(outlined ? Color.clear : WatchPalette.surface)
+                    .fill(outlined ? Color.clear : appearance.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

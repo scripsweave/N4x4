@@ -35,7 +35,7 @@ struct N4x4LiveActivityWidget: Widget {
                 MinimalView(context: context)
             }
             .widgetURL(URL(string: "n4x4://open"))
-            .keylineTint(context.state.phase.color)
+            .keylineTint(context.state.phaseColor)
         }
     }
 }
@@ -64,7 +64,7 @@ struct CompactLeadingView: View {
         .padding(.leading, 4)
     }
 
-    var phaseColor: Color { context.state.phase.color }
+    var phaseColor: Color { context.state.phaseColor }
 }
 
 /// Right slot: live countdown or paused indicator
@@ -97,11 +97,11 @@ struct MinimalView: View {
             Text(timerInterval: context.state.countdownRange(), countsDown: true)
                 .monospacedDigit()
                 .font(.caption2.bold())
-                .foregroundStyle(context.state.phase.color)
+                .foregroundStyle(context.state.phaseColor)
         } else {
             Image(systemName: context.state.phase.symbolName)
                 .font(.caption2)
-                .foregroundStyle(context.state.phase.color)
+                .foregroundStyle(context.state.phaseColor)
         }
     }
 }
@@ -116,7 +116,7 @@ struct ExpandedLeadingView: View {
         HStack(spacing: 6) {
             Image(systemName: context.state.phase.symbolName)
                 .font(.title3.bold())
-                .foregroundStyle(context.state.phase.color)
+                .foregroundStyle(context.state.phaseColor)
             VStack(alignment: .leading, spacing: 1) {
                 Text(context.state.intervalName)
                     .font(.caption.bold())
@@ -146,7 +146,7 @@ struct ExpandedTrailingView: View {
                 IntervalDotsView(
                     current: context.state.currentInterval,
                     total: context.state.totalIntervals,
-                    color: context.state.phase.color
+                    color: context.state.phaseColor
                 )
             }
         }
@@ -163,7 +163,7 @@ struct ExpandedCenterView: View {
             Text(timerInterval: context.state.countdownRange(), countsDown: true)
                 .monospacedDigit()
                 .font(.system(size: 44, weight: .bold, design: .rounded))
-                .foregroundStyle(context.state.phase.color)
+                .foregroundStyle(context.state.phaseColor)
                 .minimumScaleFactor(0.7)
         } else {
             HStack(spacing: 8) {
@@ -222,7 +222,7 @@ struct LockScreenView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Image(systemName: context.state.phase.symbolName)
                     .font(.title2.bold())
-                    .foregroundStyle(context.state.phase.color)
+                    .foregroundStyle(context.state.phaseColor)
 
                 if context.state.isRunning {
                     Text(timerInterval: context.state.countdownRange(), countsDown: true)
@@ -283,7 +283,7 @@ struct LockScreenView: View {
                     IntervalDotsView(
                         current: context.state.currentInterval,
                         total: context.state.totalIntervals,
-                        color: context.state.phase.color
+                        color: context.state.phaseColor
                     )
                 }
             }

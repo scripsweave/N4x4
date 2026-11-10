@@ -66,6 +66,59 @@ final class N4x4UITests: XCTestCase {
         app.terminate()
     }
 
+    func testAppearanceSelectionPersistsAndWorkoutKeepsState() {
+        let app = XCUIApplication()
+        app.launchArguments = reviewLaunchArguments + ["-warmupDuration", "0", "-highIntensityDuration", "240"]
+        app.launchEnvironment["N4X4_DEMO_HEART_RATE"] = "166"
+        app.launch()
+        app.buttons["Settings"].tap()
+        let display = app.buttons["Display"]
+        reveal(display, in: app)
+        display.tap()
+        let picker = app.buttons["Appearance"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        picker.tap()
+        app.buttons["Default"].tap()
+        keepScreenshot("Appearance Default option", app: app)
+        app.buttons["Home"].tap()
+        keepScreenshot("Appearance Default home", app: app)
+        app.buttons["START"].tap()
+        app.buttons["PAUSE"].tap()
+        keepScreenshot("Appearance Default workout", app: app)
+        let countdown = app.staticTexts["workout-countdown"].value as? String
+        app.buttons["Settings"].tap()
+        if !picker.exists {
+            reveal(display, in: app)
+            display.tap()
+        }
+        picker.tap()
+        app.buttons["Fall Colors"].tap()
+        keepScreenshot("Appearance Fall option", app: app)
+        app.buttons["Home"].tap()
+        XCTAssertTrue(app.buttons["RESUME"].exists)
+        XCTAssertEqual(app.staticTexts["workout-countdown"].value as? String, countdown)
+        keepScreenshot("Appearance Fall workout", app: app)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        assertVisible(app.buttons["RESUME"], in: app)
+        keepScreenshot("Appearance Fall workout landscape", app: app)
+        XCUIDevice.shared.orientation = .portrait
+        app.buttons["FINISH"].tap()
+        app.alerts["Finish workout?"].buttons["Discard Workout"].tap()
+        keepScreenshot("Appearance Fall home", app: app)
+        app.terminate()
+        app.launch()
+        app.buttons["Settings"].tap()
+        if !picker.exists {
+            reveal(display, in: app)
+            display.tap()
+        }
+        XCTAssertTrue(picker.label.contains("Fall Colors"))
+        picker.tap()
+        app.buttons["Default"].tap()
+        app.buttons["Home"].tap()
+        keepScreenshot("Appearance Restored Default home", app: app)
+    }
+
     func testExample() throws {
         // UI tests must launch the application that they test.
         let app = XCUIApplication()
