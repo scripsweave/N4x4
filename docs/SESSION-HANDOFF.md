@@ -1,5 +1,7 @@
 # N4x4 — Session Handoff
 
+> **5.16 prepared, submission blocked (2026-11-10):** Fall Colors is committed and tagged on main. Cloud 56 passed all four actions and 325/325 tests. Build 56 is VALID, but Apple rejected review submission because the uploaded review video is still processing. 5.15 remains live. Continue from [the 5.16 handoff](SESSION-HANDOFF-2026-11-10-FALL-COLORS.md); release authorization persists.
+
 > **5.15 submitted (2026-11-02): Watch HR reliability + diagnostics.**
 > Version **5.15 (55)** is WAITING_FOR_REVIEW / AFTER_APPROVAL. Cloud 55 passed
 > all four actions and 318/318 tests for `62e885a` / `v5.15`. 5.14 stays live
