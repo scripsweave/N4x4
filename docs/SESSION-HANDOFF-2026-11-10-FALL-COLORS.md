@@ -1,4 +1,14 @@
-# N4x4 5.16 — Fall Colors release, blocked on Apple attachment processing
+# N4x4 5.16 — Fall Colors submitted for review
+
+## Confirmed submission — 10 November 2026, 22:24 CET
+
+The user requested a retry. The review attachment was COMPLETE with matching checksum, and the prepared review draft still had zero items. `AppStore/submit.sh 5.16 56 --submit` succeeded at 22:24:40 CET: **WAITING_FOR_REVIEW / AFTER_APPROVAL**. An independent read-only check confirmed that exact build and release setting at 22:24:53 CET. Review notes, listing and inherited media are unchanged; the review attachment remains COMPLETE with matching checksum. **5.16 is submitted, not yet live; 5.15 remains live pending approval.**
+
+Evidence: `/tmp/n4x4-fall-release-review/submission-retry.log` and `confirmed-check.log`. Release source/tag and Cloud verification below remain unchanged. No new build or main push was needed.
+
+## Historical preparation and blocker (resolved)
+
+The state below records the earlier failed attempt, before the successful retry above.
 
 ## Exact source and release state
 

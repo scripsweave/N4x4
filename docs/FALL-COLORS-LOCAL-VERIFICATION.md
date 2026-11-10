@@ -159,3 +159,5 @@ Independent review of preference persistence, palette defaults, phone payload co
 Release evidence is under `/tmp/n4x4-fall-release-review/`. The 5.16 generic-device Release build passed. Release tooling: six tests, 21 assertions, zero failures. An initial simulator rerun stalled before tests in the existing synchronous HealthKit authorization query; `test-host-sample.txt` records it. The simulator was restarted for a clean retry.
 
 Fresh release rerun passed 300 unit + one appearance UI test (301 total). Cloud 56 passed all four actions and 325/325 tests for release commit `a3cc6f6` / `v5.16`. Build VALID; submission blocked by Apple's review-attachment processing. See [release handoff](SESSION-HANDOFF-2026-11-10-FALL-COLORS.md) for exact state and continuation. Fresh screenshots are under `/tmp/n4x4-fall-release-review/screenshots/`; restored Default also restores the native tab tint in this run.
+
+Release follow-up: the processing blocker resolved. 5.16 (56) was submitted and independently confirmed WAITING_FOR_REVIEW / AFTER_APPROVAL on 10 November 2026 at 22:24 CET. Review video COMPLETE with matching checksum. See the release handoff for evidence.

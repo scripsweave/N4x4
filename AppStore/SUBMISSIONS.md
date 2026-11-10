@@ -1,5 +1,7 @@
 # App Store submissions
 
+**5.16 submitted (2026-11-10, 22:24 CET):** `AppStore/submit.sh 5.16 56 --submit` verified WAITING_FOR_REVIEW / AFTER_APPROVAL at 22:24:40; read-only confirmation at 22:24:53. The attachment processing blocker below is resolved: review video COMPLETE with matching checksum, notes/listing/media retained. Source `a3cc6f6` / `v5.16`; Cloud 56 all four actions and 325/325 tests passed. 5.15 remains live until approval. [Handoff](../docs/SESSION-HANDOFF-2026-11-10-FALL-COLORS.md).
+
 **5.16 blocked (2026-11-10):** Source/tag `a3cc6f6` / `v5.16`, Cloud 56 all four actions SUCCEEDED and 325/325 tests. Build 5.16 (56) is VALID and attached, AFTER_APPROVAL. Submission was rejected solely because review attachment `24d2e0bb-faf6-48c0-b095-044200681b38` remains processing (UPLOAD_COMPLETE). Version stays PREPARE_FOR_SUBMISSION; empty review draft is preserved. No review canceled. 5.15 is live. See [continuation handoff](../docs/SESSION-HANDOFF-2026-11-10-FALL-COLORS.md).
 
 **Latest submission (2026-11-02):** `AppStore/submit.sh 5.15 55 --submit`
